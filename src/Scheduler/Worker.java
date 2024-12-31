@@ -1,3 +1,5 @@
+package Scheduler;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Objects;
@@ -43,10 +45,10 @@ public class Worker implements Comparable<Worker>, Cloneable{
     public PriorityQueue<LocalDateTimeRange> getUnavailable() {return unavailable;}
 
     /**
-     * Sets the Worker as unavailable during the given range.
-     * If the given range overlaps with an existing range in which this Worker is unavailable,
+     * Sets the Scheduler.Worker as unavailable during the given range.
+     * If the given range overlaps with an existing range in which this Scheduler.Worker is unavailable,
      * the two will be merged.
-     * @param range LocalDateTimeRange specifying the period in which this Worker is unavailable.
+     * @param range Scheduler.LocalDateTimeRange specifying the period in which this Scheduler.Worker is unavailable.
      */
     public void addUnavailable(LocalDateTimeRange range) {
         if (range == null) return;
@@ -65,14 +67,14 @@ public class Worker implements Comparable<Worker>, Cloneable{
     public void removeUnavailable(LocalDateTimeRange range) {unavailable.remove(range);}
 
     /**
-     * Checks if this worker is available in a given LocalDateTimeRange.
-     * Meaning, the given range does not overlap with a LocalDateTimeRange in which
-     * this Worker is unavailable.
+     * Checks if this worker is available in a given Scheduler.LocalDateTimeRange.
+     * Meaning, the given range does not overlap with a Scheduler.LocalDateTimeRange in which
+     * this Scheduler.Worker is unavailable.
      * if the variable 'remove' is set to 'True',
-     * any period in time in which this Worker is unavailable and ends before the given range will be removed.
+     * any period in time in which this Scheduler.Worker is unavailable and ends before the given range will be removed.
      * @param range Range to check
      * @param remove Whether to remove unavailable DateTime ranges which passed.
-     * @return 'True' if this Worker is available at the given range, 'False' otherwise.
+     * @return 'True' if this Scheduler.Worker is available at the given range, 'False' otherwise.
      */
     public boolean isAvailable(LocalDateTimeRange range, boolean remove){
         if (remove) { // remove any expired unavailability range we encounter

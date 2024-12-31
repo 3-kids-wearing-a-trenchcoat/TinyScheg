@@ -1,3 +1,5 @@
+package Scheduler.Exceptions;
+
 /**
  * Thrown to indicate some error has occurred while generating the Schedule.
  */

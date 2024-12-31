@@ -1,5 +1,7 @@
+package Scheduler.Exceptions;
+
 /**
- * Thrown by Parser to indicate bad input
+ * Thrown by Scheduler.Parser to indicate bad input
  */
 public class ParserInputException extends Exception {
         public ParserInputException () {

@@ -1,9 +1,12 @@
+package Scheduler;
+
+import Scheduler.Exceptions.ParserInputException;
+
 import java.io.*;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.InputMismatchException;
 
 /**
  * Method class handling writing and reading files
@@ -19,7 +22,7 @@ public class Parser {
 
     /**
      * Generate a CSV file according to the input
-     * @param table ScheduleTable according to which the CSV will be generated.
+     * @param table Scheduler.ScheduleTable according to which the CSV will be generated.
      * @param path Output directory
      */
     public static void genCSV(ScheduleTable table, String path){
@@ -33,7 +36,7 @@ public class Parser {
 
     /**
      * Generate a CSV file according to the input
-     * @param shifts ArrayList of shifts to turn into a ScheduleTable from which the CSV table will be made.
+     * @param shifts ArrayList of shifts to turn into a Scheduler.ScheduleTable from which the CSV table will be made.
      * @param path Output directory
      */
     public static void genCSV(ArrayList<Shift> shifts, String path){
@@ -43,11 +46,11 @@ public class Parser {
     }
 
     /**
-     * gets a LocalDateTimeRange from a String
+     * gets a Scheduler.LocalDateTimeRange from a String
      * Each LocalDateTime has to be formatted in DateTimeFormatter.ISO_LOCAL_DATE_TIME, and they must be separated
      * by a dash (-).
-     * @param line String representing a LocalDateTimeRange
-     * @return LocalDateTimeRange
+     * @param line String representing a Scheduler.LocalDateTimeRange
+     * @return Scheduler.LocalDateTimeRange
      */
     private static LocalDateTimeRange parseLocalDateTimeRange(String line){
         // TODO: implement some input checks in this bit.
@@ -64,7 +67,7 @@ public class Parser {
         return new LocalTimeRange(start, end);
     }
 
-    public static ArrayList<ShiftTemplate> getStations(String inputPath) throws ParserInputException{
+    public static ArrayList<ShiftTemplate> getStations(String inputPath) throws ParserInputException {
         ArrayList<ShiftTemplate> output = new ArrayList<ShiftTemplate>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(inputPath))){

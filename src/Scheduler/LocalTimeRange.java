@@ -1,3 +1,5 @@
+package Scheduler;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -57,11 +59,11 @@ public class LocalTimeRange {
     }
 
     /**
-     * Gets a new LocalTimeRange that's made by subtracting the input range from the original.
+     * Gets a new Scheduler.LocalTimeRange that's made by subtracting the input range from the original.
      * This method only supports subtractions which result in one continuous Range,
      * Meaning that the start time and/or end time must be contained within the subtraction range.
      * @param subtraction The range to be subtracted from the original.
-     * @return Subtracted LocalTimeRange or null if the range is contained entirely within the subtraction.
+     * @return Subtracted Scheduler.LocalTimeRange or null if the range is contained entirely within the subtraction.
      * @throws UnsupportedOperationException If the subtraction results in two separate ranges instead of one continuous range.
      */
     public LocalTimeRange minus (LocalTimeRange subtraction) throws UnsupportedOperationException{

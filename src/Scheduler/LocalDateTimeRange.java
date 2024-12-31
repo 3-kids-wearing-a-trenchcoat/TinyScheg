@@ -1,5 +1,6 @@
+package Scheduler;
+
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 public class LocalDateTimeRange implements Comparable<LocalDateTimeRange>{
@@ -17,7 +18,7 @@ public class LocalDateTimeRange implements Comparable<LocalDateTimeRange>{
     }
     public LocalDateTimeRange (String str){
         String[] arr = str.split("-");
-        if (arr.length != 2) {throw new IllegalArgumentException("LocalDateTimeRange constructor has been" +
+        if (arr.length != 2) {throw new IllegalArgumentException("Scheduler.LocalDateTimeRange constructor has been" +
                 " passed a string containing more or less than two dashes (-).");}
         start = LocalDateTime.parse(arr[0].strip());
         end = LocalDateTime.parse(arr[1].strip());
@@ -51,9 +52,9 @@ public class LocalDateTimeRange implements Comparable<LocalDateTimeRange>{
     }
 
     /**
-     * Compares between two LocalDateTimeRange objects by comparing the start LocalDateTime
+     * Compares between two Scheduler.LocalDateTimeRange objects by comparing the start LocalDateTime
      * and then checking the end LocalDateTime iff the two start values are equal.
-     * @param other the LocalDateTimeRange object to be compared.
+     * @param other the Scheduler.LocalDateTimeRange object to be compared.
      * @return -1 if start is before other's start OR if starts are equal and end is before other's end.
      *          1 if start is after other's start OR if starts are equal and end is after other's end.
      *          0 if both start and end are equal.
