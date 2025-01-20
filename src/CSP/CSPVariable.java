@@ -87,7 +87,7 @@ public class CSPVariable implements Cloneable, Comparable<CSPVariable>{
      *                              Should only be set that way when we assign a variable as part of a running
      *                              Arc Consistency enforcement. (for example when while running enforce
      *                              we encounter a variable with a domain of 1, in which case we auto-assign it.
-     * @return 'false' if the assignment resulted in an unsatisfiable schedule, 'true' otherwise.
+     * @return -1 if the assignment resulted in an unsatisfiable schedule, number of possible assignments removed otherwise.
      * @throws VariableAssignmentException If the variable has already been assigned or if it's not in the domain.
      */
     private int assign(Worker value, boolean enforce) throws VariableAssignmentException{
