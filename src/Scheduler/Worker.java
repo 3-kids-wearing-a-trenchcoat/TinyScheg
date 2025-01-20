@@ -136,9 +136,15 @@ public class Worker implements Comparable<Worker>, Cloneable{
 
     @Override
     public int compareTo(Worker other) {
+        if (other == null) {return 1;} // a null worker always comes before a non-null worker.
+        // this makes sense for CSPVariable's compareTo, where it may compare null Workers.
+
+        // Compare according to last shift
         if (lastShift.isBefore(other.lastShift)) return -1;
         if (lastShift.isAfter(other.lastShift)) return 1;
-        return 0;
+        // If same last shift, compare lexicographically by name.
+//        return 0;
+        return name.compareTo(other.name);
     }
 
     @Override

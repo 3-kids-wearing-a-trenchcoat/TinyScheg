@@ -42,17 +42,27 @@ public class Shift implements Comparable<Shift>, Cloneable{
     public LocalDateTime getStart() {return timeRange.getStart();}
     public LocalDateTime getEnd() {return timeRange.getEnd();}
 
+    /**
+     * Compare according to time range.
+     * If equal, compare names lexicographically.
+     * @param other the object to be compared.
+     * @return
+     */
     @Override
     public int compareTo(Shift other){
-        return timeRange.compareTo(other.timeRange);
+//        return timeRange.compareTo(other.timeRange);
+        int rangeComparison = timeRange.compareTo(other.timeRange);
+        if (rangeComparison == 0) {return name.compareTo(other.name);}
+        return rangeComparison;
     }
 
     @Override
     public boolean equals(Object obj){
         if(!(obj instanceof Shift)) return false;
         Shift other = (Shift) obj;
-        return name.equals(other.name) && timeRange.equals(other.timeRange) && workerNum == other.workerNum &&
-                type.equals(other.type) && assigned.equals(other.assigned);
+//        return name.equals(other.name) && timeRange.equals(other.timeRange) && workerNum == other.workerNum &&
+//                type.equals(other.type) && assigned.equals(other.assigned);
+        return name.equals(other.name) && timeRange.equals((other.timeRange));
     }
 
     @Override

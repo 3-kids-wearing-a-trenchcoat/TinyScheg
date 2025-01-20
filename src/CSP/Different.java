@@ -10,43 +10,24 @@ public class Different extends CSPConstraint{
     }
 
     /**
-     * Generate a new domain for the "from" variable which is arc consistent.
-     * @return a subset of The "from" domain of all values that have at least one value in the "to" domain
-     * that is different to them.
+     * Change the domain of the "to" variable to make it arc-consistent.
+     * Specifically, If from's assigned worker is in to's domain, remove that worker.
+     * @return 1 if a worker has been removed from to's domain, 0 otherwise.
      */
-    public HashSet<Worker> getArcConsistentDomain(){
-        HashSet<Worker> fromDomain = from.getDomain();
-        HashSet<Worker> toDomain = to.getDomain();
-        
-        return findDomain(fromDomain, toDomain);
+    public int makeArcConsistent(){
+        Worker value = from.getAssigned();
+        if (value == null || to.getAssigned() != null) {return 0;}
+//      // If no worker is assigned to the 'from' variable or a worker is already assigned to the 'to' variable.
+        return (to.getDomain().remove(value) ? 1 : 0); // return 1 if value was previously in domain, 0 otherwise.
     }
+//    public boolean makeArcConsistent(){
+//        Worker value = from.getAssigned();
+//        if (value == null || to.getAssigned() != null) {return false;}
+//        // If no worker is assigned to the 'from' variable or a worker is already assigned to the 'to' variable.
+//        return to.getDomain().remove(value); // returns 'true' if value was previously in the domain.
+//    }
 
-    /**
-     * Generate a new domain for the "from" variable which is arc consistent.
-     * @param alias A mapping between the 'original' worker (as was created at the start of the algorithm's run)
-     *              and its 'alias'.
-     * @return a subset of The "from" domain of all values that have at least one value in the "to" domain
-     * that is different to them.
-     */
-    public HashSet<Worker> getArcConsistentDomain(HashMap<CSPVariable, CSPVariable> alias){
-        HashSet<Worker> fromDomain = alias.get(from).getDomain();
-        HashSet<Worker> toDomain = alias.get(to).getDomain();
-
-        return findDomain(fromDomain, toDomain);
-    }
-    
-    private HashSet<Worker> findDomain(HashSet<Worker> fromDomain, HashSet<Worker> toDomain){
-        HashSet<Worker> output = new HashSet<Worker>();
-
-        for (Worker value : fromDomain){
-            for (Worker potentialAssignment : toDomain){
-                if (!value.equals(potentialAssignment)){
-                    output.add(value);
-                    break;
-                }
-            }
-        }
-
-        return output;
+    public CSPConstraint mapClone(CSPVariable to, CSPVariable from){
+        return new Different(from, to);
     }
 }
