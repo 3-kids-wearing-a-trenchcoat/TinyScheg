@@ -13,15 +13,9 @@ import Scheduler.*;
 public class CSPVariable implements Cloneable, Comparable<CSPVariable>{
     private final Shift shift;   // The shift represented by this variable
     private HashSet<Worker> domain; // The domain for this variable
-    // TODO: Change the data structure to support ordered
+    // TODO: Change the data structure to support ordered (if this is even needed??)
     private HashSet<CSPConstraint> constraints; // Constraints going from this variable to another
     private Worker assigned = null; // The worker assigned to this node.
-
-    // Variables used for assessment functions
-//    private final Double expectedRatio; // expected ratio between time in this shift and rest following it
-    private static HashMap<Shift, Double> expectedRatio; // map between shift and its expected ratio
-    private Double trueRatio = Double.POSITIVE_INFINITY; // True ratio between time in this shift and rest following it.
-                                                         // Infinity indicates that this is the last shift.
 
     public CSPVariable(Shift shift, List<Worker> workers, HashSet<CSPConstraint> constraints){
         this.shift = shift;
@@ -34,11 +28,6 @@ public class CSPVariable implements Cloneable, Comparable<CSPVariable>{
     public HashSet<CSPConstraint> getConstraints() {return constraints;}
     public Worker getAssigned() {return assigned;}
     public boolean isAssigned() {return assigned != null;}
-    public void setTrueRatio(Double trueRatio) {this.trueRatio = trueRatio;}
-    public Double getTrueRatio() {return trueRatio;}
-    public static void setExpectedRatio(HashMap<Shift, Double> expectedRatio) {
-        CSPVariable.expectedRatio = expectedRatio;
-    }
 
     /**
      * Updates the domains of variables that are constrained by this variable according to AC-3.
