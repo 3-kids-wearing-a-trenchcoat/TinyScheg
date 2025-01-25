@@ -5,16 +5,23 @@ import CSP.Exceptions.WeightException;
 import Scheduler.Worker;
 
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 public class CSPState implements Comparable<CSPState>, Runnable{
     private static final int POOL_SIZE = 8; // number of concurrent threads that should run
-    private static int runningTasks = 0; //number of concurrent threads actually being used
-
-
     private static final OutputTracker tracker = new OutputTracker();
-    private static final ExecutorService executorService = Executors.newFixedThreadPool(POOL_SIZE);
+
+//    private static final ExecutorService executorService = Executors.newFixedThreadPool(POOL_SIZE);
+    private static final ThreadPoolExecutor executor =
+        new ThreadPoolExecutor(POOL_SIZE, POOL_SIZE,
+        0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(0), Executors.defaultThreadFactory(),
+        new RejectedExecutionHandler() {
+            @Override
+            public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+                r.run(); // if max number of threads, run the next child state in the same thread as the parent.
+            }
+        });
+
     private TreeSet<CSPVariable> variables;
     private Assessor assessor;
     private int possibleAssignments = 0;
@@ -29,7 +36,8 @@ public class CSPState implements Comparable<CSPState>, Runnable{
         for (CSPVariable variable: variables){
             possibleAssignments += variable.getDomain().size();
         }
-        assessor = new Assessor();
+//        assessor = new Assessor();
+        assessor = new Assessor(this);
     }
 
     /**
@@ -42,7 +50,8 @@ public class CSPState implements Comparable<CSPState>, Runnable{
         for (CSPVariable variable: variables){
             possibleAssignments += variable.getDomain().size();
         }
-        assessor = new Assessor(weights);
+//        assessor = new Assessor(weights);
+        assessor = new Assessor(this, weights);
     }
 
     /**
@@ -85,7 +94,29 @@ public class CSPState implements Comparable<CSPState>, Runnable{
 
     @Override
     public void run(){
-        // TODO: implement run
+        // If this is not a new state, stop this run.
+        // If it IS a new state, tracker will be updated.
+        if (!tracker.checkNew(this)) {return;}
+
+        for (CSPVariable var : variables){ // go through all variables in order
+            TreeSet<CSPState> children = new TreeSet<>(); // Generate list of children to run next
+            for (Worker value : var.getDomain()){ // for every value in the domain of this variable
+                try {
+                    CSPState child = new CSPState(this, var, value); // generate new child
+                    if (!child.satisfiable || !tracker.checkScore(child)){
+                        continue; // If child is unsatisfiable or its score is below the candidate
+                    }
+                    // if child is a complete assignment, check if it's the best so far.
+                    if (child.isComplete()) {tracker.nominate(child);}
+                    else {children.add(child);}
+                }
+                catch (VariableAssignmentException e) {throw new RuntimeException(e);}
+
+                for (CSPState child : children){
+                    executor.execute(child);
+                }
+            }
+        }
     }
 
     @Override
@@ -102,7 +133,8 @@ public class CSPState implements Comparable<CSPState>, Runnable{
 
     public double getScore() {return assessor.getScore();}
 
-    public boolean isComplete() {return possibleAssignments == 0 && satisfiable;}
+//    public boolean isComplete() {return possibleAssignments == 0 && satisfiable;}
+    public boolean isComplete() {return possibleAssignments == 0;}
 
     public boolean isSatisfiable() {return satisfiable;}
 }
