@@ -16,11 +16,25 @@ public class CSPVariable implements Cloneable, Comparable<CSPVariable>{
     // TODO: Change the data structure to support ordered (if this is even needed??)
     private HashSet<CSPConstraint> constraints; // Constraints going from this variable to another
     private Worker assigned = null; // The worker assigned to this node.
+    private ArrayList<CSPVariable> equivalentVariables;
 
-    public CSPVariable(Shift shift, List<Worker> workers, HashSet<CSPConstraint> constraints){
+    public CSPVariable(Shift shift, List<Worker> workers){
         this.shift = shift;
         this.domain = new HashSet<Worker>(workers);
-        this.constraints = constraints;
+    }
+
+//    public CSPVariable(Shift shift, List<Worker> workers, List<CSPConstraint> constraints){
+//        this.shift = shift;
+//        this.domain = new HashSet<Worker>(workers);
+//        this.constraints = new HashSet<CSPConstraint>(constraints);
+//    }
+
+    public void setConstraints(List<CSPConstraint> constraints){
+        this.constraints = new HashSet<CSPConstraint>(constraints);
+    }
+
+    public void setEquivalentVariables(List<CSPVariable> equivalentVariables){
+        this.equivalentVariables = new ArrayList<>(equivalentVariables);
     }
 
     public HashSet<Worker> getDomain() {return this.domain;}
@@ -190,14 +204,19 @@ public class CSPVariable implements Cloneable, Comparable<CSPVariable>{
      * @param map HashSet where the key is the original variable and the value is the new, equivalent variable.
      */
     protected void mapConstraints(HashMap<CSPVariable, CSPVariable> map){
+        // map constraints
         HashSet<CSPConstraint> newConstraints = new HashSet<>();
-
         for (CSPConstraint constraint : constraints){
             CSPVariable newFrom = map.get(constraint.getFrom());
             CSPVariable newTo = map.get(constraint.getTo());
             newConstraints.add(constraint.mapClone(newFrom, newTo));
         }
-
         constraints = newConstraints;
+        // regenerate equivalence
+        ArrayList<CSPVariable> newEquivalence = new ArrayList<>();
+        for (CSPVariable oldEquiv : equivalentVariables){
+            newEquivalence.add(map.get(oldEquiv));
+        }
+        equivalentVariables = newEquivalence;
     }
 }

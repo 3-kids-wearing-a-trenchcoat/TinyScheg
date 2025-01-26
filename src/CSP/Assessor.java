@@ -1,8 +1,11 @@
 package CSP;
 
-public class Assessor implements Cloneable{
-    // TODO: implement
+import Scheduler.Worker;
 
+import java.util.HashMap;
+
+public class Assessor implements Cloneable{
+    private final HashMap<Worker, AssessorWorker> workers = new HashMap<>();
 
     @Override
     public Assessor clone(){

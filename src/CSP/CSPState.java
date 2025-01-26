@@ -2,6 +2,7 @@ package CSP;
 
 import CSP.Exceptions.VariableAssignmentException;
 import CSP.Exceptions.WeightException;
+import Scheduler.Shift;
 import Scheduler.Worker;
 
 import java.util.*;
@@ -26,6 +27,13 @@ public class CSPState implements Comparable<CSPState>, Runnable{
     private Assessor assessor;
     private int possibleAssignments = 0;
     private boolean satisfiable = true; // if 'false', this state cannot be satisfied and can be pruned.
+
+    public CSPState(List<Shift> shifts, List<Worker> workers){
+        // Generate variables, constraints and equivalences will come later.
+        for (Shift shift : shifts){
+            variables.add(new CSPVariable(shift, unaryConstraints(shift, workers)));
+        }
+    }
 
     /**
      * Base constructor, The Assessor's weights will be set to their default values.
@@ -137,4 +145,16 @@ public class CSPState implements Comparable<CSPState>, Runnable{
     public boolean isComplete() {return possibleAssignments == 0;}
 
     public boolean isSatisfiable() {return satisfiable;}
+
+    private List<Worker> unaryConstraints(Shift shift, List<Worker> workers){
+        List<Worker> output = new ArrayList<>();
+        // must be available during this time
+        for (Worker worker : workers){
+            if (worker.isAvailable(shift, false)){
+                output.add(worker);
+            }
+        }
+
+        return output;
+    }
 }

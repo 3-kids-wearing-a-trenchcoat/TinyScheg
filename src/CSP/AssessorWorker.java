@@ -12,6 +12,7 @@ public class AssessorWorker implements Cloneable{
 
     public AssessorWorker(Worker worker) {
         this.worker = worker;
-        // TODO: implement
     }
+
+    //TODO: implement
 }
