@@ -9,6 +9,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class CSPState implements Comparable<CSPState>, Runnable{
+    private static final int MIN_REST = 3; // minimum time between shifts (in hours)
     private static final int POOL_SIZE = 8; // number of concurrent threads that should run
     private static final OutputTracker tracker = new OutputTracker();
 
@@ -29,9 +30,31 @@ public class CSPState implements Comparable<CSPState>, Runnable{
     private boolean satisfiable = true; // if 'false', this state cannot be satisfied and can be pruned.
 
     public CSPState(List<Shift> shifts, List<Worker> workers){
-        // Generate variables, constraints and equivalences will come later.
+        // Generate variables, constraints will come later.
         for (Shift shift : shifts){
-            variables.add(new CSPVariable(shift, unaryConstraints(shift, workers)));
+            List<Worker> domain = unaryConstraints(shift, workers); // starting domain of the shift
+            // create all CSPVariables for this shift
+            ArrayList<CSPVariable> newVars = new ArrayList<>();
+            for (int i = 0; i < shift.getWorkerNum(); i++){
+                newVars.add(new CSPVariable(shift, domain));
+                possibleAssignments += domain.size(); // update possibleAssignments while we're at it
+            }
+            // set equivalence for each CSPVariable
+            for (CSPVariable newVar : newVars){
+                newVar.setEquivalentVariables(subsetExcluding(newVars, newVar));
+            }
+            // add new Variables for this shift to the TreeSet of variables
+            variables.addAll(newVars);
+        }
+        // Generate all constraints for the variables
+        // TODO: reconsider the implementation, because this is NOT an efficient way to do this.
+        for (CSPVariable var : variables){ // go through all variables
+            // compare with all variables that come AFTER this variable
+            for (CSPVariable otherVar : variables.tailSet(var, false)){
+                if (var.getShift().getTimeRange().overlaps(otherVar.getShift().getTimeRange(), MIN_REST)){
+                    var.addConstraint(new Different(var, otherVar));
+                } // TODO: check if this implementation is complete
+            }
         }
     }
 
@@ -48,19 +71,19 @@ public class CSPState implements Comparable<CSPState>, Runnable{
         assessor = new Assessor(this);
     }
 
-    /**
-     * Explicitly set the Assessor's weights
-     * @param variables A list of CSPVariables representing the shifts to be assigned.
-     * @param weights a list of weights to be applied to the assessment functions. (must match number of funcs)
-     */
-    public CSPState(List<CSPVariable> variables, List<Double> weights) throws WeightException {
-        this.variables = new TreeSet<CSPVariable>(variables);
-        for (CSPVariable variable: variables){
-            possibleAssignments += variable.getDomain().size();
-        }
-//        assessor = new Assessor(weights);
-        assessor = new Assessor(this, weights);
-    }
+//    /**
+//     * Explicitly set the Assessor's weights
+//     * @param variables A list of CSPVariables representing the shifts to be assigned.
+//     * @param weights a list of weights to be applied to the assessment functions. (must match number of funcs)
+//     */
+//    public CSPState(List<CSPVariable> variables, List<Double> weights) throws WeightException {
+//        this.variables = new TreeSet<CSPVariable>(variables);
+//        for (CSPVariable variable: variables){
+//            possibleAssignments += variable.getDomain().size();
+//        }
+////        assessor = new Assessor(weights);
+//        assessor = new Assessor(this, weights);
+//    }
 
     /**
      * The copy constructor, used to create an independent clone of the old constructor.
@@ -148,13 +171,24 @@ public class CSPState implements Comparable<CSPState>, Runnable{
 
     private List<Worker> unaryConstraints(Shift shift, List<Worker> workers){
         List<Worker> output = new ArrayList<>();
-        // must be available during this time
         for (Worker worker : workers){
-            if (worker.isAvailable(shift, false)){
-                output.add(worker);
+            if (worker.isAvailable(shift, false)){  // must be available during this time
+                // must match role, may need to reconsider this implementation when I support multiple roles
+                if (shift.fitsRole(worker)) {output.add(worker);} // fits unary constraints, add to output.
             }
         }
 
+        return output;
+    }
+
+//    private ArrayList<Worker> subsetExcluding(ArrayList<Worker> inputList, Worker toRemove){
+//        ArrayList<Worker> output = (ArrayList<Worker>) inputList.clone();
+//        output.remove(toRemove);
+//        return output;
+//    }
+    private ArrayList<CSPVariable> subsetExcluding(ArrayList<CSPVariable> inputList, CSPVariable toRemove){
+        ArrayList<CSPVariable> output = (ArrayList<CSPVariable>) inputList.clone();
+        output.remove(toRemove);
         return output;
     }
 }

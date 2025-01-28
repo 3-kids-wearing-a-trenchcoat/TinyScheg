@@ -8,6 +8,7 @@ public class Shift implements Comparable<Shift>, Cloneable{
     private final LocalDateTimeRange timeRange;
     private final int workerNum;
     private String type = null;
+    // TODO: change to support multiple types
     private Vector<Worker> assigned = new Vector<Worker>();
 
     public Shift(String name, LocalDateTimeRange timeRange, int workerNum){
@@ -92,5 +93,16 @@ public class Shift implements Comparable<Shift>, Cloneable{
             if(!assigned.getLast().equals(worker)) output += " & ";
         }
         return output;
+    }
+
+    /**
+     * Check if the input worker fits this shift type.
+     * The current implementation is that if the shift type is null it is open to all workers.
+     * Otherwise, the worker's role must match the shift's type.
+     * @param worker
+     * @return 'true' if worker's role fits this shift's type, 'false' otherwise
+     */
+    public boolean fitsRole(Worker worker){
+        return type == null || type.equals(worker.getRole());
     }
 }

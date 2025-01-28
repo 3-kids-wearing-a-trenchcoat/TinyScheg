@@ -29,8 +29,12 @@ public class CSPVariable implements Cloneable, Comparable<CSPVariable>{
 //        this.constraints = new HashSet<CSPConstraint>(constraints);
 //    }
 
-    public void setConstraints(List<CSPConstraint> constraints){
+    public void setConstraints(HashSet<CSPConstraint> constraints){
         this.constraints = new HashSet<CSPConstraint>(constraints);
+    }
+
+    public void addConstraint(CSPConstraint constraint){
+        constraints.add(constraint);
     }
 
     public void setEquivalentVariables(List<CSPVariable> equivalentVariables){
