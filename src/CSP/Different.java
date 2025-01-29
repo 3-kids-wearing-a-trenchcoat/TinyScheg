@@ -27,7 +27,7 @@ public class Different extends CSPConstraint{
 //        return to.getDomain().remove(value); // returns 'true' if value was previously in the domain.
 //    }
 
-    public CSPConstraint mapClone(CSPVariable to, CSPVariable from){
+    public CSPConstraint mapClone(CSPVariable from, CSPVariable to){
         return new Different(from, to);
     }
 }

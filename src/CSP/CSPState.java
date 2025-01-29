@@ -30,6 +30,10 @@ public class CSPState implements Comparable<CSPState>, Runnable{
     private boolean satisfiable = true; // if 'false', this state cannot be satisfied and can be pruned.
 
     public CSPState(List<Shift> shifts, List<Worker> workers){
+        // Create a temporary TreeSet which will have the same items as variables, ordered by shift period.
+        // This will make applying the Different constraints quicker.
+        TreeSet<CSPVariable> variablesOrderedByShift = new TreeSet<>((s1, s2) -> s1.getShift().compareTo(s2.getShift()));
+
         // Generate variables, constraints will come later.
         for (Shift shift : shifts){
             List<Worker> domain = unaryConstraints(shift, workers); // starting domain of the shift
@@ -37,39 +41,50 @@ public class CSPState implements Comparable<CSPState>, Runnable{
             ArrayList<CSPVariable> newVars = new ArrayList<>();
             for (int i = 0; i < shift.getWorkerNum(); i++){
                 newVars.add(new CSPVariable(shift, domain));
-                possibleAssignments += domain.size(); // update possibleAssignments while we're at it
             }
+            possibleAssignments += domain.size() * shift.getWorkerNum(); // update possible assignments
             // set equivalence for each CSPVariable
             for (CSPVariable newVar : newVars){
                 newVar.setEquivalentVariables(subsetExcluding(newVars, newVar));
             }
             // add new Variables for this shift to the TreeSet of variables
             variables.addAll(newVars);
+            variablesOrderedByShift.addAll(newVars);
         }
-        // Generate all constraints for the variables
-        // TODO: reconsider the implementation, because this is NOT an efficient way to do this.
-        for (CSPVariable var : variables){ // go through all variables
+
+        // Generate all 'Different' constraints for the variables
+        for (CSPVariable var : variablesOrderedByShift){ // go through all variables
             // compare with all variables that come AFTER this variable
-            for (CSPVariable otherVar : variables.tailSet(var, false)){
+            for (CSPVariable otherVar : variablesOrderedByShift.tailSet(var, false)){
+                // If this variable's shift is within MIN_REST hours of the other variable's shift
                 if (var.getShift().getTimeRange().overlaps(otherVar.getShift().getTimeRange(), MIN_REST)){
-                    var.addConstraint(new Different(var, otherVar));
-                } // TODO: check if this implementation is complete
+                    var.addConstraint(new Different(var, otherVar)); // constrain the two variables to be different
+                    otherVar.addConstraint(new Different(otherVar, var));
+                    // This should also affect the variables in variables, since they are pointers to the same object.
+                }
+                else{
+                    // If we encounter an otherVar that is not within MIN_REST hours, we can conclude from
+                    // variablesOrderedByShift's ordering that all subsequent otherVars will also be outside this range.
+                    // That is because we scan through the tailSet, meaning all otherVars we scan will have a shift time
+                    // equal or later than that of var.
+                    break;
+                }
             }
         }
     }
 
-    /**
-     * Base constructor, The Assessor's weights will be set to their default values.
-     * @param variables A list of CSPVariables representing the shifts to be assigned.
-     */
-    public CSPState(List<CSPVariable> variables){
-        this.variables = new TreeSet<CSPVariable>(variables);
-        for (CSPVariable variable: variables){
-            possibleAssignments += variable.getDomain().size();
-        }
-//        assessor = new Assessor();
-        assessor = new Assessor(this);
-    }
+//    /**
+//     * Base constructor, The Assessor's weights will be set to their default values.
+//     * @param variables A list of CSPVariables representing the shifts to be assigned.
+//     */
+//    public CSPState(List<CSPVariable> variables){
+//        this.variables = new TreeSet<CSPVariable>(variables);
+//        for (CSPVariable variable: variables){
+//            possibleAssignments += variable.getDomain().size();
+//        }
+////        assessor = new Assessor();
+//        assessor = new Assessor(this);
+//    }
 
 //    /**
 //     * Explicitly set the Assessor's weights
