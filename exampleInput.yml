@@ -1,0 +1,65 @@
+# Scheduler settings
+settings:
+  time: ["2025-01-01", "2025-01-04"] # time period to generate a schedule for
+  min_rest: 5 # minimum time between shifts (in hours)
+
+
+# List of workers available for assignment.
+workers:
+  - name: "Jack" # worker name, duplicates aren't allowed, mandatory
+    roles: ["supervisor", "other"] # list of roles associated with this worker, can be left empty
+    # list of date-time ranges in ISO 8601 (YYYY-MM-DDTHH:MM:SS) during which worker is unavailable.
+    # A worker is assumed to be available at all times other than date-time ranges explicitly mentioned in "unavailable"
+    unavailable: # can be left empty
+      - ["2025-01-01T04:00:00", "2025-01-01T06:00:00"]
+      - ["2025-01-02T04:00:00", "2025-01-02T06:00:00"]
+    likes: ["Jill"] # list of worker names this worker likes sharing a shift with, can be left empty
+    dislikes: [] # list of worker names this worker doesn't like sharing a shift with, can be left empty
+
+  - name: "Jill"
+    roles: ["supervisor", "other"]
+    unavailable:
+      - ["2025-01-03", "2025-01-04"] # date without time is assumed to be midnight, so jill is unavailable on the 3rd and IS available on the 4th
+    likes: ["Jack"]
+    dislikes: []
+
+  - name: "Jeff"
+    # except for the name field, a field can be excluded and will be considered empty
+    roles: ["security"]
+    dislikes: ["Jack", "Jill"]
+
+  - name: "Anne"
+
+  - name: "Gilgamesh"
+    roles: ["security", "supervisor"]
+    likes: ["Enkidu"]
+
+  - name: "Enkidu"
+    roles: ["security"]
+    likes: ["Gilgamesh"]
+
+
+# List of posts that need to be staffed by workers
+posts:
+  - name: "front gate" # post name, duplicates aren't allowed, mandatory
+    workers: 1 # number of workers that need to be assigned to this post
+    roles: # list of roles required by this post along with number of workers with that role needed
+      any: 1 # "any" is a wildcard that every worker (including those with an empty role list) fulfill
+    length: 3 # shift duration in hours
+
+    variations: # time-based variations on this post, can be omitted
+      # night variation - front gate is manned by two workers, one of which must have the security role:
+      - time: "19:00-07:00" # every 24-hour period, from 7PM to 7AM the next day
+        workers: 2
+        roles:
+          security: 1
+          # If "any" is omitted, defaults to `any: [workers] - [sum of specified roles]
+        # if any parameter is specified in the general case but not the variation, the variation will inherit the value
+        # specified by the general case
+
+  - name: "desk"
+    workers: 1
+    roles:
+      supervisor: 1
+    time: "08:00-20:00" # this post is only active between 8AM and 8PM every day
+    length: 4
