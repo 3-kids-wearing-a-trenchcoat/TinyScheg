@@ -39,13 +39,23 @@ class DateTimeRange:
             return NotImplemented
         return (self.start, self.end) < (other.start, other.end)
 
-    def __repr__(self):
-        return "DateTimeRange ({!r} -> {!r})".format(self.start, self.end)
-
-    def overlaps(self, other):
+    def __gt__(self, other):
         if not isinstance(other, DateTimeRange):
             return NotImplemented
-        return self.start <= other.end and other.start <= self.end
+        return (self.start, self.end) > (other.start, other.end)
+
+    def __ge__(self, other):
+        if not isinstance(other, DateTimeRange):
+            return NotImplemented
+        return (self.start, self.end) >= (other.start, other.end)
+
+    def __le__(self, other):
+        if not isinstance(other, DateTimeRange):
+            return NotImplemented
+        return (self.start, self.end) <= (other.start, other.end)
+
+    def __repr__(self):
+        return "DateTimeRange ({!r} -> {!r})".format(self.start, self.end)
 
     def touches(self, other):
         """return True if one DateTimeRange start immediately as the other ends, return False otherwise"""
@@ -53,11 +63,19 @@ class DateTimeRange:
             return NotImplemented
         return self.start == other.end or self.end == other.start
 
-    def in_range(self, other):
-        """Return True if input datetime object is within range, False otherwise"""
-        if not isinstance(other, dt.datetime):
+    def overlaps(self, other):
+        if not isinstance(other, DateTimeRange):
             return NotImplemented
-        return self.start <= other <= self.end
+        return self.start <= other.end and other.start <= self.end and not self.touches(other)
+
+    def in_range(self, other):
+        """Return True if other is entirely contained within this DateTimeRange
+        other may be either a DateTimeRange object or a datetime.datetime object"""
+        if not isinstance(other, dt.datetime):
+            if isinstance(other, DateTimeRange):
+                return self.start <= other.start < self.end and self.start <= other.end < self.end
+            return NotImplemented
+        return self.start <= other < self.end
 
     def is_before(self, other):
         if isinstance(other, dt.datetime):
@@ -75,6 +93,21 @@ class DateTimeRange:
 
     def time_str(self):
         return "{!r} - {!r}".format(self.start.time(), self.end.time())
+
+    def intersect(self, other):
+        """Return an intersection of two DateTimeRange objects
+        That is, a DateTimeRange contained within both self and other
+        If the intersection is empty, returns None"""
+        if not isinstance(DateTimeRange, other):
+            return NotImplemented
+        if not self.overlaps(other):
+            return None # no overlap and thus no intersection
+        # from here, self and other definitely overlap, return that overlap
+        if self < other: # self begins before other
+            return DateTimeRange(other.start, self.end)
+        return DateTimeRange(self.start, other.end)
+
+
 
 
 def parse_range(str_pair):
