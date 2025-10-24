@@ -42,7 +42,6 @@ workers:
 # List of posts that need to be staffed by workers
 posts:
   - name: "front gate" # post name, duplicates aren't allowed, mandatory
-    workers: 1 # number of workers that need to be assigned to this post
     roles: # list of roles required by this post along with number of workers with that role needed
       any: 1 # "any" is a wildcard that every worker (including those with an empty role list) fulfill
     length: 3 # shift duration in hours
@@ -50,15 +49,13 @@ posts:
     variations: # time-based variations on this post, can be omitted
       # night variation - front gate is manned by two workers, one of which must have the security role:
       - time: "19:00-07:00" # every 24-hour period, from 7PM to 7AM the next day
-        workers: 2
         roles:
           security: 1
-          # If "any" is omitted, defaults to `any: [workers] - [sum of specified roles]
+          any: 1
         # if any parameter is specified in the general case but not the variation, the variation will inherit the value
         # specified by the general case
 
   - name: "desk"
-    workers: 1
     roles:
       supervisor: 1
     time: "08:00-20:00" # this post is only active between 8AM and 8PM every day
