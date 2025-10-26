@@ -25,7 +25,7 @@ class DateTimeRange:
             raise TypeError("end must be a datetime.datetime instance or a datetime.timedelta instance")
 
     @property
-    def duration(self):
+    def duration(self) -> dt.timedelta:
         """return a datetime.timedelta of end - start"""
         return self.end - self.start
 
@@ -107,7 +107,17 @@ class DateTimeRange:
             return DateTimeRange(other.start, self.end)
         return DateTimeRange(self.start, other.end)
 
-
+    def pad(self, padding: dt.timedelta):
+        """
+        pad the DateTimeRange by a certain timedelta
+        If applying the (negative) padding results in start >= end, returns None.
+        :param padding: datetime.timedelta object
+        :return: [original_start + padding] -> [original_end + padding]
+        """
+        try:
+            return DateTimeRange(self.start + padding, self.end + padding)
+        except ValueError:
+            return None
 
 
 def parse_range(str_pair):
