@@ -17,7 +17,6 @@ class Worker:
         # TODO: add variables relevant to the CSP algorithm
 
     # TODO: Implement __lt__ and __eq__ when it's clear how workers should be ordered for CSP
-    # TODO: Implement has_role(self, shift) when the Shift object is defined
 
     def likes_worker(self, other):
         if not isinstance(other, Worker):
@@ -41,4 +40,15 @@ class Worker:
         while self.unavailable and self.unavailable[0].is_before(other_time):
             self.unavailable.pop(0)
 
-    # TODO: implement is_available(self, shift) once Shift object is defined
+    def is_available(self, period: DateTimeRange):
+        """Return True if the given period does not overlap with this worker's unavailability.
+        Otherwise, return False"""
+        for unavailable_time in self.unavailable:
+            if unavailable_time.overlaps(period):
+                return False
+        return True
+
+    def has_role(self, required_role: str):
+        """Return True if the worker has the input required role.
+        Otherwise, return False."""
+        return required_role in self.roles
