@@ -40,7 +40,7 @@ class Worker:
         while self.unavailable and self.unavailable[0].is_before(other_time):
             self.unavailable.pop(0)
 
-    def is_available(self, period: DateTimeRange):
+    def is_available(self, period: DateTimeRange.DateTimeRange):
         """Return True if the given period does not overlap with this worker's unavailability.
         Otherwise, return False"""
         for unavailable_time in self.unavailable:
