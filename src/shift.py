@@ -107,3 +107,41 @@ class Slot:
         while to_check:
             current_slot = to_check.pop(0)
             current_slot.find_time_constraints(to_check, rest_delta)
+
+    def propagate_constraint(self, to_remove: Worker) -> bool:
+        """
+        propagate a constraint following the removal of a worker from a slot's domain
+        Should this Slot's domain become empty, this slot (and by extension the schedule) becomes **unsatisfiable**
+        :param to_remove: Worker to remove from domain
+        :return: True if the slot remains satisfiable, False otherwise
+        """
+        if self.assigned or self.last_iteration == Slot.iteration_ticker:
+            # skip propagation if this slot has an assigned worker or if it was already checked in this iteration
+            return True
+        try: # remove the worker from the domain
+            self.diff_constrained.remove(to_remove)
+        except KeyError:
+            # to_remove is not in the domain, mark slot as checked and stop propagation
+            self.last_iteration = Slot.iteration_ticker
+            return True
+        if not self.domain: # if domain is empty (we checked previously it is unassigned)
+            return False
+        if len(self.domain) == 1: # if one worker remains in domain, assign it
+            return self.assign(self.domain.pop())
+            # further constraint propagation will be called by assign
+        return True
+
+    # TODO: define 'assign' and have it make use of constraint propagation
+    def assign(self, worker: Worker) -> bool:
+        """
+        assign a worker to this slot, triggering constraint propagation.
+        Should the constraint propagation triggered by this assignment yield a slot with an empty domain,
+        the slot (and by extension the schedule) will become _unsatisfiable_
+        If worker is not part of this Slot's domain, will raise a KeyError
+        :param worker: Worker to assign to this slot
+        :return: True if the schedule remains satisfiable after this assignment, False otherwise
+        """
+        if worker not in self.domain:
+            raise KeyError("worker is not in this Slot's domain")
+        # TODO: call on scoring classes and functions as part of the assignment
+        # TODO: notify Trail of actions taken here, so that they may be reversed
