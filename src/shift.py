@@ -1,0 +1,109 @@
+from __future__ import annotations
+import DateTimeRange
+from typing import List, Dict, Tuple, Optional
+from Worker import Worker
+from datetime import timedelta
+
+class Post:
+    """Defining a post that needs to be manned throughout the schedule.
+    A Post is a kind of template from which we generate a list of individual shifts.
+    For example, a \"front gate\" post that needs to be manned 24/7 by a single person for 2-hour shifts will
+    generate 12 \"front gate\" shifts, each representing a 2-hour period."""
+
+    def __init__(self, name: str, length: int, roles: Dict[str, int], time=None, variations=None):
+        """
+        Initialize a Post object (representing a single variation of a post)
+        :param name: post name
+        :param length: shift length
+        :param roles: dict (str: int) specifying how many workers of each role are needed
+        :param time: DateTimeRange specifying activity period for this post, if left empty, this post is always active
+        :param variations: DateTimeRange-based variations on this Post, may be left empty.
+        (assuming time-based ranges have already been converted to a series of datetime ranges)
+        Expected form for variations is:
+         Dict[DateTimeRange, Tuple[int(duration), Dict(roles)[str(role name), int(num of workers of this role)]]]
+        """
+        if time and not isinstance(DateTimeRange, time): # accept only DateTimeRange or None in time
+            raise TypeError("time must be None or a DateTimeRange object")
+        if variations and not isinstance(Dict[DateTimeRange, Tuple[int, Dict[str, int]]], variations):
+            raise TypeError("variations must be None or a dict mapping DateTimeRange to duration and a role dict")
+        self.name, self.length, self.roles, self.time, self.variations = name, length, roles, time, variations
+
+    # TODO: implement gen_slot_list
+
+
+class Slot:
+    """Representing a single schedule slot.
+    In the schedule, a post is divided into shifts, which represent the state of this post at a certain time range
+    Such a shift is a group of slots.
+    For example, a \"front gate\" post that needs to be manned by two people at all times, one of which must be
+    a supervisor and whose shift length is 2 hours, will have 2 slots for every 2-hour shifts, one for a supervisor
+    and the other for the additional worker"""
+
+    # static variables
+    DEFAULT_MIN_REST = 6 # Default minimum rest period in hours, any post that are less than <min_rest> hours apart
+                         # (including overlap) will have a binary difference constraint between them
+    iteration_ticker = 0 # global iteration tracker, compared with each slot's last_iteration
+
+    def __init__(self, time: DateTimeRange.DateTimeRange, role: str, post: Post, worker_list: List[Worker]):
+        """
+        Create a new schedule slot that fits a single worker of the appropriate role.
+        This constructor performs unary constraint pruning and the resulting domain will reflect this.
+        This constructor generates a Slot with NO binary constraints, which must be generated after the fact.
+        :param time: DateTimeRange representing date-time period of this slot.
+                    all workers with an unavailability period that overlaps time are pruned from the domain.
+        :param role: Required role for this slot, all workers without this role are pruned from the domain
+        :param post: Parent post this slot belongs to.
+        :param worker_list: List of all available workers, serves as a starting point for the domain
+        """
+        self.time = time
+        self.post = post
+        self.assigned = None
+        self.diff_constrained = set() # set of other Slots this slot is diff constrained with
+        self.last_iteration = 0 # if last_iteration < iteration_ticker, this slot hasn't been checked
+                                # in the current iteration routine
+        # build domain
+        self.domain = []
+        for worker in worker_list:
+            if worker.is_available(time) and worker.has_role(role):
+                self.domain.append(worker)
+        # TODO: domain may need to be sorted in a way that's beneficial for the SCP algorithm
+
+    def __lt__(self, other):
+        if not isinstance(Slot, other):
+            return NotImplemented
+        return self.time < other.time
+
+    def __eq__(self, other):
+        if not isinstance(Slot, other):
+            return NotImplemented
+        return self.time == other.time
+
+    def find_time_constraints(self, slots: List[Slot], min_rest: timedelta) -> None:
+        """
+        Create a diff constraint between this Slot and any Slot in the input list that is time constrained.
+        (either at the same time or within the same min_rest range)
+        Constraints are created both in this Slot and in the other Slot the constraint applies to
+        :param slots: a list of Slots **sorted by time** beginning with overlapping time
+        :param min_rest: datetime.timedelta object representing minimum rest period between two assignments
+        """
+        padded_time = self.time.pad(min_rest)
+        for other_slot in slots:
+            if not padded_time.overlaps(other_slot.time):
+                # since the list begins with overlapping time and is ordered by start time and then end time,
+                # if other_slot's time doesn't overlap with padded_time, no subsequent slot will overlap.
+                return
+            self.diff_constrained.add(other_slot)
+            other_slot.diff_constrained.add(self)
+
+    @staticmethod
+    def gen_time_constraints(slots: List[Slot], min_rest:float = DEFAULT_MIN_REST) -> None:
+        """
+        Generate time-based binary constraints between all slots in the input
+        :param slots: List of Slot objects sorted by time (DateTimeRange)
+        :param min_rest: minimum rest period in hours, defaults to DEFAULT_MIN_REST (6)
+        """
+        to_check = slots.copy()
+        rest_delta = timedelta(0,0,0,0,0, min_rest)
+        while to_check:
+            current_slot = to_check.pop(0)
+            current_slot.find_time_constraints(to_check, rest_delta)
