@@ -57,6 +57,9 @@ class DateTimeRange:
     def __repr__(self):
         return "DateTimeRange ({!r} -> {!r})".format(self.start, self.end)
 
+    def __hash__(self):
+        return hash((self.start, self.end))
+
     def touches(self, other):
         """return True if one DateTimeRange start immediately as the other ends, return False otherwise"""
         if not isinstance(other, DateTimeRange):
@@ -118,6 +121,11 @@ class DateTimeRange:
             return DateTimeRange(self.start + padding, self.end + padding)
         except ValueError:
             return None
+
+    @staticmethod
+    def forever():
+        """Get a DateTimeRange spanning from datetime.datetime.min to datetime.datetime.max"""
+        return DateTimeRange(dt.datetime.min, dt.datetime.max)
 
 
 def parse_range(str_pair):
