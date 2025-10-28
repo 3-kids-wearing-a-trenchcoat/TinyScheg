@@ -1,8 +1,8 @@
 from __future__ import annotations
-import DateTimeRange
+from DateTimeRange import DateTimeRange
 from typing import List, Dict, Tuple, Optional
 from Worker import Worker
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 class Post:
     """Defining a post that needs to be manned throughout the schedule.
@@ -10,25 +10,59 @@ class Post:
     For example, a \"front gate\" post that needs to be manned 24/7 by a single person for 2-hour shifts will
     generate 12 \"front gate\" shifts, each representing a 2-hour period."""
 
-    def __init__(self, name: str, length: int, roles: Dict[str, int], time=None, variations=None):
+    def __init__(self, name: str, length: int, roles: Dict[str, int],
+                 period:DateTimeRange|None=None,
+                 variations:Dict[DateTimeRange, Tuple[int, Dict[str, int]]]|None=None):
         """
         Initialize a Post object (representing a single variation of a post)
         :param name: post name
         :param length: shift length
         :param roles: dict (str: int) specifying how many workers of each role are needed
-        :param time: DateTimeRange specifying activity period for this post, if left empty, this post is always active
+        :param period: DateTimeRange specifying activity period for this post, if left empty, this post is always active
         :param variations: DateTimeRange-based variations on this Post, may be left empty.
         (assuming time-based ranges have already been converted to a series of datetime ranges)
         Expected form for variations is:
          Dict[DateTimeRange, Tuple[int(duration), Dict(roles)[str(role name), int(num of workers of this role)]]]
         """
-        if time and not isinstance(DateTimeRange, time): # accept only DateTimeRange or None in time
+        if not period:
+            self.period = DateTimeRange.forever()
+        elif not isinstance(DateTimeRange, period): # accept only DateTimeRange or None in time
             raise TypeError("time must be None or a DateTimeRange object")
-        if variations and not isinstance(Dict[DateTimeRange, Tuple[int, Dict[str, int]]], variations):
+        if not variations:
+            self.variations = Dict()
+        elif not isinstance(Dict[DateTimeRange, Tuple[int, Dict[str, int]]], variations):
             raise TypeError("variations must be None or a dict mapping DateTimeRange to duration and a role dict")
-        self.name, self.length, self.roles, self.time, self.variations = name, length, roles, time, variations
+        self.name, self.length, self.roles, self.time, self.variations = name, length, roles, period, variations
 
-    # TODO: implement gen_slot_list
+    def get_variation(self, start_time: datetime) -> Tuple[int, Dict[str, int]] | None:
+        """
+        Find the post variation (including default) containing the start time and return it as a Tuple of key and value
+        :param start_time: datetime.datetime object representing start time for a shift
+        :return: variation tuple where the first item is a DateTimeRange for this variation
+                 and the second item is the tuple (duration(int), Dict[role_name(str), required_workers(int)]
+                 Returns None if Post isn't active at this start_time
+        """
+        if start_time >= self.period:
+            return None # Post is no longer active
+        for var_period in self.variations.keys():
+            if var_period.in_range(start_time):
+                return self.variations[var_period]
+        return self.length, self.roles
+
+    def gen_slot_list(self, period: DateTimeRange) -> List[Slot]:
+        """
+        Generate a list of Slots according to this Post
+        :param period: Schedule datetime range
+        :return: list of Slot objects
+        """
+        output = []
+        start = period.start
+        while start < period.end:
+            current_var = self.get_variation(start)
+            if not current_var: # getting None from get_variation means we're out of this post's activity range
+                return output
+            # TODO: generate shifts according to roles at range start_time -> start_time+duration
+
 
 
 class Slot:
@@ -59,6 +93,7 @@ class Slot:
         self.post = post
         self.assigned = None
         self.diff_constrained = set() # set of other Slots this slot is diff constrained with
+        self.same_shift = set() # set of other Slots which, along with this Slot, make up a single shift
         self.last_iteration = 0 # if last_iteration < iteration_ticker, this slot hasn't been checked
                                 # in the current iteration routine
         # build domain
@@ -107,6 +142,11 @@ class Slot:
         while to_check:
             current_slot = to_check.pop(0)
             current_slot.find_time_constraints(to_check, rest_delta)
+
+    @staticmethod
+    def set_same_shift(slots: List[Slot]) -> None:
+        for i in range(len(slots)):
+            slots[i].same_shift = set(slots[:i] + slots[i+1:])
 
     def propagate_constraint(self, to_remove: Worker) -> bool:
         """
