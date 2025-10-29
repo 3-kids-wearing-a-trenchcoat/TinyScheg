@@ -51,4 +51,4 @@ class Worker:
     def has_role(self, required_role: str):
         """Return True if the worker has the input required role.
         Otherwise, return False."""
-        return required_role in self.roles
+        return required_role is None or required_role in self.roles
