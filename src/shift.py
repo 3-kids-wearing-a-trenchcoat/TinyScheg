@@ -23,23 +23,23 @@ class Post:
         (assuming time-based ranges have already been converted to a series of datetime ranges)
         Expected form for variations is:
          Dict[DateTimeRange, Tuple[int(duration), Dict(roles)[str(role name), int(num of workers of this role)]]]
+         It is assumed that each variation contains ALL variables and that filling in unspecified vars is done beforehand.
         """
         if not period:
-            self.period = DateTimeRange.forever()
+            period = DateTimeRange.forever()
         elif not isinstance(DateTimeRange, period): # accept only DateTimeRange or None in time
             raise TypeError("time must be None or a DateTimeRange object")
         if not variations:
-            self.variations = Dict()
+            variations = Dict()
         elif not isinstance(Dict[DateTimeRange, Tuple[int, Dict[str, int]]], variations):
             raise TypeError("variations must be None or a dict mapping DateTimeRange to duration and a role dict")
-        self.name, self.length, self.roles, self.time, self.variations = name, length, roles, period, variations
+        self.name, self.length, self.roles, self.period, self.variations = name, length, roles, period, variations
 
     def get_variation(self, start_time: datetime) -> Tuple[int, Dict[str, int]] | None:
         """
         Find the post variation (including default) containing the start time and return it as a Tuple of key and value
         :param start_time: datetime.datetime object representing start time for a shift
-        :return: variation tuple where the first item is a DateTimeRange for this variation
-                 and the second item is the tuple (duration(int), Dict[role_name(str), required_workers(int)]
+        :return: (duration(int), Dict[role_name(str), required_workers(int)])
                  Returns None if Post isn't active at this start_time
         """
         if start_time >= self.period:
@@ -49,7 +49,7 @@ class Post:
                 return self.variations[var_period]
         return self.length, self.roles
 
-    def gen_slot_list(self, period: DateTimeRange) -> List[Slot]:
+    def gen_slot_list(self, period: DateTimeRange) -> List[Slot] | List[None]:
         """
         Generate a list of Slots according to this Post
         :param period: Schedule datetime range
@@ -60,8 +60,19 @@ class Post:
         while start < period.end:
             current_var = self.get_variation(start)
             if not current_var: # getting None from get_variation means we're out of this post's activity range
-                return output
-            # TODO: generate shifts according to roles at range start_time -> start_time+duration
+                break
+            same_shift = []
+            end = start + current_var[0]
+            current_period = DateTimeRange(start, end)
+            for role in current_var[1].keys():
+                # for every role required by this shift...
+                for i in range(current_var[1][role]):
+                    # ...generate a number of slots equal to the required workers of that role
+                    same_shift.append(Slot(current_period, role, self))
+            Slot.set_same_shift(same_shift) # create same_shift association between the new slots
+            output += same_shift # append the newly created slots into the output
+            start = end # move on to next time period
+        return output
 
 
 
@@ -77,17 +88,19 @@ class Slot:
     DEFAULT_MIN_REST = 6 # Default minimum rest period in hours, any post that are less than <min_rest> hours apart
                          # (including overlap) will have a binary difference constraint between them
     iteration_ticker = 0 # global iteration tracker, compared with each slot's last_iteration
+    worker_list = []  # full domain for slots, each slot will copy and prune this list to fit its constraints.
+                      # must be initialized before initializing any Slot object
 
-    def __init__(self, time: DateTimeRange.DateTimeRange, role: str, post: Post, worker_list: List[Worker]):
+    def __init__(self, time: DateTimeRange, role: str, post: Post):
         """
         Create a new schedule slot that fits a single worker of the appropriate role.
         This constructor performs unary constraint pruning and the resulting domain will reflect this.
         This constructor generates a Slot with NO binary constraints, which must be generated after the fact.
         :param time: DateTimeRange representing date-time period of this slot.
                     all workers with an unavailability period that overlaps time are pruned from the domain.
-        :param role: Required role for this slot, all workers without this role are pruned from the domain
+        :param role: Required role for this slot, all workers without this role are pruned from the domain.
+                     if set to None, all workers may fill this Slot.
         :param post: Parent post this slot belongs to.
-        :param worker_list: List of all available workers, serves as a starting point for the domain
         """
         self.time = time
         self.post = post
@@ -98,9 +111,10 @@ class Slot:
                                 # in the current iteration routine
         # build domain
         self.domain = []
-        for worker in worker_list:
+        for worker in Slot.worker_list:
             if worker.is_available(time) and worker.has_role(role):
                 self.domain.append(worker)
+                # TODO: report to worker about his inclusion in a domain
         # TODO: domain may need to be sorted in a way that's beneficial for the SCP algorithm
 
     def __lt__(self, other):
