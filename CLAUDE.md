@@ -88,8 +88,8 @@ This folder contains many unrelated notes, as well as **stale notes from earlier
   happened yet.
 
 ## Stack
-The program is written in Python 3.13, currently using the virtual environment in `.venv` (a migration to Conda is
-planned). The only third-party dependency at this point is PyYAML.
+The program is written in Python 3.13, using the Conda environment `tinyscheg` defined in `environment.yml`.
+The only third-party dependency at this point is PyYAML.
 New libraries should only be introduced under one of the following circumstances:
 * A feature can't be implemented using the existing libraries.
 * Implementing a feature with existing libraries would be less efficient.
@@ -99,6 +99,7 @@ If you want to add a new library or module, you must first explain to me why you
 feature _could_ be implemented without introducing this new library and if so what implementing it with existing
 libraries might look like.
 You may only add this library or module after my explicit permission.
+If you get this permission, make sure to also update `environment.yml` to reflect the change.
 
 ## Working rules
 * Each modification to the code (be it changing, adding or deleting) must be briefly explained and applied only after
@@ -137,9 +138,12 @@ You may only add this library or module after my explicit permission.
   implemented, a decision being revised), update the relevant section of this file as well.
 
 ## How to run
-Not settled yet (pending the Conda migration). For now, code runs with the `.venv` interpreter
-(`.venv/bin/python`). Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import ...`),
-so code must be run from within `src/`.
+Always use `run.sh` to execute code. This is to make sure the correct Conda environment is used.
+This script runs `conda run -n "$ENV_NAME" python "$@"`, so `run.sh` needs to be supplied only with the commands that
+would appear after `python` if you were to write it manually (e.g. `./run.sh src/main.py`). `$ENV_NAME` is a constant
+defined in the script and must match the name in `environment.yml`.
+Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import ...`); `run.sh` adds `src/`
+to `PYTHONPATH` so this works regardless of the working directory.
 There is currently no test suite; how testing will be done is yet to be decided.
 
 ## Git Usage Rules

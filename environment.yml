@@ -1,0 +1,11 @@
+# Must match ENV_NAME in run.sh
+name: tinyscheg
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.13
+
+  # YAML input parsing
+  - pyyaml
