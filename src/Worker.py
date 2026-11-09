@@ -14,9 +14,6 @@ class Worker:
         if dislikes is None : self.dislikes = []
         else: self.dislikes = dislikes
         self.unavailable = sorted([DateTimeRange.parse_range(pair) for pair in unavailable])
-        # TODO: add variables relevant to the CSP algorithm
-
-    # TODO: Implement __lt__ and __eq__ when it's clear how workers should be ordered for CSP
 
     def likes_worker(self, other):
         if not isinstance(other, Worker):

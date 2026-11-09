@@ -109,6 +109,7 @@ class Slot:
         self.same_shift = set() # set of other Slots which, along with this Slot, make up a single shift
         self.last_iteration = 0 # if last_iteration < iteration_ticker, this slot hasn't been checked
                                 # in the current iteration routine
+        self.unassigned_constraints = 0 # number of slots constrained to this slot which are unassigned
         # build domain
         self.domain = []
         for worker in Slot.worker_list:
@@ -142,7 +143,9 @@ class Slot:
                 # if other_slot's time doesn't overlap with padded_time, no subsequent slot will overlap.
                 return
             self.diff_constrained.add(other_slot)
+            self.unassigned_constraints += 1
             other_slot.diff_constrained.add(self)
+            other_slot.unassigned_constraints += 1
 
     @staticmethod
     def gen_time_constraints(slots: List[Slot], min_rest:float = DEFAULT_MIN_REST) -> None:
@@ -199,3 +202,18 @@ class Slot:
             raise KeyError("worker is not in this Slot's domain")
         # TODO: call on scoring classes and functions as part of the assignment
         # TODO: notify Trail of actions taken here, so that they may be reversed
+        # TODO: update unassigned_constraints on all constrained slots
+
+    def csp_lt(self, other: Slot) -> bool:
+        """
+        Alternative less-than comparison based on CSP heuristics.
+        The primary criteria is MRV and Degree Heuristic is used as a tie-breaker.
+        :param other: Slot object
+        :return: True if self's domain is smaller than other's (MRV), or if the domains are of equal size
+                 and self has more unassigned slots constrained to it than the other. (Degree Heuristic)
+        """
+        if len(self.domain) < len(other.domain):
+            return True
+        if len(self.domain) == len(other.domain):
+            return self.unassigned_constraints > other.unassigned_constraints
+        return False
