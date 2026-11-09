@@ -1,7 +1,7 @@
 # Input format
 
 > [!WARNING]
-> **Not yet implemented.** The format below is defined (see the annotated [`exampleInput.yml`](../../exampleInput.yml)),
+> **Not yet implemented.** The format below is defined (see the annotated [`exampleInput.yml`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/exampleInput.yml)),
 > but the parser that reads it doesn't exist yet.
 
 TinyScheg's input is a single YAML file with three top-level keys: `settings`, `workers` and `posts`.

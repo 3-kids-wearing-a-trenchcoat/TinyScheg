@@ -1,6 +1,6 @@
 # `shift` module: `Post` and `Slot`
 
-Source: [`src/shift.py`](../../../src/shift.py)
+Source: [`src/shift.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/shift.py)
 
 See [Domain model](../../explanation/domain-model.md) for how posts, shifts and slots relate to each other.
 

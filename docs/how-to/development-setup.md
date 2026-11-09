@@ -47,3 +47,29 @@ Dependencies are listed in `environment.yml`. After changing it, update the envi
 ```bash
 conda env update -f environment.yml --prune
 ```
+
+## Viewing the docs
+
+The docs are plain Markdown in `docs/` and can be read directly on GitHub. They can also be viewed as a website,
+built with [MkDocs](https://www.mkdocs.org/) and the [Material](https://squidfunk.github.io/mkdocs-material/) theme
+(both installed by `environment.yml`).
+
+To browse the docs locally, run from the repository root:
+
+```bash
+mkdocs serve
+```
+
+and open <http://127.0.0.1:8000>. The site reloads automatically whenever a file in `docs/` or `mkdocs.yml` changes.
+
+To check the docs for broken links and other problems, build them in strict mode, which turns warnings into errors:
+
+```bash
+mkdocs build --strict
+```
+
+The built site goes into `site/`, which is ignored by git.
+
+When adding a page, also add it to `nav` in `mkdocs.yml`. Write docs so they render correctly both on GitHub and
+on the site: link to other pages with relative links, and link to files outside `docs/` (such as source files) with
+full GitHub URLs.

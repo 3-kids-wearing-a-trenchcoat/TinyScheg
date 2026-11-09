@@ -41,6 +41,9 @@ Docs rules:
   Mermaid diagrams. In math, write `\lbrace` / `\rbrace` instead of `\{` / `\}`, which GitHub can mangle.
 * `docs/explanation/scoring.md` was transferred as-is from the original notes, including a known mistake in the rest
   target formula. It will be reviewed separately; don't correct it unprompted.
+* The docs are also built into a site with MkDocs + Material (`mkdocs.yml`). When adding a page, add it to `nav` in
+  `mkdocs.yml`. Link to files outside `docs/` with full GitHub URLs, since relative links outside `docs/` break on
+  the site. After changing the docs, check them with `mkdocs build --strict`.
 
 ## Knowledge Sources
 The docs were migrated from notes in the Zettelkasten at `/home/danny/Documents/Zettelkasten/`, which are now
@@ -51,7 +54,8 @@ superseded by `docs/`. They may still be useful for background, but if they disa
 
 ## Stack
 The program is written in Python 3.13, using the Conda environment `tinyscheg` defined in `environment.yml`.
-The only third-party dependency at this point is PyYAML.
+The only third-party dependency of the program at this point is PyYAML. MkDocs, Material and markdown-callouts are
+used only to build the docs.
 New libraries should only be introduced under one of the following circumstances:
 * A feature can't be implemented using the existing libraries.
 * Implementing a feature with existing libraries would be less efficient.

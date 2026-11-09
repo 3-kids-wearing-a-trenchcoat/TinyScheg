@@ -1,0 +1,19 @@
+/* Material has no built-in "important" admonition type, which GitHub's > [!IMPORTANT] alert maps to.
+   Style it like GitHub does (purple), using Material's "note" icon. */
+:root {
+  --md-admonition-icon--important: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2 1 21Z"/></svg>');
+}
+.md-typeset .admonition.important,
+.md-typeset details.important {
+  border-color: #8250df;
+}
+.md-typeset .important > .admonition-title,
+.md-typeset .important > summary {
+  background-color: rgba(130, 80, 223, 0.1);
+}
+.md-typeset .important > .admonition-title::before,
+.md-typeset .important > summary::before {
+  background-color: #8250df;
+  -webkit-mask-image: var(--md-admonition-icon--important);
+  mask-image: var(--md-admonition-icon--important);
+}

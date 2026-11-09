@@ -1,6 +1,6 @@
 # `DateTimeRange` module
 
-Source: [`src/DateTimeRange.py`](../../../src/DateTimeRange.py)
+Source: [`src/DateTimeRange.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/DateTimeRange.py)
 
 > [!NOTE]
 > **Implemented.**

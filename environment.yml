@@ -8,3 +8,11 @@ dependencies:
 
   # YAML input parsing
   - pyyaml
+
+  - pip
+  - pip:
+      # Documentation site (docs only, not used by the program itself)
+      - mkdocs==1.6.1
+      - mkdocs-material==9.7.6
+      # Renders GitHub-style alerts (> [!NOTE]) so docs look right both on GitHub and on the site
+      - markdown-callouts==0.4.0

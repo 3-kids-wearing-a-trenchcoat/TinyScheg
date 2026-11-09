@@ -1,0 +1,85 @@
+site_name: TinyScheg
+site_description: A shift scheduler that balances hard constraints, fairness and personal preferences.
+repo_url: https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg
+repo_name: TinyScheg
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - How-to guides:
+      - Development setup: how-to/development-setup.md
+  - Reference:
+      - Input format: reference/input-format.md
+      - Output format: reference/output-format.md
+      - API:
+          - DateTimeRange: reference/api/datetime-range.md
+          - Worker: reference/api/worker.md
+          - Post and Slot: reference/api/post-and-slot.md
+  - Explanation:
+      - Architecture: explanation/architecture.md
+      - Domain model: explanation/domain-model.md
+      - CSP formulation: explanation/csp-formulation.md
+      - Search algorithm: explanation/search-algorithm.md
+      - Scoring: explanation/scoring.md
+      - Glossary: explanation/glossary.md
+  - Decisions:
+      - decisions/README.md
+      - 0001 Model scheduling as a CSP: decisions/0001-model-scheduling-as-csp.md
+      - 0002 Backtracking with forward checking: decisions/0002-backtracking-with-forward-checking.md
+      - 0003 Variable ordering: decisions/0003-variable-ordering-mrv-degree.md
+      - 0004 Branch and bound: decisions/0004-branch-and-bound-with-monotone-penalty.md
+      - 0005 Weighted sum of penalties: decisions/0005-weighted-sum-of-normalized-penalties.md
+      - 0006 Convex workload function: decisions/0006-convex-function-for-workload-fairness.md
+      - 0007 Greedy rest-deficit bound: decisions/0007-greedy-bound-for-worst-rest-deficit.md
+      - 0008 Undo through a trail: decisions/0008-undo-through-trail.md
+      - 0009 YAML input: decisions/0009-yaml-input-with-time-based-variations.md
+      - 0010 Python rewrite: decisions/0010-python-rewrite.md
+
+markdown_extensions:
+  - admonition
+  - github-callouts           # GitHub-style alerts (> [!NOTE]), from markdown-callouts
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:      # $...$ and $$...$$ math, rendered by MathJax
+      generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
+
+extra_css:
+  - stylesheets/extra.css
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
