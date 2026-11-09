@@ -1,4 +1,3 @@
-# Must match ENV_NAME in run.sh
 name: tinyscheg
 
 channels:

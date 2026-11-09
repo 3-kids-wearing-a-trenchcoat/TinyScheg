@@ -138,12 +138,14 @@ If you get this permission, make sure to also update `environment.yml` to reflec
   implemented, a decision being revised), update the relevant section of this file as well.
 
 ## How to run
-Always use `run.sh` to execute code. This is to make sure the correct Conda environment is used.
-This script runs `conda run -n "$ENV_NAME" python "$@"`, so `run.sh` needs to be supplied only with the commands that
-would appear after `python` if you were to write it manually (e.g. `./run.sh src/main.py`). `$ENV_NAME` is a constant
-defined in the script and must match the name in `environment.yml`.
-Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import ...`); `run.sh` adds `src/`
-to `PYTHONPATH` so this works regardless of the working directory.
+Code is run with the `tinyscheg` Conda environment (`environment.yml`). I work with it activated
+(`conda activate tinyscheg`) and run scripts with plain `python`.
+Since your shell state does not persist between commands, activation won't carry over for you. Instead, always run
+code through the environment explicitly: `conda run --no-capture-output -n tinyscheg python <args>`
+(e.g. `conda run --no-capture-output -n tinyscheg python src/main.py`).
+Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import ...`). Running a script inside
+`src/` (e.g. `python src/main.py`) puts `src/` on the import path automatically; for anything else (such as
+`python -c`), run from within `src/` or set `PYTHONPATH=src`.
 There is currently no test suite; how testing will be done is yet to be decided.
 
 ## Git Usage Rules
