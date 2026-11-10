@@ -5,12 +5,12 @@
 **Constraint propagation** — Using constraints to shrink slot domains after an assignment. TinyScheg uses forward
 checking. See [Search algorithm](search-algorithm.md#constraint-propagation).
 
+**Dangling shift** — A shift cut short at the end of its segment, because the segment's length isn't a multiple of
+the shift length.
+
 **Difference constraint** (diff constraint) — A binary constraint between two slots that must be assigned
 different workers, because they overlap in time or are less than the minimum rest period apart.
 See [CSP formulation](csp-formulation.md#binary-difference-constraints).
-
-**Dangling shift** — A shift cut short at the end of its segment, because the segment's length isn't a multiple of
-the shift length.
 
 **Domain** — The set of workers who can still be assigned to a slot.
 
