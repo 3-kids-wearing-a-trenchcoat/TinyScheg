@@ -1,6 +1,6 @@
 # `Worker` module
 
-Source: [`src/Worker.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/Worker.py)
+Source: [`src/tinyscheg/model/worker.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/model/worker.py)
 
 > [!IMPORTANT]
 > **Partially implemented.** The per-worker `Scorer` (see [Scoring](../../explanation/scoring.md)) and the

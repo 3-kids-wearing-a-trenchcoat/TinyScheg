@@ -1,6 +1,6 @@
 # `DateTimeRange` module
 
-Source: [`src/DateTimeRange.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/DateTimeRange.py)
+Source: [`src/tinyscheg/timing/datetime_range.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/timing/datetime_range.py)
 
 > [!NOTE]
 > **Implemented.**

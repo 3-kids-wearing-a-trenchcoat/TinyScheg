@@ -1,7 +1,7 @@
 from __future__ import annotations
-from DateTimeRange import DateTimeRange
+from tinyscheg.timing.datetime_range import DateTimeRange
 from typing import List, Dict, Tuple, Optional
-from Worker import Worker
+from tinyscheg.model.worker import Worker
 from datetime import timedelta, datetime
 
 class Post:

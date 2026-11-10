@@ -32,13 +32,24 @@ With the environment activated, run scripts with plain `python` from the reposit
 python src/main.py
 ```
 
-Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import DateTimeRange`).
-Running a script that lives in `src/` puts `src/` on the import path automatically. For anything else, such as
-`python -c` or an interactive session, either run from within `src/` or set `PYTHONPATH`:
+The code is the `tinyscheg` package in `src/tinyscheg/` (see
+[Architecture](../explanation/architecture.md#code-layout)), and modules import each other by full package path
+(e.g. `from tinyscheg.timing.datetime_range import DateTimeRange`). Running `src/main.py` puts `src/` on the import
+path automatically. For anything else, such as `python -c` or an interactive session, set `PYTHONPATH`:
 
 ```bash
-PYTHONPATH=src python -c "from DateTimeRange import DateTimeRange"
+PYTHONPATH=src python -c "from tinyscheg.timing.datetime_range import DateTimeRange"
 ```
+
+## Running the tests
+
+Tests live in `tests/` and use pytest. With the environment activated, run them from the repository root:
+
+```bash
+python -m pytest
+```
+
+`pyproject.toml` puts `src/` on pytest's import path, so no `PYTHONPATH` is needed.
 
 ## Updating dependencies
 

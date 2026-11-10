@@ -67,13 +67,29 @@ Write or return the output.
 
 ## Code layout
 
-All code currently lives directly in `src/`:
+The code is the `tinyscheg` package in `src/tinyscheg/`, split into subpackages by domain. `src/main.py` is a thin
+entry point. Modules marked *planned* don't exist yet.
 
-| File                  | Contents |
-|-----------------------|----------|
-| `src/DateTimeRange.py`| [`DateTimeRange`](../reference/api/datetime-range.md) and `parse_range` |
-| `src/Worker.py`       | [`Worker`](../reference/api/worker.md) |
-| `src/shift.py`        | [`Post` and `Slot`](../reference/api/post-and-slot.md) |
-| `src/main.py`         | Entry point (empty) |
+| Module | Contents |
+|--------|----------|
+| `cli.py` | *Planned.* Command-line interface; runs the pipeline end to end. |
+| `timing/datetime_range.py` | [`DateTimeRange`](../reference/api/datetime-range.md) and `parse_range`. |
+| `timing/daily_window.py` | *Planned.* Recurring `"HH:MM-HH:MM"` windows, turned into concrete ranges over a period. |
+| `model/worker.py` | [`Worker`](../reference/api/worker.md). |
+| `model/shift.py` | [`Post` and `Slot`](../reference/api/post-and-slot.md); to become plain, immutable `Shift` and `Slot` descriptions, with `Post` moving to `model/post.py`. |
+| `model/post.py` | *Planned.* `Post` and its variations. |
+| `model/shift_generation.py` | *Planned.* Segments, shifts and slots in stable order ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). |
+| `parsing/input_reader.py` | *Planned.* YAML input to model objects. |
+| `parsing/validation.py` | *Planned.* Input validation rules. |
+| `csp/problem.py` | *Planned.* Domains and difference constraints, by slot index. |
+| `csp/state.py` | *Planned.* The explicit search state and change records ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
+| `csp/search.py` | *Planned.* Backtracking search with forward checking and MRV/degree ordering. |
+| `output/grid.py` | *Planned.* Assigned slots to the time-by-post grid ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
+| `output/csv_writer.py` | *Planned.* The grid as CSV; XLSX and ODS writers will sit next to it. |
 
-Planned but not yet in code: `Scorer`, `Schedule` and the search with its explicit search state.
+Dependencies point one way: `timing` ← `model` ← (`parsing`, `csp`, `output`), with `cli` using all of them.
+`parsing`, `csp` and `output` don't import each other. A planned `scoring` package will depend only on `model` and be
+used by `csp`.
+
+Tests live in `tests/`, one test file per module, plus an independent schedule checker that verifies every hard
+constraint of a search result.

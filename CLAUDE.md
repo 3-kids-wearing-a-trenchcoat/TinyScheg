@@ -109,10 +109,13 @@ Code is run with the `tinyscheg` Conda environment (`environment.yml`). I work w
 Since your shell state does not persist between commands, activation won't carry over for you. Instead, always run
 code through the environment explicitly: `conda run --no-capture-output -n tinyscheg python <args>`
 (e.g. `conda run --no-capture-output -n tinyscheg python src/main.py`).
-Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import ...`). Running a script inside
-`src/` (e.g. `python src/main.py`) puts `src/` on the import path automatically; for anything else (such as
-`python -c`), run from within `src/` or set `PYTHONPATH=src`.
-Tests use pytest (a development-only dependency in `environment.yml`). There is no test suite yet.
+The code is the `tinyscheg` package in `src/tinyscheg/`, split into subpackages by domain (see
+`docs/explanation/architecture.md#code-layout`). Modules import each other by full package path
+(e.g. `from tinyscheg.timing.datetime_range import DateTimeRange`). Running `python src/main.py` puts `src/` on the
+import path automatically; for anything else (such as `python -c`), set `PYTHONPATH=src`.
+Tests use pytest (a development-only dependency in `environment.yml`) and live in `tests/`. `pyproject.toml` puts
+`src/` on pytest's import path, so run them from the repository root:
+`conda run --no-capture-output -n tinyscheg python -m pytest`.
 
 ## Git Usage Rules
 When working on this repository, you MUST follow these rules:

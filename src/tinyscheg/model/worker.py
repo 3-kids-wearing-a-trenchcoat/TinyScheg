@@ -1,4 +1,4 @@
-import DateTimeRange
+from tinyscheg.timing import datetime_range as DateTimeRange
 
 class Worker:
     """
