@@ -52,11 +52,11 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 |-------------------------------------|---------------------------|
 | `DateTimeRange`                     | Implemented               |
 | `Worker`                            | Partially implemented     |
-| `Post`                              | Implemented               |
+| `Post`                              | Partially implemented     |
 | `Slot` (domain, constraints, MRV)   | Partially implemented     |
 | Input parsing                       | Not yet implemented       |
 | Search (backtracking, pocket)       | Not yet implemented       |
-| `Trail`                             | Not yet implemented       |
+| Undo (change records)               | Not yet implemented       |
 | `Schedule`                          | Not yet implemented       |
 | Scoring (`Scorer`)                  | Not yet implemented       |
 | Output                              | Not yet implemented       |

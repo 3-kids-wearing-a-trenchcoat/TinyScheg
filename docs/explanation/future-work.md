@@ -62,6 +62,16 @@ Penalties are first computed from scratch for every state. Updating them increme
 stay exactly path-independent (see [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)), for
 example by using exact arithmetic. The from-scratch computation then serves as a test oracle.
 
+## Dangling shifts
+
+> [!WARNING]
+> **Not decided.** Deferred until TinyScheg works end to end.
+
+When a segment's length isn't a multiple of the shift length, its last shift is cut short
+([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). This is expected to be rare in real use. Options if it
+needs handling: keep the short shift (current behaviour), merge it into the previous shift, or let the input set a
+minimum shift length. If the segment scheme itself doesn't work well in practice, it will be revisited.
+
 ## Time and post preferences
 
 > [!WARNING]

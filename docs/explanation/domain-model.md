@@ -47,16 +47,32 @@ can override the roles and the shift length; anything it doesn't specify is inhe
 > [!IMPORTANT]
 > **Partially implemented.** See [`Slot`](../reference/api/post-and-slot.md#class-slottime-role-post).
 
-Over the schedule period, each post is split into consecutive **shifts**. Starting from the beginning of the
-period, each shift's length and requirements are taken from the variation in effect at its start time, and the next
-shift starts when it ends.
+Over the schedule period, each post is split into **shifts**
+([ADR 0018](../decisions/0018-slot-generation-by-segments.md)):
+
+1. The period is split into **segments** at every boundary where the post's rules change: the schedule's start and
+   end, the openings and closings of the post's daily activity window, and the starts and ends of its variations.
+   Windows that cross midnight count from the day they open, so a window that opened the day before the schedule
+   starts still applies. A variation only applies where its post is active.
+2. Within a segment the rules are constant: those of the variation in effect, otherwise the post's general case.
+3. In each segment, shifts are laid back to back from the segment's start. If the segment isn't a multiple of the
+   shift length, the last shift is cut off at the segment's end (a shorter, "dangling" shift).
+
+For example, with 3-hour shifts and a 19:00–07:00 night variation, a schedule starting at midnight gets night
+shifts 00–03, 03–06 and 06–07, then day shifts 07–10, 10–13, 13–16 and 16–19, then night shifts from 19:00. No
+shift ever crosses a boundary where the requirements change.
 
 Each shift is made up of **slots**, one per required worker. A slot is a single position for a single worker at a
 specific time, with a single required role. For example, a night shift at the front gate requiring
 `{security: 1, any: 1}` consists of two slots: one requiring the security role and one that any worker can fill.
 
 Slots of the same shift are linked to one another (`Slot.same_shift`). This grouping matters for the
-likes/dislikes part of [scoring](scoring.md), which looks at who shares a shift.
+likes/dislikes part of [scoring](scoring.md), which looks at who shares a shift. A variation requiring no workers
+produces shifts with no slots, closing the post during its window.
+
+Slots have a fixed, stable order: by start time, end time, the post's position in the input, the role's position in
+the post's role list, and index. This order is used wherever ties need breaking, so that the same input always
+produces the same schedule ([ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)).
 
 Slots are the unit TinyScheg actually schedules: they are the variables of the
 [CSP](csp-formulation.md).
@@ -67,5 +83,5 @@ Slots are the unit TinyScheg actually schedules: they are the variables of the
 > **Not yet implemented.**
 
 A **schedule** is an assignment of workers to slots. A planned `Schedule` class will hold the list of slots (in the
-order the CSP algorithm processes them) together with the [`Trail`](search-algorithm.md#trail) used to undo
+order the CSP algorithm processes them) together with the [change records](search-algorithm.md#undo) used to undo
 assignments while searching.

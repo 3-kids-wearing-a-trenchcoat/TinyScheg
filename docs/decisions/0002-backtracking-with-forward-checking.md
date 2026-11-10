@@ -1,6 +1,6 @@
 # 0002. Backtracking search with forward checking
 
-**Status:** Accepted
+**Status:** Accepted. Amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) (no automatic assignment of single-worker slots).
 
 ## Context
 

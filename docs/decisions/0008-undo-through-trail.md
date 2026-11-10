@@ -1,6 +1,6 @@
 # 0008. Undo assignments through a trail
 
-**Status:** Accepted
+**Status:** Superseded by [0016](0016-undo-through-change-records-on-the-call-stack.md).
 
 ## Context
 

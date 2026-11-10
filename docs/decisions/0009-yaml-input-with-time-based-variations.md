@@ -1,6 +1,6 @@
 # 0009. YAML input with time-based post variations
 
-**Status:** Accepted
+**Status:** Accepted. Shift generation detailed by [0018](0018-slot-generation-by-segments.md).
 
 ## Context
 

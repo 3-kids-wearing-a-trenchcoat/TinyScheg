@@ -23,13 +23,13 @@ ADR that supersedes the old one.
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-model-scheduling-as-csp.md) | Model scheduling as a constraint satisfaction problem | Accepted |
-| [0002](0002-backtracking-with-forward-checking.md) | Backtracking search with forward checking | Accepted |
+| [0002](0002-backtracking-with-forward-checking.md) | Backtracking search with forward checking | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) |
 | [0003](0003-variable-ordering-mrv-degree.md) | Order variables by MRV and the degree heuristic; no value ordering | Accepted |
-| [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted |
+| [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) |
 | [0005](0005-weighted-sum-of-normalized-penalties.md) | Score as a weighted sum of normalized per-worker penalties | Accepted |
 | [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted, amended by [0013](0013-availability-weighted-workload.md) |
 | [0007](0007-greedy-bound-for-worst-rest-deficit.md) | Bound the worst rest deficit greedily | Superseded by [0014](0014-exact-worst-rest-deficit.md) |
-| [0008](0008-undo-through-trail.md) | Undo assignments through a trail | Accepted |
+| [0008](0008-undo-through-trail.md) | Undo assignments through a trail | Superseded by [0016](0016-undo-through-change-records-on-the-call-stack.md) |
 | [0009](0009-yaml-input-with-time-based-variations.md) | YAML input with time-based post variations | Accepted |
 | [0010](0010-python-rewrite.md) | Rewrite in Python | Accepted |
 | [0011](0011-no-output-for-infeasible-inputs.md) | No output for infeasible inputs | Accepted |
@@ -37,6 +37,9 @@ ADR that supersedes the old one.
 | [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted, amended by [0015](0015-normalize-workload-by-packable-maximum.md) |
 | [0014](0014-exact-worst-rest-deficit.md) | Calculate the worst rest deficit exactly | Accepted |
 | [0015](0015-normalize-workload-by-packable-maximum.md) | Normalize workload by each worker's packable maximum | Accepted |
+| [0016](0016-undo-through-change-records-on-the-call-stack.md) | Undo through change records on the call stack | Accepted |
+| [0017](0017-plain-forward-checking-and-pruning-on-ties.md) | Plain forward checking, and pruning on ties | Accepted |
+| [0018](0018-slot-generation-by-segments.md) | Generate shifts per segment | Accepted |
 
 ## Template
 

@@ -9,6 +9,9 @@ checking. See [Search algorithm](search-algorithm.md#constraint-propagation).
 different workers, because they overlap in time or are less than the minimum rest period apart.
 See [CSP formulation](csp-formulation.md#binary-difference-constraints).
 
+**Dangling shift** — A shift cut short at the end of its segment, because the segment's length isn't a multiple of
+the shift length.
+
 **Domain** — The set of workers who can still be assigned to a slot.
 
 **Minimum rest period** — The least amount of time, in hours, that must separate two shifts assigned to the same
@@ -32,14 +35,17 @@ has.
 
 **Scorer** — A per-worker object holding what's needed to calculate that worker's penalty. Not yet implemented.
 
+**Segment** — A stretch of the schedule period during which a post's rules (shift length, roles) don't change.
+Shifts are generated per segment. See [Domain model](domain-model.md#shifts-and-slots).
+
 **Shift** — A post during one specific time range; a group of slots that are manned together.
 See [Domain model](domain-model.md#shifts-and-slots).
 
 **Slot** — A single position, for a single worker with a given role, during one shift. Slots are the CSP's
 variables. See [Domain model](domain-model.md#shifts-and-slots).
 
-**Trail** — The undo stack used during backtracking to revert an assignment and everything it caused.
-Not yet implemented. See [Search algorithm](search-algorithm.md#trail).
+**Undo** — Reverting an assignment and everything it caused when the search backtracks, by restoring the values
+recorded when the changes were made. See [Search algorithm](search-algorithm.md#undo).
 
 **Unavailability** — A date-time range during which a worker can't be assigned. Workers are available at all other
 times.

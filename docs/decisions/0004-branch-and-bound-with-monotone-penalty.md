@@ -1,6 +1,6 @@
 # 0004. Find the best schedule with branch and bound over a monotone penalty
 
-**Status:** Accepted
+**Status:** Accepted. Amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) (prune on equal penalties too).
 
 ## Context
 

@@ -77,7 +77,19 @@ A variation overrides a post's fields during a recurring daily time window.
 | `roles`  | mapping of role → count  | no       | Overrides the post's `roles`. |
 | `length` | number (hours)           | no       | Overrides the post's `length`. |
 
-Any field a variation doesn't specify is inherited from the post's general case.
+* Any field a variation doesn't specify is inherited from the post's general case.
+* A variation only applies while its post is active: if the post has its own `time` window, the variation is limited
+  to the part of its window that falls within the post's.
+* Variations of the same post must not overlap in time; overlapping variations are an input error.
+* A variation may require no workers at all (e.g. `roles: {}`), which closes the post during its window.
+
+### Time windows
+
+* `"HH:MM-HH:MM"` windows recur every day. A window whose end is earlier than its start crosses midnight
+  (`"19:00-07:00"` is 7 PM to 7 AM the next day), and a window whose start equals its end (`"00:00-00:00"`) covers
+  the full 24 hours.
+* Shifts start at the beginning of each window, and a shift is cut short where the window (or the schedule) ends.
+  See [Domain model](../explanation/domain-model.md#shifts-and-slots) for exactly how shifts are generated.
 
 ```yaml
 posts:

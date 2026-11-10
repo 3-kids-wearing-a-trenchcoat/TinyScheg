@@ -19,6 +19,10 @@ Read the YAML input file (see [Input format](../reference/input-format.md)) and 
   This includes converting daily time windows (e.g. `"19:00-07:00"`) into concrete date-time ranges over the
   schedule period, and filling in each variation's unspecified fields from the post's general case.
 
+The input is also **validated**: names are unique, every name in a likes/dislikes list refers to an existing worker,
+a worker isn't in their own lists, nobody is both liked and disliked by the same worker, and a post's variations
+don't overlap. Invalid input is reported before anything else happens.
+
 ## 2. Initialize
 
 > [!IMPORTANT]
@@ -27,11 +31,13 @@ Read the YAML input file (see [Input format](../reference/input-format.md)) and 
 
 Set up the CSP:
 
-1. Set `Slot.worker_list` to all workers.
-2. Generate the slots of every post over the schedule period with `Post.gen_slot_list`. Each slot's domain is
-   pruned by unary constraints (availability, role) as it's created.
-3. Sort all slots by time and generate the binary difference constraints with `Slot.gen_time_constraints`, using
-   the minimum rest period from the settings.
+1. Generate the slots of every post over the schedule period, segment by segment (see
+   [Domain model](domain-model.md#shifts-and-slots)), in their stable order. Each slot's domain is pruned by unary
+   constraints (availability, role) as it's created.
+2. Generate the binary difference constraints between slots, using the minimum rest period from the settings.
+3. Calculate the constants used by scoring: each worker's availability, the number of shared slots, and each
+   worker's worst rest deficit and packable maximum (see [Scoring](scoring.md)).
+4. If any slot's domain is already empty, no legal schedule exists: report it and stop.
 
 See [Domain model](domain-model.md) and [CSP formulation](csp-formulation.md).
 
@@ -70,4 +76,4 @@ All code currently lives directly in `src/`:
 | `src/shift.py`        | [`Post` and `Slot`](../reference/api/post-and-slot.md) |
 | `src/main.py`         | Entry point (empty) |
 
-Planned classes not yet in code: `Scorer`, `Trail` and `Schedule`.
+Planned but not yet in code: `Scorer`, `Schedule` and the search with its explicit search state.

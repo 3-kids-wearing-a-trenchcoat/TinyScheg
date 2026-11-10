@@ -4,12 +4,23 @@ Source: [`src/shift.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinySche
 
 See [Domain model](../../explanation/domain-model.md) for how posts, shifts and slots relate to each other.
 
+> [!IMPORTANT]
+> This page documents the code as it currently stands, which is due to be rebuilt. Parts of it follow an earlier
+> design that has since been revised:
+> * `gen_slot_list` chooses each shift's requirements by its start time in one continuous sequence; shifts are now
+>   to be generated per segment ([ADR 0018](../../decisions/0018-slot-generation-by-segments.md)).
+> * `propagate_constraint` assigns single-worker slots automatically and uses a global iteration counter; propagation
+>   is now plain forward checking ([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)).
+> * `Slot.worker_list`, `Slot.iteration_ticker`, `last_iteration` and `unassigned_constraints`, and reporting to a
+>   `Trail`, are replaced by an explicit search state and change records
+>   ([ADR 0016](../../decisions/0016-undo-through-change-records-on-the-call-stack.md)).
+
 ## `class Post(name, length, roles, period=None, variations=None)`
 
-> [!NOTE]
-> **Implemented.** Converting the input's daily time windows and filling in inherited variation fields, which the
-> constructor expects to have been done beforehand, is part of input parsing and is
-> [not yet implemented](../input-format.md).
+> [!IMPORTANT]
+> **Partially implemented.** Daily activity windows and generating shifts per segment aren't implemented. Converting
+> the input's time windows and filling in inherited variation fields, which the constructor expects to have been done
+> beforehand, is part of input parsing and is [not yet implemented](../input-format.md).
 
 A post that needs to be manned throughout the schedule. A `Post` is a template from which individual slots are
 generated. For example, a "front gate" post that needs one person at all times in 2-hour shifts generates 12
@@ -152,8 +163,8 @@ Assigns `worker` to this slot and triggers constraint propagation. If propagatio
 domain, the schedule becomes unsatisfiable. Planned effects:
 
 * update the scores affected by the assignment (see [Scoring](../../explanation/scoring.md));
-* report every action taken to the `Trail` so it can be undone (see
-  [Search algorithm](../../explanation/search-algorithm.md#trail));
+* record every change so it can be undone (see
+  [Search algorithm](../../explanation/search-algorithm.md#undo));
 * update `unassigned_constraints` on all constrained slots.
 
 **Returns** `True` if the schedule remains satisfiable after the assignment, `False` otherwise.
