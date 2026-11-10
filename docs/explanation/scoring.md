@@ -5,8 +5,9 @@
 > See [ADR 0005](../decisions/0005-weighted-sum-of-normalized-penalties.md),
 > [ADR 0006](../decisions/0006-convex-function-for-workload-fairness.md),
 > [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md),
-> [ADR 0013](../decisions/0013-availability-weighted-workload.md) and
-> [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md).
+> [ADR 0013](../decisions/0013-availability-weighted-workload.md),
+> [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md) and
+> [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md).
 > This page was corrected on 2026-11-10; see [Corrections](#corrections).
 
 ## General idea
@@ -116,7 +117,7 @@ $$
 adds $\frac{l_i(w_j)}{|\mathcal{S}(s)| - 1} \geq 0$ to the term of every worker $w_i$ already assigned to another slot
 of the same shift. Nothing decreases.
 
-#### Normalization
+#### Normalizing the like score
 
 Each local like term is an average of values that are at most $\beta$, so it's at most $\beta$. There is at most one
 local term per shared slot (single-slot shifts contribute 0), so $\mathcal{L}^*(t) \leq \beta \cdot n_\text{shared}$.
@@ -205,16 +206,30 @@ Generally speaking, $x^p$ and $e^{ax} -1$ penalize harder as $p$ and $a$ increas
 **Monotonicity:** assigning a slot only increases the assigned worker's $h_t$, and $\varphi$ is increasing, so
 $\mathcal{W}$ never decreases.
 
-#### Normalization
+#### Normalizing the workload
 
-Since $h_t(w_i) \leq 1$ and $\varphi$ is increasing, $\mathcal{W}(t) \leq \varphi(1) \sum_i \mathrm{av}_i$.
+$h_t(w_i) \leq 1$, but a workload of 1 — working every available hour — is never reachable, since the minimum rest
+period forces gaps between shifts. Normalizing by it would compress the workload penalty far below the other
+components. Instead, the penalty is normalized by how much each worker could **actually** be packed with work within
+the hard constraints (see [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md)).
+
+For every worker $w_i$ with $\mathrm{av}_i > 0$, let $H^{\max}_i$ be the **packable maximum**: the largest total
+number of hours $w_i$ could be assigned over any legal set of slots in their domain (calculated in
+[the same way as $M_w$](#calculating-the-worst-possible-deficit-m_w), with each slot weighted by its duration). Let
+$h^{\max}_i = H^{\max}_i / \mathrm{av}_i$ be the corresponding **packable maximum workload**. Since
+$h_t(w_i) \leq h^{\max}_i$ and $\varphi$ is increasing,
+$\mathcal{W}(t) \leq \sum_i \mathrm{av}_i \, \varphi(h^{\max}_i)$.
 **The normalized global workload function** is therefore:
 
 $$
-\mathcal{W}^*(t) = k \cdot \frac{\sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h_t(w_i) \big)}{\varphi(1) \cdot \sum_{i=1}^k \mathrm{av}_i}
+\mathcal{W}^*(t) = k \cdot \frac{\sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h_t(w_i) \big)}{\sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h^{\max}_i \big)}
 $$
 
-which lies in $[0, k]$ for either choice of $\varphi$ ($\varphi(1) = 1$ for $x^p$ and $e^a - 1$ for $e^{ax} - 1$).
+which lies in $[0, k]$ for either choice of $\varphi$. If the denominator is 0 (no worker can be assigned anything),
+$\mathcal{W}^*(t) = 0$.
+
+The denominator is a constant, calculated once before the search, so this only rescales the workload penalty: it
+remains monotone, and it's still minimal exactly when every worker's workload is the same.
 
 ### Rest
 
@@ -293,7 +308,7 @@ $$
 \mathcal{R}^*_t = \sum _{w \in W} \mathcal{R}_t(w) = \sum _{w \in W} \Bigg( \sum _{s \in A_t(w)} d_t(w,s) \Bigg)
 $$
 
-#### Normalization
+#### Normalizing the rest deficit
 
 The minimum possible deficit for any worker at any slot is 0. Since any two slots assigned to the same worker are at
 least $m$ hours apart, $\Delta s \geq m$, so the maximum possible deficit after a slot $s$ is reached when the next
@@ -322,6 +337,12 @@ $$
 
 which lies in $[0, k]$.
 
+Normalizing **per worker** is deliberate. Each worker's rest is judged relative to their *own* worst case, just as
+their workload is judged relative to their *own* availability. As a result, an hour of deficit weighs more for a
+worker whose availability allows only a mild worst case than for a highly available one. This follows the same idea
+of fairness as the workload policy, in which unavailable time — leave, other duties, being posted elsewhere — counts
+as neither work nor rest.
+
 #### Calculating the worst possible deficit $M_w$
 
 $M_w$ is calculated **exactly**, as the most expensive path in a
@@ -340,6 +361,13 @@ takes $O(n^2)$ time for $n$ slots, which is cheap at the intended schedule sizes
 
 The search space can be reduced by looking at **time ranges** rather than distinct slots: in terms of rest deficit,
 a shift from $t_1$ to $t_2$ is the same no matter which slot it's spent in.
+
+The packable maximum $H^{\max}_w$ used to normalize the workload is calculated on the same graph, with each slot
+weighted by its duration $|s|$ instead of each edge by its deficit.
+
+If these calculations ever become too slow, they can be sped up by limiting the possible first shifts: if a worker's
+first shift starts at time $t$ and some shift ends before $t - m$, another shift could be added before it, so the
+worst-case (or fullest) sequence **must start with a shift within $m$ hours of the schedule start**.
 
 ## Total score for each state
 
@@ -399,5 +427,9 @@ This page was originally transferred as-is from the design notes. It was reviewe
 7. **Rest monotonicity argument.** The original argument stated
    $\Delta(s_1, s_3) < \Delta(s_1, s_2), \Delta(s_2, s_3) < \Delta(s_1,s_2) + \Delta (s_2,s_3)$, which has every
    inequality reversed. The conclusion (the rest penalty is monotone) was correct; the argument has been replaced.
-8. **Edge cases.** Terms that would divide by zero ($\mathrm{av}_i = 0$, $n_\text{shared} = 0$, $M_w = 0$) are now
-   defined.
+8. **Edge cases.** Terms that would divide by zero ($\mathrm{av}_i = 0$, $n_\text{shared} = 0$, $M_w = 0$, and a
+   zero workload denominator) are now defined.
+9. **Workload scale.** The workload penalty was normalized by a workload of 1 (every available hour worked), which
+   the minimum rest period makes unreachable; typical schedules used only a small fraction of that range. It's now
+   normalized by each worker's packable maximum; see
+   [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md).

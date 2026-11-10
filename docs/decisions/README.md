@@ -34,8 +34,9 @@ ADR that supersedes the old one.
 | [0010](0010-python-rewrite.md) | Rewrite in Python | Accepted |
 | [0011](0011-no-output-for-infeasible-inputs.md) | No output for infeasible inputs | Accepted |
 | [0012](0012-deterministic-path-independent-scoring.md) | Deterministic, path-independent scoring and output | Accepted |
-| [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted |
+| [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted, amended by [0015](0015-normalize-workload-by-packable-maximum.md) |
 | [0014](0014-exact-worst-rest-deficit.md) | Calculate the worst rest deficit exactly | Accepted |
+| [0015](0015-normalize-workload-by-packable-maximum.md) | Normalize workload by each worker's packable maximum | Accepted |
 
 ## Template
 
