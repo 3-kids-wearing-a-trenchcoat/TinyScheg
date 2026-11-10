@@ -20,7 +20,7 @@ Read the YAML input file (see [Input format](../reference/input-format.md)) and 
   schedule period, and filling in each variation's unspecified fields from the post's general case.
 
 The input is also **validated**: names are unique, every name in a likes/dislikes list refers to an existing worker,
-a worker isn't in their own lists, nobody is both liked and disliked by the same worker, and a post's variations
+a worker isn't in their own lists, no worker name contains `" & "`, nobody is both liked and disliked by the same worker, and a post's variations
 don't overlap. Invalid input is reported before anything else happens.
 
 ## 2. Initialize
@@ -55,8 +55,8 @@ See [Search algorithm](search-algorithm.md) and [Scoring](scoring.md).
 > [!WARNING]
 > **Not yet implemented.**
 
-Transform the best schedule's list of assigned slots into the output CSV (see
-[Output format](../reference/output-format.md)).
+Transform the best schedule's list of assigned slots into a grid of time against post, written as CSV, XLSX or ODS
+(see [Output format](../reference/output-format.md)).
 
 ## 5. Return output
 

@@ -8,7 +8,8 @@ The core approach is to treat scheduling as a **constraint satisfaction problem 
 (penalty) system** that quantifies how good a (partial) schedule is. The score is monotone along the search, which
 allows pruning partial assignments that are guaranteed to be no better than the best complete schedule found so far.
 
-Input is a YAML file (see `exampleInput.yml`), output is planned to be a CSV file.
+Input is a YAML file (see `exampleInput.yml`), output is planned to be a time-by-post grid written as CSV, XLSX or
+ODS (see `docs/reference/output-format.md`).
 
 ## Project Status
 * The project has been developed on-and-off over several years and through several iterations
@@ -55,7 +56,7 @@ the roadmap, `251021115817.md` for the dev log) and bring what you find to me.
 
 ## Stack
 The program is written in Python 3.13, using the Conda environment `tinyscheg` defined in `environment.yml`.
-The only third-party dependency of the program at this point is PyYAML. MkDocs, Material and markdown-callouts are
+The program's third-party dependencies are PyYAML (input), and openpyxl and odfpy (XLSX and ODS output). MkDocs, Material and markdown-callouts are
 used only to build the docs, and pytest only for testing.
 New libraries should only be introduced under one of the following circumstances:
 * A feature can't be implemented using the existing libraries.

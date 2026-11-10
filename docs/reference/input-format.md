@@ -27,7 +27,7 @@ A list of workers available for assignment.
 
 | Field         | Type                             | Required | Description |
 |---------------|----------------------------------|----------|-------------|
-| `name`        | string                           | yes      | Worker name. Duplicates aren't allowed. |
+| `name`        | string                           | yes      | Worker name. Duplicates aren't allowed, and it must not contain `" & "` (used to join names in the [output](output-format.md)). |
 | `roles`       | list of strings                  | no       | Roles this worker has. |
 | `unavailable` | list of pairs of ISO 8601 strings | no      | Date-time ranges during which the worker is unavailable. |
 | `likes`       | list of worker names             | no       | Workers this worker likes sharing a shift with. |

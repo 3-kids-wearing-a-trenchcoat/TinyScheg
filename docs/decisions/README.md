@@ -40,6 +40,7 @@ ADR that supersedes the old one.
 | [0016](0016-undo-through-change-records-on-the-call-stack.md) | Undo through change records on the call stack | Accepted |
 | [0017](0017-plain-forward-checking-and-pruning-on-ties.md) | Plain forward checking, and pruning on ties | Accepted |
 | [0018](0018-slot-generation-by-segments.md) | Generate shifts per segment | Accepted |
+| [0019](0019-output-as-a-time-by-post-grid.md) | Output the schedule as a time-by-post grid | Accepted |
 
 ## Template
 

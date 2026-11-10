@@ -63,6 +63,7 @@ nav:
       - 0016 Undo via change records: decisions/0016-undo-through-change-records-on-the-call-stack.md
       - 0017 Forward checking and ties: decisions/0017-plain-forward-checking-and-pruning-on-ties.md
       - 0018 Shifts per segment: decisions/0018-slot-generation-by-segments.md
+      - 0019 Time-by-post grid output: decisions/0019-output-as-a-time-by-post-grid.md
 
 markdown_extensions:
   - admonition
