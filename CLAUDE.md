@@ -55,7 +55,7 @@ superseded by `docs/`. They may still be useful for background, but if they disa
 ## Stack
 The program is written in Python 3.13, using the Conda environment `tinyscheg` defined in `environment.yml`.
 The only third-party dependency of the program at this point is PyYAML. MkDocs, Material and markdown-callouts are
-used only to build the docs.
+used only to build the docs, and pytest only for testing.
 New libraries should only be introduced under one of the following circumstances:
 * A feature can't be implemented using the existing libraries.
 * Implementing a feature with existing libraries would be less efficient.
@@ -110,7 +110,7 @@ code through the environment explicitly: `conda run --no-capture-output -n tinys
 Modules in `src/` import each other by bare module name (e.g. `from DateTimeRange import ...`). Running a script inside
 `src/` (e.g. `python src/main.py`) puts `src/` on the import path automatically; for anything else (such as
 `python -c`), run from within `src/` or set `PYTHONPATH=src`.
-There is currently no test suite; how testing will be done is yet to be decided.
+Tests use pytest (a development-only dependency in `environment.yml`). There is no test suite yet.
 
 ## Git Usage Rules
 When working on this repository, you MUST follow these rules:

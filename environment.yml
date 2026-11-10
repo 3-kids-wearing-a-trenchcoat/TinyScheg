@@ -9,6 +9,9 @@ dependencies:
   # YAML input parsing
   - pyyaml
 
+  # Testing (development only, not used by the program itself)
+  - pytest=9.0.3
+
   - pip
   - pip:
       # Documentation site (docs only, not used by the program itself)
