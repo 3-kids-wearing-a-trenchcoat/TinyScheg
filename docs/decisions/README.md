@@ -31,6 +31,8 @@ ADR that supersedes the old one.
 | [0008](0008-undo-through-trail.md) | Undo assignments through a trail | Accepted |
 | [0009](0009-yaml-input-with-time-based-variations.md) | YAML input with time-based post variations | Accepted |
 | [0010](0010-python-rewrite.md) | Rewrite in Python | Accepted |
+| [0011](0011-no-output-for-infeasible-inputs.md) | No output for infeasible inputs | Accepted |
+| [0012](0012-deterministic-path-independent-scoring.md) | Deterministic, path-independent scoring and output | Accepted |
 
 ## Template
 

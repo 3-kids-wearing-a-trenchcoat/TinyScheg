@@ -42,6 +42,7 @@ nav:
       - Search algorithm: explanation/search-algorithm.md
       - Scoring: explanation/scoring.md
       - Glossary: explanation/glossary.md
+      - Future work: explanation/future-work.md
   - Decisions:
       - decisions/README.md
       - 0001 Model scheduling as a CSP: decisions/0001-model-scheduling-as-csp.md
@@ -54,6 +55,8 @@ nav:
       - 0008 Undo through a trail: decisions/0008-undo-through-trail.md
       - 0009 YAML input: decisions/0009-yaml-input-with-time-based-variations.md
       - 0010 Python rewrite: decisions/0010-python-rewrite.md
+      - 0011 No output for infeasible inputs: decisions/0011-no-output-for-infeasible-inputs.md
+      - 0012 Deterministic scoring: decisions/0012-deterministic-path-independent-scoring.md
 
 markdown_extensions:
   - admonition

@@ -28,6 +28,7 @@ Architecture Decision Records (ADRs).
   * [Search algorithm](explanation/search-algorithm.md)
   * [Scoring](explanation/scoring.md)
   * [Glossary](explanation/glossary.md)
+  * [Future work](explanation/future-work.md)
 * **[Decisions](decisions/README.md)** — the design decisions made so far and the reasoning behind them.
 
 Tutorials will be added once TinyScheg runs end-to-end.
