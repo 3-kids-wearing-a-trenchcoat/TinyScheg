@@ -1,14 +1,55 @@
-# `shift` module: `Post` and `Slot`
+# `post` and `shift` modules: `Post` and `Slot`
 
-Source: [`src/tinyscheg/model/shift.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/model/shift.py)
+Sources: [`src/tinyscheg/model/post.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/model/post.py) and
+[`src/tinyscheg/model/shift.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/model/shift.py)
 
 See [Domain model](../../explanation/domain-model.md) for how posts, shifts and slots relate to each other.
 
+## `post` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_post.py`). Generating shifts from posts is
+> [not yet implemented](../../explanation/domain-model.md#shifts-and-slots).
+
+Posts are immutable, hashable descriptions. Converting the input's time windows and filling in the fields a variation
+inherits from its post is done by [input parsing](parsing.md).
+
+### `class ShiftRules(length, roles)`
+
+What each shift needs.
+
+* `length` — `datetime.timedelta`, the shift length. Must be positive.
+* `roles` — `tuple[tuple[str, int], ...]`, pairs of a role and the number of workers of that role each shift needs,
+  in input order (which is part of the stable slot order). Role names must not repeat, and counts are whole numbers
+  of at least 0. No roles at all (`()`) is allowed: such shifts need no workers.
+
+`workers_needed` (property) is the total number of workers each shift needs.
+
+**Raises** `ValueError` if any of the above doesn't hold.
+
+### `class Variation(window, rules)`
+
+A [`DailyWindow`](daily-window.md) during which a post's shifts follow different `ShiftRules`. Always fully
+specified: fields the input leaves out are already filled in from the post.
+
+### `class Post(name, rules, window=None, variations=())`
+
+Something that needs to be manned, as a template for its shifts.
+
+* `name` — `str`, the post name. Names are unique (checked by [validation](parsing.md#validateschedule_input)).
+* `rules` — `ShiftRules`, the general case.
+* `window` — `DailyWindow | None`, the daily window during which the post is active; `None` means always active.
+* `variations` — the post's `Variation`s, stored as a `tuple`. They must not overlap one another (checked by
+  validation).
+
+## `shift` module
+
 > [!IMPORTANT]
-> This page documents the code as it currently stands, which is due to be rebuilt. Parts of it follow an earlier
+> This part documents the code as it currently stands, which is due to be rebuilt. Parts of it follow an earlier
 > design that has since been revised:
-> * `gen_slot_list` chooses each shift's requirements by its start time in one continuous sequence; shifts are now
->   to be generated per segment ([ADR 0018](../../decisions/0018-slot-generation-by-segments.md)).
+> * Shifts are now to be generated per segment ([ADR 0018](../../decisions/0018-slot-generation-by-segments.md)),
+>   in a new `model/shift_generation.py`. The old `Post.gen_slot_list` and `Post.get_variation` were removed with the
+>   old `Post`.
 > * `propagate_constraint` assigns single-worker slots automatically and uses a global iteration counter; propagation
 >   is now plain forward checking ([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)).
 > * `Slot.worker_list`, `Slot.iteration_ticker`, `last_iteration` and `unassigned_constraints`, and reporting to a
@@ -16,68 +57,11 @@ See [Domain model](../../explanation/domain-model.md) for how posts, shifts and 
 >   ([ADR 0016](../../decisions/0016-undo-through-change-records-on-the-call-stack.md)).
 > * `Slot` is to become a plain, unchanging description of a slot (time, post, role, shift), with a `Shift` grouping
 >   the slots of each shift in place of `same_shift`. Domains, constraints and assignments move to the CSP setup and
->   search state (`csp/`), and `Post` moves to `model/post.py` (see
->   [Architecture](../../explanation/architecture.md#code-layout)).
-> * `DateTimeRange.forever()` is no longer needed: a post without a time window is active throughout the schedule
->   period. It has been removed, along with `in_range` and `pad`, in the rebuilt
->   [`DateTimeRange`](datetime-range.md), so this module no longer runs as is: `in_range` is now `contains`, and `pad`
->   is replaced by `gap`.
+>   search state (`csp/`) (see [Architecture](../../explanation/architecture.md#code-layout)).
+> * The code still calls `DateTimeRange.pad`, which the rebuilt [`DateTimeRange`](datetime-range.md) no longer has
+>   (it's replaced by `gap`), and expects the old `Worker`, so this module no longer runs as is.
 
-## `class Post(name, length, roles, period=None, variations=None)`
-
-> [!IMPORTANT]
-> **Partially implemented.** Daily activity windows and generating shifts per segment aren't implemented. Converting
-> the input's time windows and filling in inherited variation fields, which the constructor expects to have been done
-> beforehand, is part of input parsing and is [not yet implemented](../input-format.md).
-
-A post that needs to be manned throughout the schedule. A `Post` is a template from which individual slots are
-generated. For example, a "front gate" post that needs one person at all times in 2-hour shifts generates 12
-"front gate" slots per day.
-
-**Parameters**
-
-* `name` — `str`, the post name.
-* `length` — shift length, in hours.
-* `roles` — `dict[str, int]`, how many workers of each role the post needs.
-* `period` — `DateTimeRange | None`, the period during which the post is active. If `None`, the post is always
-  active (`DateTimeRange.forever()`).
-* `variations` — `dict[DateTimeRange, tuple[int, dict[str, int]]] | None`, time-based variations of this post:
-  each key is a date-time range during which the variation applies, and its value is `(length, roles)` for that
-  range. May be `None` for no variations.
-  The constructor assumes that daily time windows have already been converted to concrete date-time ranges, and
-  that every variation is fully specified (fields inherited from the general case are already filled in).
-
-**Raises** `TypeError` if `period` or `variations` are of the wrong type.
-
-### Attributes
-
-`name`, `length`, `roles`, `period`, `variations` — as passed to the constructor.
-
-### Methods
-
-#### `get_variation(start_time) -> tuple[int, dict[str, int]] | None`
-
-Finds the variation of the post (including the general case) that applies at `start_time`.
-
-* `start_time` — `datetime.datetime`, the start time of a shift.
-
-**Returns** `(length, roles)` of the variation containing `start_time`, the general case's `(length, roles)` if no
-variation contains it, or `None` if the post isn't active at `start_time`.
-
-#### `gen_slot_list(period) -> list[Slot]`
-
-Generates the slots of this post over the schedule period.
-
-* `period` — `DateTimeRange`, the schedule's time period.
-
-Starting at the beginning of `period`, the post is split into consecutive shifts. Each shift's length and role
-requirements come from `get_variation` at the shift's start time. For each shift, one `Slot` is created per
-required worker (e.g. `{"security": 1, "any": 1}` creates two slots), and the slots of the same shift are linked
-with `Slot.set_same_shift`. Generation stops at the end of `period` or when the post is no longer active.
-
-**Returns** the list of all generated slots, in time order.
-
-## `class Slot(time, role, post)`
+### `class Slot(time, role, post)`
 
 > [!IMPORTANT]
 > **Partially implemented.** Domain building, constraint generation, constraint propagation and the MRV/degree
@@ -96,7 +80,7 @@ for the whole of `time` and have `role`. It creates **no** binary constraints; t
 * `role` — `str | None`, the role required for this slot. `None` (or `"any"`) means any worker may fill it.
 * `post` — `Post`, the post this slot belongs to.
 
-### Class variables
+#### Class variables
 
 | Name               | Default | Description |
 |--------------------|---------|-------------|
@@ -104,7 +88,7 @@ for the whole of `time` and have `role`. It creates **no** binary constraints; t
 | `worker_list`      | `[]`    | The full domain: all workers. Each slot copies and prunes this list. **Must be initialized before any `Slot` is created.** |
 | `iteration_ticker` | `0`     | Global iteration counter used during constraint propagation. A slot whose `last_iteration` is below it hasn't been checked in the current propagation round. |
 
-### Attributes
+#### Attributes
 
 | Name                     | Type           | Description |
 |--------------------------|----------------|-------------|
@@ -117,7 +101,7 @@ for the whole of `time` and have `role`. It creates **no** binary constraints; t
 | `last_iteration`         | `int`          | The last propagation round in which this slot was checked. |
 | `unassigned_constraints` | `int`          | Number of slots constrained with this slot that are still unassigned (used by the degree heuristic). |
 
-### Comparison
+#### Comparison
 
 * `<` and `==` compare slots by `time`.
 * `csp_lt(other) -> bool` is an alternative "less than" based on CSP heuristics (see
@@ -125,9 +109,9 @@ for the whole of `time` and have `role`. It creates **no** binary constraints; t
   smaller than `other`'s (MRV), or if the domains are the same size and this slot has more unassigned constrained
   slots (degree heuristic).
 
-### Methods
+#### Methods
 
-#### `gen_time_constraints(slots, min_rest=DEFAULT_MIN_REST) -> None` (static)
+##### `gen_time_constraints(slots, min_rest=DEFAULT_MIN_REST) -> None` (static)
 
 Generates time-based difference constraints between all the given slots.
 
@@ -136,7 +120,7 @@ Generates time-based difference constraints between all the given slots.
 
 Each slot is checked (with `find_time_constraints`) against the slots after it in the list.
 
-#### `find_time_constraints(slots, min_rest) -> None`
+##### `find_time_constraints(slots, min_rest) -> None`
 
 Creates a difference constraint between this slot and every slot in `slots` that is time-constrained with it, i.e.
 that overlaps it or falls within `min_rest` of it. Constraints are recorded on both slots (`diff_constrained`), and
@@ -146,12 +130,12 @@ both slots' `unassigned_constraints` counters are incremented.
   sorted, checking stops at the first slot that isn't time-constrained.
 * `min_rest` — `datetime.timedelta`, the minimum rest period between two assignments.
 
-#### `set_same_shift(slots) -> None` (static)
+##### `set_same_shift(slots) -> None` (static)
 
 Marks the given slots as belonging to the same shift: each slot's `same_shift` is set to all the other slots in the
 list.
 
-#### `propagate_constraint(to_remove) -> bool`
+##### `propagate_constraint(to_remove) -> bool`
 
 Propagates a constraint following the removal of the `Worker` `to_remove` from this slot's domain.
 
@@ -162,7 +146,7 @@ Propagates a constraint following the removal of the `Worker` `to_remove` from t
 
 **Returns** `True` if the slot remains satisfiable, `False` otherwise.
 
-#### `assign(worker) -> bool`
+##### `assign(worker) -> bool`
 
 > [!WARNING]
 > **Not yet implemented** beyond checking that `worker` is in the domain.
@@ -178,7 +162,7 @@ domain, the schedule becomes unsatisfiable. Planned effects:
 **Returns** `True` if the schedule remains satisfiable after the assignment, `False` otherwise.
 **Raises** `KeyError` if `worker` isn't in this slot's domain.
 
-### Open TODOs in the code
+#### Open TODOs in the code
 
 * Report to a worker when they're included in a slot's domain.
 * Possibly sort the domain in a way that benefits the CSP algorithm.

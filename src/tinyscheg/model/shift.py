@@ -1,80 +1,9 @@
 from __future__ import annotations
 from tinyscheg.timing.datetime_range import DateTimeRange
 from typing import List, Dict, Tuple, Optional
+from tinyscheg.model.post import Post
 from tinyscheg.model.worker import Worker
 from datetime import timedelta, datetime
-
-class Post:
-    """Defining a post that needs to be manned throughout the schedule.
-    A Post is a kind of template from which we generate a list of individual shifts.
-    For example, a \"front gate\" post that needs to be manned 24/7 by a single person for 2-hour shifts will
-    generate 12 \"front gate\" shifts, each representing a 2-hour period."""
-
-    def __init__(self, name: str, length: int, roles: Dict[str, int],
-                 period:DateTimeRange|None=None,
-                 variations:Dict[DateTimeRange, Tuple[int, Dict[str, int]]]|None=None):
-        """
-        Initialize a Post object (representing a single variation of a post)
-        :param name: post name
-        :param length: shift length
-        :param roles: dict (str: int) specifying how many workers of each role are needed
-        :param period: DateTimeRange specifying activity period for this post, if left empty, this post is always active
-        :param variations: DateTimeRange-based variations on this Post, may be left empty.
-        (assuming time-based ranges have already been converted to a series of datetime ranges)
-        Expected form for variations is:
-         Dict[DateTimeRange, Tuple[int(duration), Dict(roles)[str(role name), int(num of workers of this role)]]]
-         It is assumed that each variation contains ALL variables and that filling in unspecified vars is done beforehand.
-        """
-        if not period:
-            period = DateTimeRange.forever()
-        elif not isinstance(DateTimeRange, period): # accept only DateTimeRange or None in time
-            raise TypeError("time must be None or a DateTimeRange object")
-        if not variations:
-            variations = Dict()
-        elif not isinstance(Dict[DateTimeRange, Tuple[int, Dict[str, int]]], variations):
-            raise TypeError("variations must be None or a dict mapping DateTimeRange to duration and a role dict")
-        self.name, self.length, self.roles, self.period, self.variations = name, length, roles, period, variations
-
-    def get_variation(self, start_time: datetime) -> Tuple[int, Dict[str, int]] | None:
-        """
-        Find the post variation (including default) containing the start time and return it as a Tuple of key and value
-        :param start_time: datetime.datetime object representing start time for a shift
-        :return: (duration(int), Dict[role_name(str), required_workers(int)])
-                 Returns None if Post isn't active at this start_time
-        """
-        if start_time >= self.period:
-            return None # Post is no longer active
-        for var_period in self.variations.keys():
-            if var_period.in_range(start_time):
-                return self.variations[var_period]
-        return self.length, self.roles
-
-    def gen_slot_list(self, period: DateTimeRange) -> List[Slot] | List[None]:
-        """
-        Generate a list of Slots according to this Post
-        :param period: Schedule datetime range
-        :return: list of Slot objects
-        """
-        output = []
-        start = period.start
-        while start < period.end:
-            current_var = self.get_variation(start)
-            if not current_var: # getting None from get_variation means we're out of this post's activity range
-                break
-            same_shift = []
-            end = start + current_var[0]
-            current_period = DateTimeRange(start, end)
-            for role in current_var[1].keys():
-                # for every role required by this shift...
-                for i in range(current_var[1][role]):
-                    # ...generate a number of slots equal to the required workers of that role
-                    same_shift.append(Slot(current_period, role, self))
-            Slot.set_same_shift(same_shift) # create same_shift association between the new slots
-            output += same_shift # append the newly created slots into the output
-            start = end # move on to next time period
-        return output
-
-
 
 class Slot:
     """Representing a single schedule slot.

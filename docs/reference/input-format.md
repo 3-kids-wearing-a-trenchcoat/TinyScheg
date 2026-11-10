@@ -1,11 +1,21 @@
 # Input format
 
-> [!WARNING]
-> **Not yet implemented.** The format below is defined (see the annotated [`exampleInput.yml`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/exampleInput.yml)),
-> but the parser that reads it doesn't exist yet.
+> [!NOTE]
+> **Implemented**, by the [`parsing`](api/parsing.md) package. See also the annotated
+> [`exampleInput.yml`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/exampleInput.yml).
 
 TinyScheg's input is a single YAML file with three top-level keys: `settings`, `workers` and `posts`.
 The file is read as UTF-8, so names may be written in any script (e.g. Hebrew).
+
+* All three keys are required, and `workers` and `posts` must each list at least one entry.
+* **Unknown fields are an error**, at every level. This catches typos such as `unavailble:`, which would otherwise be
+  silently ignored.
+* An optional field may be omitted or left empty (`likes:` with nothing after it); either way it's considered empty.
+* Names are compared exactly: they're case-sensitive, and spaces aren't trimmed.
+* Date-times may be quoted (`"2025-01-01"`) or not (`2025-01-01`). They must not include a timezone.
+
+If the input is invalid, TinyScheg reports **every** problem it finds, each naming where it is (e.g.
+`worker #3 ("Jeff"), likes: unknown worker "Jil"`), and stops. See [Errors](#errors).
 
 ## `settings`
 
@@ -13,8 +23,8 @@ General scheduler settings.
 
 | Field      | Type                      | Description                                                                 |
 |------------|---------------------------|-----------------------------------------------------------------------------|
-| `time`     | pair of ISO 8601 strings  | The time period to generate a schedule for, as `[start, end]`.             |
-| `min_rest` | number (hours)            | Minimum time between two shifts assigned to the same worker (hard constraint). If omitted, defaults to 6 hours. |
+| `time`     | pair of ISO 8601 strings  | Required. The time period to generate a schedule for, as `[start, end]`; `start` must be before `end`. |
+| `min_rest` | number (hours)            | Minimum time between two shifts assigned to the same worker (hard constraint). At least 0; if omitted, defaults to 6 hours. |
 
 ```yaml
 settings:
@@ -35,7 +45,8 @@ A list of workers available for assignment.
 | `dislikes`    | list of worker names             | no       | Workers this worker doesn't like sharing a shift with. |
 
 * Any field other than `name` may be omitted and is then considered empty.
-* A worker is assumed to be available at all times other than the ranges listed in `unavailable`.
+* A worker is assumed to be available at all times other than the ranges listed in `unavailable`. Each range's start
+  must be before its end.
 * Date-times are ISO 8601 (`YYYY-MM-DDTHH:MM:SS`). A date without a time is taken to be midnight, so
   `["2025-01-03", "2025-01-04"]` means unavailable throughout the 3rd and available on the 4th.
 * Every name in `likes` and `dislikes` must be the name of another worker in the list: a worker can't like or
@@ -60,13 +71,15 @@ A list of posts that need to be manned throughout the schedule.
 | Field        | Type                        | Required | Description |
 |--------------|-----------------------------|----------|-------------|
 | `name`       | string                      | yes      | Post name. Duplicates aren't allowed. |
-| `roles`      | mapping of role → count     | yes      | How many workers of each role the post needs at any time. |
-| `length`     | number (hours)              | yes      | Shift duration. |
+| `roles`      | mapping of role → count     | yes      | How many workers of each role the post needs at any time. Counts are whole numbers of at least 0. |
+| `length`     | number (hours)              | yes      | Shift duration; more than 0, and may be fractional (`2.5`). |
 | `time`       | `"HH:MM-HH:MM"`             | no       | Daily time window during which the post is active. If omitted, the post is always active. |
 | `variations` | list of variations          | no       | Time-based variations of the post (see below). |
 
 * The role `any` is a wildcard that every worker fulfills, including workers with no roles.
-* The number of workers a shift needs is the sum of the role counts, so it isn't specified separately.
+* The number of workers a shift needs is the sum of the role counts, so it isn't specified separately. A count of 0,
+  or no roles at all (`roles: {}`), is allowed: such shifts need no workers.
+* The order of the roles matters only for the stable order of slots, which keeps results deterministic.
 * A time window may cross midnight, e.g. `"19:00-07:00"` is 7 PM to 7 AM the next day.
 
 ### Variations
@@ -111,4 +124,25 @@ posts:
       supervisor: 1
     time: "08:00-20:00"
     length: 4
+```
+
+## Errors
+
+Input is checked in two stages, and each stage reports every problem it finds at once:
+
+1. **Structure** — missing required fields, unknown fields, wrong types and invalid values (e.g. `length: 0`, a
+   time window `"25:00-07:00"`, or a range whose start isn't before its end).
+2. **Rules spanning several entries** — checked only once the structure is valid:
+    * worker names are unique, and so are post names;
+    * no worker name contains `" & "`;
+    * every name in a worker's `likes` and `dislikes` is another existing worker (not the worker themselves), and no
+      name is in both;
+    * a post's variations don't overlap.
+
+Each message names where the problem is, counting entries from 1 in the order they appear:
+
+```
+invalid input:
+  - worker #3 ("Jeff"), likes: unknown worker "Jil"
+  - post #1 ("front gate"), variation #1 (19:00-07:00) and variation #2 (06:00-08:00) overlap
 ```

@@ -33,8 +33,11 @@ nav:
       - Output format: reference/output-format.md
       - API:
           - DateTimeRange: reference/api/datetime-range.md
+          - DailyWindow: reference/api/daily-window.md
           - Worker: reference/api/worker.md
           - Post and Slot: reference/api/post-and-slot.md
+          - ScheduleInput: reference/api/schedule-input.md
+          - parsing: reference/api/parsing.md
   - Explanation:
       - Architecture: explanation/architecture.md
       - Domain model: explanation/domain-model.md

@@ -1,52 +1,49 @@
-from tinyscheg.timing import datetime_range as DateTimeRange
+"""Workers: the people assigned to slots."""
+from __future__ import annotations
 
+from dataclasses import dataclass
+
+from tinyscheg.timing.datetime_range import DateTimeRange
+
+ANY_ROLE = "any"
+"""The wildcard role: every worker has it, including workers with no roles."""
+
+NAME_SEPARATOR = " & "
+"""Joins the names of workers sharing a cell in the output grid, so worker names must not contain it."""
+
+
+@dataclass(frozen=True, slots=True)
 class Worker:
     """
-    Represents a single worker that can be assigned in the schedule.
-    Contains the worker's name, role list, like list, dislike list and unavailability list.
+    A worker who can be assigned to slots. Workers are immutable, and hold no scoring or search state.
+    likes and dislikes are names of other workers.
     """
-    def __init__(self, name, roles=None, unavailable=None, likes=None, dislikes=None):
-        self.name = name
-        if roles is None:self.roles = []
-        else: self.roles = roles
-        if likes is None: likes = []
-        else: self.likes = likes
-        if dislikes is None : self.dislikes = []
-        else: self.dislikes = dislikes
-        self.unavailable = sorted([DateTimeRange.parse_range(pair) for pair in unavailable])
+    name: str
+    roles: frozenset[str] = frozenset()
+    unavailable: tuple[DateTimeRange, ...] = ()
+    likes: frozenset[str] = frozenset()
+    dislikes: frozenset[str] = frozenset()
 
-    def likes_worker(self, other):
-        if not isinstance(other, Worker):
-            raise TypeError("Expecting a Worker as other")
-        return self.likes.contains(other)
+    def __post_init__(self) -> None:
+        """Store the collections in their canonical forms, keeping unavailability sorted by time."""
+        # frozen dataclasses can only set their fields through object.__setattr__
+        object.__setattr__(self, "roles", frozenset(self.roles))
+        object.__setattr__(self, "unavailable", tuple(sorted(self.unavailable)))
+        object.__setattr__(self, "likes", frozenset(self.likes))
+        object.__setattr__(self, "dislikes", frozenset(self.dislikes))
 
-    def dislikes_worker(self, other):
-        if not isinstance(other, Worker):
-            raise TypeError("Expecting a Worker as other")
-        return self.dislikes.contains(other)
+    def has_role(self, role: str) -> bool:
+        """True if the worker has the role. Every worker has the wildcard role "any"."""
+        return role == ANY_ROLE or role in self.roles
 
-    def _prune_unavailability_list(self, other_time):
-        """
-        Remove from the unavailability list all ranges which end before other_time.
-        other_time can be either a datetime.datetime object or a DateTimeRange object.
-        In the latter case, DateTimeRange's start value will be used.
-        This reduces the total amount of ranges that need to be checked while removing workers from shift domains.
-        :param other_time: datetime.datetime object or DateTimeRange object
-        :return: None
-        """
-        while self.unavailable and self.unavailable[0].is_before(other_time):
-            self.unavailable.pop(0)
+    def is_available(self, time_range: DateTimeRange) -> bool:
+        """True if the time range doesn't overlap any of the worker's unavailability."""
+        return not any(unavailable.overlaps(time_range) for unavailable in self.unavailable)
 
-    def is_available(self, period: DateTimeRange.DateTimeRange):
-        """Return True if the given period does not overlap with this worker's unavailability.
-        Otherwise, return False"""
-        for unavailable_time in self.unavailable:
-            if unavailable_time.overlaps(period):
-                return False
-        return True
+    def likes_worker(self, other: Worker) -> bool:
+        """True if this worker likes sharing a shift with other."""
+        return other.name in self.likes
 
-    def has_role(self, required_role: str):
-        """Return True if the worker has the input required role.
-        Otherwise, return False.
-        Values None and "any" are equivalent"""
-        return required_role is None or required_role == "any" or required_role in self.roles
+    def dislikes_worker(self, other: Worker) -> bool:
+        """True if this worker dislikes sharing a shift with other."""
+        return other.name in self.dislikes

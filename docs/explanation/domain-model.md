@@ -12,8 +12,8 @@ flowchart TD
 
 ## Workers
 
-> [!IMPORTANT]
-> **Partially implemented.** See [`Worker`](../reference/api/worker.md).
+> [!NOTE]
+> **Implemented.** See [`Worker`](../reference/api/worker.md).
 
 A **worker** is someone who can be assigned to shifts. Each worker has:
 
@@ -26,9 +26,9 @@ The role `any` is a wildcard: every worker has it, including workers with no rol
 
 ## Posts
 
-> [!IMPORTANT]
-> **Partially implemented.** See [`Post`](../reference/api/post-and-slot.md). Daily activity windows aren't
-> implemented.
+> [!NOTE]
+> **Implemented.** See [`Post`](../reference/api/post-and-slot.md#post-module) and
+> [`DailyWindow`](../reference/api/daily-window.md).
 
 A **post** is something that needs to be manned, such as "front gate" or "desk". A post is a **template**: it
 describes what's needed, not who does it or when exactly. Each post defines:
