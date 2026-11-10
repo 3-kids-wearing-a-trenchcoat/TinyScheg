@@ -48,7 +48,7 @@ pruning ("no worker with the supervisor role is available on 2025-01-02 04:00–
 * **A stronger lower bound.** The pocket comparison uses the penalty accumulated so far, which is a weak bound,
   especially for workload, which barely grows until late in the search. Since every slot must be filled, the
   remaining hours are known; by the same Jensen argument used in [Scoring](scoring.md#the-function-varphi-and-jensens-inequality),
-  spreading them as evenly as possible gives a lower bound on the remaining workload penalty that can be added
+  spreading them so that every workload is equal gives a lower bound on the remaining workload penalty that can be added
   before comparing.
 * **Time limit.** Stop the search after a given time and return the best pocket schedule found so far. Note that
   with a time limit, value ordering affects the *result* and not just the speed.

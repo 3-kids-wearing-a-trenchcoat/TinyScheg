@@ -57,6 +57,8 @@ nav:
       - 0010 Python rewrite: decisions/0010-python-rewrite.md
       - 0011 No output for infeasible inputs: decisions/0011-no-output-for-infeasible-inputs.md
       - 0012 Deterministic scoring: decisions/0012-deterministic-path-independent-scoring.md
+      - 0013 Availability-weighted workload: decisions/0013-availability-weighted-workload.md
+      - 0014 Exact worst rest deficit: decisions/0014-exact-worst-rest-deficit.md
 
 markdown_extensions:
   - admonition

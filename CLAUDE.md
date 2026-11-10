@@ -39,15 +39,16 @@ Docs rules:
   changed decision gets a new ADR that supersedes the old one. See `docs/decisions/README.md`.
 * The docs use GitHub-flavored Markdown, including GitHub alerts (`> [!NOTE]`), `$...$` / `$$...$$` math and
   Mermaid diagrams. In math, write `\lbrace` / `\rbrace` instead of `\{` / `\}`, which GitHub can mangle.
-* `docs/explanation/scoring.md` was transferred as-is from the original notes, including a known mistake in the rest
-  target formula. It will be reviewed separately; don't correct it unprompted.
 * The docs are also built into a site with MkDocs + Material (`mkdocs.yml`). When adding a page, add it to `nav` in
   `mkdocs.yml`. Link to files outside `docs/` with full GitHub URLs, since relative links outside `docs/` break on
   the site. After changing the docs, check them with `mkdocs build --strict`.
 
 ## Knowledge Sources
 The docs were migrated from notes in the Zettelkasten at `/home/danny/Documents/Zettelkasten/`, which are now
-superseded by `docs/`. They may still be useful for background, but if they disagree with `docs/`, `docs/` wins.
+superseded by `docs/`: if they disagree with `docs/`, `docs/` wins.
+The Zettelkasten is still the **original source** everything was rebuilt from. When the original intention behind a
+design is unclear or ambiguous, consult the relevant note (e.g. `251028122014.md` for scoring, `251021115839.md` for
+the roadmap, `251021115817.md` for the dev log) and bring what you find to me.
 * The Zettelkasten is **read-only** — never modify it unless explicitly asked.
 * It contains many unrelated notes, as well as stale notes from earlier iterations of TinyScheg (notes with IDs
   starting with `20250305` describe the deleted Java version).

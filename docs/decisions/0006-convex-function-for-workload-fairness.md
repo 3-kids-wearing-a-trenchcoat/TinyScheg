@@ -1,6 +1,6 @@
 # 0006. Use a convex function for workload fairness
 
-**Status:** Accepted
+**Status:** Accepted. Penalty formula amended by [0013](0013-availability-weighted-workload.md).
 
 ## Context
 

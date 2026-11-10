@@ -11,6 +11,7 @@ tracked in the rest of the docs.
 
 * **Proposed** — under consideration, not yet settled.
 * **Accepted** — decided.
+* **Amended** — still accepted, but part of it (named in its status) is changed by a later ADR, which is linked.
 * **Superseded** — replaced by a later ADR, which is linked. Superseded ADRs are kept, not deleted, so the reasoning
   behind past decisions isn't lost.
 
@@ -26,13 +27,15 @@ ADR that supersedes the old one.
 | [0003](0003-variable-ordering-mrv-degree.md) | Order variables by MRV and the degree heuristic; no value ordering | Accepted |
 | [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted |
 | [0005](0005-weighted-sum-of-normalized-penalties.md) | Score as a weighted sum of normalized per-worker penalties | Accepted |
-| [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted |
-| [0007](0007-greedy-bound-for-worst-rest-deficit.md) | Bound the worst rest deficit greedily | Accepted |
+| [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted, amended by [0013](0013-availability-weighted-workload.md) |
+| [0007](0007-greedy-bound-for-worst-rest-deficit.md) | Bound the worst rest deficit greedily | Superseded by [0014](0014-exact-worst-rest-deficit.md) |
 | [0008](0008-undo-through-trail.md) | Undo assignments through a trail | Accepted |
 | [0009](0009-yaml-input-with-time-based-variations.md) | YAML input with time-based post variations | Accepted |
 | [0010](0010-python-rewrite.md) | Rewrite in Python | Accepted |
 | [0011](0011-no-output-for-infeasible-inputs.md) | No output for infeasible inputs | Accepted |
 | [0012](0012-deterministic-path-independent-scoring.md) | Deterministic, path-independent scoring and output | Accepted |
+| [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted |
+| [0014](0014-exact-worst-rest-deficit.md) | Calculate the worst rest deficit exactly | Accepted |
 
 ## Template
 

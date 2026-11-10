@@ -3,8 +3,11 @@
 > [!WARNING]
 > **Not yet implemented.** This page is the specification for TinyScheg's scoring. None of it exists in code yet.
 > See [ADR 0005](../decisions/0005-weighted-sum-of-normalized-penalties.md),
-> [ADR 0006](../decisions/0006-convex-function-for-workload-fairness.md) and
-> [ADR 0007](../decisions/0007-greedy-bound-for-worst-rest-deficit.md).
+> [ADR 0006](../decisions/0006-convex-function-for-workload-fairness.md),
+> [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md),
+> [ADR 0013](../decisions/0013-availability-weighted-workload.md) and
+> [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md).
+> This page was corrected on 2026-11-10; see [Corrections](#corrections).
 
 ## General idea
 
@@ -19,14 +22,19 @@ The penalty is what makes the [pocket](search-algorithm.md#branch-and-bound-the-
 legal schedule has been found, any partial schedule whose penalty is already higher can be pruned, since its
 penalty can only grow.
 
+The penalty must also be **deterministic and path-independent**: for a given configuration of weights and
+parameters, every state maps to exactly one penalty, regardless of how the search reached it
+(see [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)). Every formula below depends only on
+the current assignment and on constants computed before the search, so this holds as long as the computation itself
+is deterministic (e.g. sums are always taken in the same order).
+
 ## Calculations
 
-Each *criterion* (likes/dislikes, workload, rest) has its own penalty function. Each function is **normalized**, and
-their **weighted sum** is the total penalty.
+Each *criterion* (likes/dislikes, workload, rest) has its own penalty function. Each function is **normalized** so
+that its value lies between $0$ and $k$ (the number of workers), and their **weighted sum** is the total penalty.
 
 Ideally, each score would be derived from its previous value to make these calculations more efficient, but how
-practical that is remains to be seen. (At least *undoing* an action and its influence on a score can be done
-through the [`Trail`](search-algorithm.md#trail).)
+practical that is remains to be seen (see [Future work](future-work.md#incremental-scoring)).
 A proper score must be produced for every single state, since its absolute value is compared with the pocket's —
 scores can't be calculated lazily.
 
@@ -36,8 +44,12 @@ scores can't be calculated lazily.
   workers).
 * For every worker $w_i \in W$, let $L_i \subset W$ be the group of workers that $w_i$ likes.
 * For every worker $w_i \in W$, let $H_i \subset W$ be the group of workers that $w_i$ dislikes. It is assumed that
-  $\forall i \in [1,k] \quad L_i \cap H_i = \emptyset$.
+  $\forall i \in [1,k] \quad L_i \cap H_i = \emptyset$, and that a worker appears in neither of their own groups.
+* For every worker $w_i \in W$, let $\mathrm{av}_i \geq 0$ be $w_i$'s **availability**: the total number of hours
+  **within the schedule period** during which $w_i$ is available.
 * $S = \lbrace s_1, s_2, \dots ,s_n \rbrace$ is the set of all slots ($n\in \mathbb{N}$ is the total number of slots).
+  For a slot $s$, $[s]_\text{start}$ and $[s]_\text{end}$ are its start and end times, and $|s|$ is its
+  **duration** in hours.
 * For every slot $s_i \in S$, let $D_i \subseteq W$ be **the domain** of $s_i$.
 * The notation $s_i \sim s_j$ means that $s_i$ and $s_j$ **belong to the same shift**.
   * For every slot $s_i \in S$, the set $\mathcal{S}(s_i) = \lbrace s_j \in S \mid s_i \sim s_j \rbrace$ is the shift
@@ -45,6 +57,8 @@ scores can't be calculated lazily.
     Notice that $s_i \sim s_i \Leftrightarrow s_i \in \mathcal{S}(s_i)$, that if $s_j \sim s_i$ then
     $\mathcal{S}(s_i) = \mathcal{S}(s_j)$, and that for every $s_i, s_j \in S$ such that $s_i \nsim s_j$,
     $\mathcal{S}(s_i) \cap \mathcal{S}(s_j) = \emptyset$.
+  * A slot is **shared** if its shift has more than one slot, i.e. $|\mathcal{S}(s)| > 1$. Let $n_\text{shared}$ be
+    the total number of shared slots.
 * $\mathcal{A}_i: S^{n \in \mathbb{N}} \rightarrow W^n$ is a function that takes a set of slots and returns the
   workers **assigned** to these slots in the $i$-th iteration of the run.
   $\mathcal{A}$ (no subscript) refers to the workers assigned to the input slots at the *current* iteration.
@@ -55,6 +69,9 @@ scores can't be calculated lazily.
   * $C_i = \lbrace s_j \in S \mid s_i \bowtie s_j \rbrace$ is **the constraint set of $s_i \in S$ specifically**.
 * For every iteration $t \in \mathbb{N}$ and worker $w_i \in W$, $A_t(w_i)$ is **the set of slots $w_i$ is assigned
   to at iteration $t$**.
+* $m \in \mathbb{R}^+$ is **the minimum rest period** in hours, as defined in the hard constraints. Since slots that
+  are less than $m$ hours apart are diff constrained, any two slots assigned to the same worker are at least $m$
+  hours apart.
 
 ### Likes/dislikes
 
@@ -72,11 +89,12 @@ At iteration $t \in \mathbb{N}$, the **local like function** $\mathcal{L}_t:W \t
 ($| \cdot |$ denoting the **size** of $\cdot$):
 
 $$
-\mathcal{L}_t(w_i, s_i) = \frac{1}{| \mathcal{S}(s_i) | - 1} \cdot \sum_{w \in A_t \big( \mathcal{S}(s_i) \big)} l_i(w) = \sum_{w \in A_t \big(\mathcal{S}(s_i) \big)} \frac{l_i(w)}{| \mathcal{S}(s_i) | - 1}
+\mathcal{L}_t(w_i, s_i) = \frac{1}{| \mathcal{S}(s_i) | - 1} \cdot \sum_{w \in A_t \big( \mathcal{S}(s_i) \setminus \lbrace s_i \rbrace \big)} l_i(w) = \sum_{w \in A_t \big(\mathcal{S}(s_i) \setminus \lbrace s_i \rbrace \big)} \frac{l_i(w)}{| \mathcal{S}(s_i) | - 1}
 $$
 
-Or less formally: $\mathcal{L}_t (w_i, s_i)$ is **the sum of the like function of $w_i$ over all workers assigned to
-slots that share a shift with $s_i$, averaged over the number of other slots in that shift**.
+Or less formally: $\mathcal{L}_t (w_i, s_i)$ is **the sum of the like function of $w_i$ over the workers assigned to
+the *other* slots of $s_i$'s shift, averaged over the number of other slots in that shift**. Other slots of the shift
+that are still unassigned contribute nothing.
 If a shift has only one slot, this function is defined to be 0, that is,
 $| \mathcal{S} (s_i) | = 1 \Rightarrow \forall w_i \in W \; \forall t \in \mathbb{N} \quad \mathcal{L}_t(w_i,s_i)=0$.
 
@@ -94,60 +112,81 @@ $$
 \mathcal{L}^{*}(t) = \sum _{w \in W} \mathcal{L}_t(w)
 $$
 
-The highest possible penalty for any worker at any shift is $\beta$. Since $\mathcal{L}^*(t)$ is a sum of such
-penalties, **the normalized global like score** is:
+**Monotonicity:** assigning a worker $w_j$ to a slot $s$ adds a new non-negative term $\mathcal{L}_t(w_j, s)$, and
+adds $\frac{l_i(w_j)}{|\mathcal{S}(s)| - 1} \geq 0$ to the term of every worker $w_i$ already assigned to another slot
+of the same shift. Nothing decreases.
+
+#### Normalization
+
+Each local like term is an average of values that are at most $\beta$, so it's at most $\beta$. There is at most one
+local term per shared slot (single-slot shifts contribute 0), so $\mathcal{L}^*(t) \leq \beta \cdot n_\text{shared}$.
+**The normalized global like score** is therefore:
 
 $$
-\mathcal{L}^{**}(t) = \frac{\mathcal{L}^*(t)}{\beta} = \sum_{w \in W} \frac{\mathcal{L}_t(w)}{\beta}
+\mathcal{L}^{**}(t) = k \cdot \frac{\mathcal{L}^*(t)}{\beta \cdot n_\text{shared}}
 $$
+
+which lies in $[0, k]$. If $n_\text{shared} = 0$ (every shift has a single slot), $\mathcal{L}^{**}(t) = 0$.
+
+The denominator must be a constant. Normalizing each worker by their *own* number of shifts (an average) would break
+monotonicity, since an average can decrease when a liked shift is added.
 
 ### Workload
 
-Let $w\in W$ be a worker, $t \in \mathbb{N}$, and let $h_t(w) \in [0,1]$ be $w$'s **workload** at iteration $t$:
-the ratio between the hours assigned and the total hours available.
+Let $w_i \in W$ be a worker with $\mathrm{av}_i > 0$, $t \in \mathbb{N}$, and let $h_t(w_i) \in [0,1]$ be $w_i$'s
+**workload** at iteration $t$: the ratio between the hours assigned and the hours available.
 
 $$
-h_t(w) = \frac{\text{Total hours assigned to } w}{\text{Total hours in which } w \text{ is available}} = \frac{\sum _{s \in A_t(w)} \text{duration of } s}{\text{Total hours in which } w \text{ is available}} = \sum _{s \in A_t(w)} \frac{ \text{duration of } s}{\text{Total hours in which } w \text{ is available}}
+h_t(w_i) = \frac{\text{Total hours assigned to } w_i}{\mathrm{av}_i} = \frac{\sum _{s \in A_t(w_i)} |s|}{\mathrm{av}_i}
 $$
 
-Naturally, $h_t(w)=0$ iff $A_t(w) = \emptyset$, and $h_t(w) = 1$ iff $w$ is assigned in all of $w$'s available
-hours.
+Since a worker can only be assigned to slots that lie entirely within their availability, and their slots never
+overlap, $h_t(w_i) \leq 1$. Naturally, $h_t(w_i)=0$ iff $A_t(w_i) = \emptyset$, and $h_t(w_i) = 1$ iff $w_i$ is
+assigned in all of their available hours.
+Workers with $\mathrm{av}_i = 0$ can't be assigned anywhere and are left out of the workload penalty.
+
 The absolute workload of each worker doesn't matter; what matters is that it's as **fair** as possible, meaning
-workloads should be as close to one another as possible. The workload penalty function is therefore built from a
-function $\varphi$, as follows.
+workloads — each worker's share of their *own* availability — should be as equal as possible. Unavailable time
+counts as neither work nor rest. The workload penalty function is built from a function $\varphi$, as follows.
 
 #### The function $\varphi$ and Jensen's inequality
 
-We use a **convex, monotonically increasing** function $\varphi :\mathbb{R} \rightarrow \mathbb{R}$ and take
-advantage of [Jensen's inequality](https://en.wikipedia.org/wiki/Jensen%27s_inequality#Finite_form).
+We use a **convex, monotonically increasing** function $\varphi :\mathbb{R} \rightarrow \mathbb{R}$ with
+$\varphi(0) = 0$, and take advantage of the weighted form of
+[Jensen's inequality](https://en.wikipedia.org/wiki/Jensen%27s_inequality#Finite_form).
 
-**Jensen's inequality** states (in the special case relevant here) that for a real convex function $\varphi$ and
-numbers $x_1,\dots, x_n$ in its domain:
-
-$$
-\varphi \left( \frac{\sum x_i}{n} \right) \leq \frac{\sum \varphi (x_i)}{n}
-$$
-
-Let $\overline{x} = \frac{1}{n} \sum_{i=1}^n x_i$, the average of $\lbrace x_1, \dots ,x_n \rbrace$. Then:
+**Jensen's inequality** states (in the special case relevant here) that for a real convex function $\varphi$,
+numbers $x_1,\dots, x_n$ in its domain and positive weights $\lambda_1, \dots, \lambda_n$:
 
 $$
-\varphi \left( \frac{\sum x_i}{n} \right) = \varphi (\overline{x}) \leq \frac{\sum \varphi (x_i)}{n} = \frac{1}{n} \sum \varphi (x_i) \quad \underset{\cdot n}{\rightarrow} \quad n \varphi(\overline{x}) \leq \sum_{i=1}^n \varphi (x_i)
+\varphi \left( \frac{\sum \lambda_i x_i}{\sum \lambda_i} \right) \leq \frac{\sum \lambda_i \varphi (x_i)}{\sum \lambda_i}
+\quad \Rightarrow \quad
+\left( \sum \lambda_i \right) \varphi (\overline{x}) \leq \sum_{i=1}^n \lambda_i \varphi (x_i)
+\quad \text{where} \quad \overline{x} = \frac{\sum \lambda_i x_i}{\sum \lambda_i}
 $$
 
-This means that if $\sum _{i=1}^n \varphi (x_i)$ is the total penalty function, its **minimum** is exactly when
-$x_1 = \dots = x_n = \overline{x}$. In other words, **this penalty function is minimal when all values are the
-same**, which is what we're looking for.
-The advantage of this function is that we don't need to know (or even guess) what the average value is.
+with equality when $x_1 = \dots = x_n$ (and, for strictly convex $\varphi$, only then).
 
-We can also see that for every $a \neq b$, $\varphi (a) + \varphi (b) \geq 2 \varphi \left( \frac{a+b}{2} \right)$,
-with equality iff $a=b$.
-So by increasing the smaller value by $0 < c \in \mathbb{R}$ such that $|a-b| > |a+c-b|$ (making $a$ "more similar"
-to $b$), we also approach the local minimum without requiring backtracking.
-That is, as long as $\varphi$ is convex and monotonically increasing, each step that makes $x_1 ,\dots ,x_n$ "more
-similar" also approaches the desirable local minimum.
+We choose $x_i = h_t(w_i)$ and $\lambda_i = \mathrm{av}_i$. In a complete schedule every slot is filled, so the total
+number of assigned hours $T = \sum_i \mathrm{av}_i \, h_t(w_i)$ is the same for every complete schedule, and so is
+$\overline{x} = T / \sum_i \mathrm{av}_i$. The left-hand side is therefore a constant, and the penalty
 
-Naturally, we choose $x_i$ to be $h_t (w_i)$, so the total workload penalty function at iteration $t \in \mathbb{N}$
-is $\sum _{i=1}^k \varphi (h_t(w_i))$.
+$$
+\mathcal{W}(t) = \sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h_t(w_i) \big)
+$$
+
+is **minimal exactly when every worker's workload is the same**, which is what we're looking for. The advantage of
+this function is that we don't need to know (or even guess) what that common workload is.
+
+The weights are essential. Without them, $\sum \varphi(h_t(w_i))$ would only be minimized by equal workloads if
+$\sum h_t(w_i)$ were fixed, which it isn't: when availabilities differ, the unweighted sum favours giving
+disproportionately many hours to the most available workers (see
+[ADR 0013](../decisions/0013-availability-weighted-workload.md)).
+
+It also behaves well step by step. Assigning a slot of duration $|s|$ to $w_i$ increases $\mathcal{W}$ by
+$\mathrm{av}_i \big( \varphi(h + |s|/\mathrm{av}_i) - \varphi(h) \big) \approx |s| \cdot \varphi'(h)$, where $h$ is
+$w_i$'s current workload. Since $\varphi$ is convex, $\varphi'$ is increasing: **the higher a worker's workload, the
+higher the penalty for giving them another assignment**, regardless of how available they are.
 
 There are two "low-hanging fruit" options for $\varphi$:
 
@@ -156,12 +195,6 @@ There are two "low-hanging fruit" options for $\varphi$:
 
 Generally speaking, $x^p$ and $e^{ax} -1$ penalize harder as $p$ and $a$ increase respectively, and $e^{ax} - 1$ is
 *much stricter* (penalizes harder) than $x^p$.
-This works for two main reasons. The first, as mentioned, is that there is a single minimum, when
-$x_1 = \dots = x_n$. The second is that for any $x_1, \dots ,x_n$, the value increase that yields the lowest penalty
-is the one that makes the values overall "closer" to one another.
-In TinyScheg, this means that the higher a worker's workload, the higher the penalty for giving them another
-assignment, so this penalty function simultaneously seeks to **keep workload equal** and to **minimize
-assignments**.
 
 ![Plot of x^p and e^(ax) - 1 on the range [0, 1]](../images/workload-phi-functions.png)
 
@@ -169,24 +202,19 @@ assignments**.
 > intersect at $x=1$. Increasing $p$ "moves the midpoint" to the right, whereas increasing $a$ makes the ascent much
 > sharper.
 
-**If we choose** $\varphi (x) = x^p$, the global function for each iteration is:
+**Monotonicity:** assigning a slot only increases the assigned worker's $h_t$, and $\varphi$ is increasing, so
+$\mathcal{W}$ never decreases.
+
+#### Normalization
+
+Since $h_t(w_i) \leq 1$ and $\varphi$ is increasing, $\mathcal{W}(t) \leq \varphi(1) \sum_i \mathrm{av}_i$.
+**The normalized global workload function** is therefore:
 
 $$
-\sum _{i=1}^k \varphi \left( h_t(w_i) \right) = \sum _{i=1}^k \left( h_t(w_i) \right) ^p = \sum _{i=1}^k \frac{\left( \text{hours assigned to } w_i \text{ in iteration } t \right)^p}{\left( \text{total availability of } w_i \right)^p} = \sum _{i=1}^k \frac{\left( \sum _{s \in A_t(w_i)} \text{duration of } s \right)^p}{\left( \text{total availability of } w_i \right)^p}
+\mathcal{W}^*(t) = k \cdot \frac{\sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h_t(w_i) \big)}{\varphi(1) \cdot \sum_{i=1}^k \mathrm{av}_i}
 $$
 
-and its normalized form is simply $\frac{1}{k} \sum _{i=1}^k \varphi \left( h_t(w_i) \right)$.
-
-**If we choose** $\varphi(x) = e^{ax}-1$, the global function for each iteration is:
-
-$$
-\sum _{i=1}^k \varphi \left( h_t(w_i) \right) = \sum_{i=1}^k \left( e^{a \cdot h_t(w_i)} - 1 \right) = \sum _{i=1}^k \bigg( \exp \big( a\cdot h_t(w_i) \big) \bigg) - k = \sum _{i=1}^k \left( \exp \left( a \cdot \frac{\sum _{s \in A_t(w_i)} \text{duration of } s}{\text{total availability of }w_i} \right) \right) -k
-$$
-
-and its **normalized form** is $\frac{1}{e^a - 1} \sum _{i=1}^k \varphi \left( h_t(w_i) \right)$.
-
-We denote the global workload function by $\mathcal{W}(t) = \sum_{i=1}^k \varphi (h_t(w_i))$ and its normalized form
-by $\mathcal{W}^*(t)$.
+which lies in $[0, k]$ for either choice of $\varphi$ ($\varphi(1) = 1$ for $x^p$ and $e^a - 1$ for $e^{ax} - 1$).
 
 ### Rest
 
@@ -199,8 +227,9 @@ That said, rest periods shouldn't necessarily all be made as similar as possible
 schedule. An ideal rest period following a 3-hour shift can and should be shorter than one following a 4-hour (or
 longer) shift.
 A rest period longer than the ideal doesn't need to be penalized either, since the main problem with an overly long
-rest period is the risk of it coming at the expense of someone else. If it's possible to give worker X extra rest
-without it coming at someone's expense, X should get it.
+rest period is the risk of it coming at the expense of someone else — and that is already reflected as a shorter
+rest for that someone else. If it's possible to give worker X extra rest without it coming at someone's expense, X
+should get it.
 
 For these reasons, a fairly simple function suffices: it calculates a **rest deficit** for each rest period of each
 worker, sums them up and normalizes the result.
@@ -213,16 +242,18 @@ $$
 s_i < s_j \iff \bigg( [s_i]_\text{start} < [s_j]_\text{start} \bigg) \text{ OR } \bigg( [s_i]_\text{start} = [s_j]_\text{start} \text{ AND } [s_i]_\text{end} < [s_j]_\text{end} \bigg)
 $$
 
-For every $s_i \in A_t(w)$, define the **rest period** for $s_i$:
+(A worker's slots never overlap, so this order is strict and unambiguous.)
+
+For every $s_i \in A_t(w)$, define the **rest period** after $s_i$:
 
 $$
 \Delta s_i = \begin{cases} [s_{i+1}]_\text{start} - [s_i]_\text{end} & i \neq n \\ \infty & i=n \end{cases}
 $$
 
-and the **rest target** for $s_i$ (shift length times $\gamma$), for some $1 \leq \gamma \in \mathbb{R}$:
+and the **rest target** after $s_i$ — the shift's duration times $\gamma$, for some $1 \leq \gamma \in \mathbb{R}$:
 
 $$
-r(s_i) = \gamma \bigg( [s_{i+1}]_\text{start} - [s_i]_\text{end} \bigg)
+r(s_i) = \gamma \cdot |s_i|
 $$
 
 (All time periods are in hours.)
@@ -234,7 +265,8 @@ d_t(w,s) = \max \bigg( 0, \; r(s) - \Delta s \bigg)
 $$
 
 That is, $d_t(w,s)$ is how many hours **below** the rest target worker $w$ actually rested after shift $s$.
-If $w$'s rest period after $s$ was equal to or greater than the rest target, $d_t(w,s) = 0$.
+If $w$'s rest period after $s$ was equal to or greater than the rest target, $d_t(w,s) = 0$; how much longer it
+was doesn't matter. In particular, $d_t(w, s_n) = 0$ for a worker's last shift.
 
 The **worker rest deficit function** at iteration $t$ is:
 
@@ -244,9 +276,16 @@ $$
 
 That is, the sum of the rest deficits for each shift $w$ is assigned to at iteration $t$.
 
-> Monotonicity is evident from the fact that for sorted shifts $s_1 < s_2 < s_3$,
-> $\Delta(s_1, s_3) < \begin{matrix} \Delta(s_1, s_2) \\ \Delta(s_2, s_3) \end{matrix} < \Delta(s_1,s_2) + \Delta (s_2,s_3)$.
-> That is, the deficit can only increase for each shift, and therefore so can the sum of these deficits.
+> **Monotonicity:** assigning $w$ another slot $s'$ can only add deficit.
+> * If $s'$ falls between two of $w$'s slots $s_i < s' < s_{i+1}$, the rest after $s_i$ shrinks from
+>   $\Delta s_i$ to $[s']_\text{start} - [s_i]_\text{end} < \Delta s_i$, so $d_t(w, s_i)$ can only grow; and $s'$
+>   brings a new deficit $d_t(w, s') \geq 0$. (The rest periods around $s'$ add up to *less* than the old one:
+>   $\big([s']_\text{start} - [s_i]_\text{end}\big) + \big([s_{i+1}]_\text{start} - [s']_\text{end}\big) = \Delta s_i - |s'|$.)
+> * If $s'$ comes after $w$'s last slot, the rest after that slot goes from $\infty$ (no deficit) to a finite value,
+>   so its deficit can only grow, and $d_t(w, s') = 0$.
+> * If $s'$ comes before $w$'s first slot, it only adds a new deficit $d_t(w, s') \geq 0$.
+>
+> No other deficit changes, so $\mathcal{R}_t(w)$ never decreases.
 
 Similarly, the **global rest deficit function** at iteration $t$ is:
 
@@ -256,54 +295,51 @@ $$
 
 #### Normalization
 
-The maximum possible deficit for a slot is achieved by assigning a worker to a post as soon as possible, i.e. as
-soon as that worker's minimum rest period (the hard constraint) is over. The minimum possible deficit for any
-worker at any slot is, of course, 0.
-
-Let $m \in \mathbb{R}^+$ be **the minimum rest period** as defined in the hard constraints.
-For any slot $s \in S$, the maximum possible rest deficit (with the minimal rest period) is:
+The minimum possible deficit for any worker at any slot is 0. Since any two slots assigned to the same worker are at
+least $m$ hours apart, $\Delta s \geq m$, so the maximum possible deficit after a slot $s$ is reached when the next
+shift starts as soon as the minimum rest period is over:
 
 $$
-d_m(s) = r(s) - \Delta s \underset{\Delta s = m}{=} r(s) - m = \gamma \bigg( [s_{i+1}]_\text{start} - [s_i]_\text{end} \bigg) - m = \gamma \cdot [s]_\text{duration in hours} -m
+d_m(s) = \max \big(0, \; r(s) - m \big) = \max \big(0, \; \gamma \cdot |s| - m \big)
 $$
 
-So the normalized form of the rest deficit function would be
-$d_t^* (w,s) = \frac{d_t(w,s)}{d_m(s)} = \max \big( 0, \; \frac{r(s)-\Delta s}{r(s) - m} \big)$.
-This isn't very helpful because the number of rest periods varies; normalization should instead be relative to
-*each worker*, whose number is constant for a given schedule.
+If $\gamma \cdot |s| \leq m$, the minimum rest period already meets the rest target and $s$ can never cause a
+deficit.
 
-For every $w \in W$, let $0 < M_w \in \mathbb{R}$ be **the worst possible deficit** for $w$ (calculating $M_w$ is
-covered in the next section). **The normalized worker rest deficit function** is
-$\frac{1}{M_w} \sum _{s \in A_t(w)} d_t(w,s) = \sum _{s \in A_t(w)} \frac{d_t(w,s)}{M_w}$, which keeps it between 0
-(best case) and 1 (worst case).
+Normalizing each deficit by $d_m(s)$ isn't very helpful, because the number of rest periods varies; normalization
+should instead be relative to *each worker*, whose number is constant for a given schedule.
+
+For every $w \in W$, let $M_w \geq 0$ be **the worst possible deficit** for $w$: the largest value
+$\mathcal{R}_t(w)$ could take over any legal set of slots $w$ could be assigned to (calculating $M_w$ is covered in
+the next section). **The normalized worker rest deficit function** is
+$\frac{1}{M_w} \sum _{s \in A_t(w)} d_t(w,s) = \sum _{s \in A_t(w)} \frac{d_t(w,s)}{M_w}$, which lies between 0
+(best case) and 1 (worst case). If $M_w = 0$, $w$ can never have a deficit and the term is defined to be 0.
 Therefore, **the normalized global rest deficit function** is:
 
 $$
 \mathcal{R}^{**}(t) = \sum _{w \in W} \frac{1}{M_w} \mathcal{R}_t(w) = \sum _{w \in W} \Bigg( \sum_{s \in A_t(w)} \frac{d_t(w,s)}{M_w} \Bigg)
 $$
 
+which lies in $[0, k]$.
+
 #### Calculating the worst possible deficit $M_w$
 
-There are two ways to do this: calculate $M_w$ precisely by finding the most expensive path in a
-[directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) (DAG), using something like a
-[longest-path algorithm for DAGs](https://www.geeksforgeeks.org/dsa/find-longest-path-directed-acyclic-graph/), or
-find a *good enough* upper bound and use it as $M_w$.
+$M_w$ is calculated **exactly**, as the most expensive path in a
+[directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) (DAG)
+(see [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md)):
 
-TinyScheg uses an upper bound, found with a simple greedy algorithm. There are two options:
+* the nodes are the slots in whose domain $w$ is (after unary pruning);
+* there is an edge $s \rightarrow s'$ whenever $w$ could work $s$ and then $s'$ as consecutive shifts, i.e.
+  $[s']_\text{start} - [s]_\text{end} \geq m$;
+* the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot |s| - ([s']_\text{start} - [s]_\text{end}) \big)$.
 
-* **Simple:** sort the slots by time and iteratively take the earliest-ending slot that doesn't conflict with what
-  has been taken so far. This can be sped up by using each worker's domain set to remove irrelevant slots.
-* **Tuned:** similar to the simple option, a little more expensive but still much cheaper than the DAG, and
-  (*usually*) producing a tighter upper bound. For every possible beginning slot, a chain is built by greedily
-  choosing, at each step, the next slot that maximizes the rest penalty. This produces several chains, each with its
-  own rest penalty, and the maximum of those is $M_w$.
-  The worst-case complexity of this method is $O(n^2)$, but in practice it can be made much quicker by limiting the
-  set of possible beginning slots:
-  * Let $m\in \mathbb{R}^+$ be the minimum rest period. Suppose a worker's first shift in the schedule *starts* at
-    time $t$. If some shift *ends* earlier than $t - m$, at least one more shift could be crammed into this
-    worker's schedule. So the worst-case chain **must start with a shift within $m$ hours of the schedule start**.
-  * The search space can be reduced further by looking at **time ranges** rather than distinct slots: in terms of
-    rest deficit, a shift from $t_1$ to $t_2$ is the same no matter which slot it's spent in.
+Every legal sequence of $w$'s shifts is a path in this graph, and its total deficit is the path's total weight, so
+$M_w$ is the weight of the heaviest path. Sorting the slots by time and applying a standard
+[longest-path algorithm for DAGs](https://www.geeksforgeeks.org/dsa/find-longest-path-directed-acyclic-graph/)
+takes $O(n^2)$ time for $n$ slots, which is cheap at the intended schedule sizes.
+
+The search space can be reduced by looking at **time ranges** rather than distinct slots: in terms of rest deficit,
+a shift from $t_1$ to $t_2$ is the same no matter which slot it's spent in.
 
 ## Total score for each state
 
@@ -314,7 +350,9 @@ $$
 \mathcal{P}(t) = a \cdot \mathcal{L}^{**}(t) + b \cdot \mathcal{W}^*(t) + c \cdot \mathcal{R}^{**}(t)
 $$
 
-Each sub-function normalizes its results per worker, so with $k \in \mathbb{N}$ workers,
+(The weight $a$ here is unrelated to the parameter $a$ of $\varphi(x) = e^{ax} - 1$.)
+
+Each sub-function is normalized to $[0, k]$, where $k \in \mathbb{N}$ is the number of workers:
 $0 \leq g(t) \leq k$ for every $g\in \lbrace \mathcal{L}^{**}, \mathcal{W}^*, \mathcal{R}^{**} \rbrace$.
 This means that for every $t \in \mathbb{N}$:
 
@@ -325,10 +363,41 @@ $$
 This is fine, as $k$ (the number of workers) stays constant within each run. If normalizing into the range $[0,1]$
 is ever needed, it's as simple as $\frac{\mathcal{P}(t)}{k}$.
 
+Each sub-function is monotonically non-decreasing, and the weights are non-negative, so $\mathcal{P}$ is too.
+
 ## Open questions
 
-* Which function to use for $\varphi$: $x^p$ or $e^{ax} - 1$.
-* Which greedy method to use for $M_w$: simple or tuned.
+* Which function to use for $\varphi$: $x^p$ or $e^{ax} - 1$. [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)
+  favours $x^p$ with an integer $p$ if scores are ever updated incrementally, since it can be computed exactly.
 * The values of the parameters $\alpha$, $\beta$, $\gamma$, $p$ or $a$, and of the weights $a$, $b$, $c$ — and
   whether they're fixed or configurable through the input.
 * Whether scores can practically be updated incrementally from their previous values.
+
+## Corrections
+
+This page was originally transferred as-is from the design notes. It was reviewed and corrected on 2026-11-10:
+
+1. **Rest target.** It was written as $r(s_i) = \gamma \big([s_{i+1}]_\text{start} - [s_i]_\text{end}\big)$, i.e.
+   $\gamma$ times the rest period itself, which made the deficit $(\gamma - 1) \cdot \Delta s_i$: the longer the
+   rest, the larger the penalty, and the target could never be met. It's now $\gamma \cdot |s_i|$, as the text
+   ("shift length times $\gamma$") and the normalization already intended. The same typo appeared in the derivation
+   of $d_m(s)$.
+2. **Workload weighting.** The penalty was the unweighted $\sum \varphi(h_t(w_i))$, which isn't minimized by equal
+   workloads when availabilities differ. It's now weighted by availability; see
+   [ADR 0013](../decisions/0013-availability-weighted-workload.md).
+3. **Workload normalization.** The two choices of $\varphi$ were normalized inconsistently ($[0,1]$ for $x^p$,
+   $[0,k]$ for $e^{ax} - 1$). Both are now normalized to $[0, k]$.
+4. **Likes normalization.** $\mathcal{L}^*/\beta$ grew with the number of shifts rather than being bounded by $k$,
+   so the weights' meaning depended on the schedule's size. It's now divided by its maximum,
+   $\beta \cdot n_\text{shared}$, and scaled to $[0,k]$.
+5. **Likes self-inclusion.** The local like function summed over the whole shift, including the worker's own slot,
+   so every worker rated themselves as neutral. It now sums over the *other* slots of the shift only.
+6. **Worst rest deficit.** $M_w$ was to be found with a greedy algorithm, described as an upper bound. A greedy
+   algorithm finds one actual sequence of shifts, whose deficit is a *lower* bound on the worst case, so the
+   normalized rest penalty could exceed 1. $M_w$ is now calculated exactly; see
+   [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md).
+7. **Rest monotonicity argument.** The original argument stated
+   $\Delta(s_1, s_3) < \Delta(s_1, s_2), \Delta(s_2, s_3) < \Delta(s_1,s_2) + \Delta (s_2,s_3)$, which has every
+   inequality reversed. The conclusion (the rest penalty is monotone) was correct; the argument has been replaced.
+8. **Edge cases.** Terms that would divide by zero ($\mathrm{av}_i = 0$, $n_\text{shared} = 0$, $M_w = 0$) are now
+   defined.

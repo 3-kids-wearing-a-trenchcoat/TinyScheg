@@ -1,6 +1,6 @@
 # 0007. Bound the worst rest deficit greedily
 
-**Status:** Accepted
+**Status:** Superseded by [0014](0014-exact-worst-rest-deficit.md).
 
 ## Context
 
