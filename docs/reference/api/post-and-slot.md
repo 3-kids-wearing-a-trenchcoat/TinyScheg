@@ -19,7 +19,9 @@ See [Domain model](../../explanation/domain-model.md) for how posts, shifts and 
 >   search state (`csp/`), and `Post` moves to `model/post.py` (see
 >   [Architecture](../../explanation/architecture.md#code-layout)).
 > * `DateTimeRange.forever()` is no longer needed: a post without a time window is active throughout the schedule
->   period.
+>   period. It has been removed, along with `in_range` and `pad`, in the rebuilt
+>   [`DateTimeRange`](datetime-range.md), so this module no longer runs as is: `in_range` is now `contains`, and `pad`
+>   is replaced by `gap`.
 
 ## `class Post(name, length, roles, period=None, variations=None)`
 

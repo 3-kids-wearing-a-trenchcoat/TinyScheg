@@ -1,149 +1,102 @@
-import datetime as dt
+"""Half-open date-time ranges, and parsing them from ISO 8601 strings."""
+from __future__ import annotations
 
+import datetime as dt
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, order=True, slots=True)
 class DateTimeRange:
     """
-    A simple date-time range: [start, end) (inclusive start, exclusive end)
-    Start and end must be datetime.datetime objects and start <= end.
-    Both datetime objects are assumed to be timezone naive (timezones are not taken into account)
+    A non-empty date-time range [start, end): the start is included and the end isn't.
+    Both ends are timezone-naive datetime.datetime objects, and start < end.
+    Ranges are immutable, hashable, and ordered by (start, end).
     """
+    start: dt.datetime
+    end: dt.datetime
 
-    def __init__(self, start, end):
-        """DateTimeRange constructor
-        Requires *start* which is a datetime object representing the start of the range
-        and *end*, which is either a datetime object representing the end
-        or a timedelta object representing the length of the range from start."""
-        if not isinstance(start, dt.datetime):
-            raise TypeError("start must be a datetime.datetime instance")
-        self.start = start
-        if isinstance(end, dt.timedelta):
-            self.end = start + end
-        elif isinstance(end, dt.datetime):
-            if start > end:
-                raise ValueError("start must be before or equal to end")
-            self.end = end
-        else:
-            raise TypeError("end must be a datetime.datetime instance or a datetime.timedelta instance")
+    def __post_init__(self) -> None:
+        """Validate the range's ends."""
+        for name, value in (("start", self.start), ("end", self.end)):
+            if not isinstance(value, dt.datetime):
+                raise TypeError(f"{name} must be a datetime.datetime, not {type(value).__name__}")
+            if value.tzinfo is not None:
+                raise ValueError(f"{name} must be timezone-naive, got {value!r}")
+        if self.start >= self.end:
+            raise ValueError(f"start must be before end, got {self.start.isoformat()} -> {self.end.isoformat()}")
+
+    @classmethod
+    def from_duration(cls, start: dt.datetime, length: dt.timedelta) -> DateTimeRange:
+        """
+        Create a range from its start and its length
+        :param start: datetime.datetime, the start of the range
+        :param length: datetime.timedelta, the length of the range; must be positive
+        :return: the range [start, start + length)
+        """
+        if not isinstance(length, dt.timedelta):
+            raise TypeError(f"length must be a datetime.timedelta, not {type(length).__name__}")
+        return cls(start, start + length)
 
     @property
     def duration(self) -> dt.timedelta:
-        """return a datetime.timedelta of end - start"""
+        """The length of the range, end - start."""
         return self.end - self.start
 
-    def __eq__(self, other):
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return self.start == other.start and self.end == other.end
-
-    def __lt__(self, other):
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return (self.start, self.end) < (other.start, other.end)
-
-    def __gt__(self, other):
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return (self.start, self.end) > (other.start, other.end)
-
-    def __ge__(self, other):
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return (self.start, self.end) >= (other.start, other.end)
-
-    def __le__(self, other):
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return (self.start, self.end) <= (other.start, other.end)
-
-    def __repr__(self):
-        return "DateTimeRange ({!r} -> {!r})".format(self.start, self.end)
-
-    def __hash__(self):
-        return hash((self.start, self.end))
-
-    def touches(self, other):
-        """return True if one DateTimeRange start immediately as the other ends, return False otherwise"""
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return self.start == other.end or self.end == other.start
-
-    def overlaps(self, other):
-        if not isinstance(other, DateTimeRange):
-            return NotImplemented
-        return self.start <= other.end and other.start <= self.end and not self.touches(other)
-
-    def in_range(self, other):
-        """Return True if other is entirely contained within this DateTimeRange
-        other may be either a DateTimeRange object or a datetime.datetime object"""
-        if not isinstance(other, dt.datetime):
-            if isinstance(other, DateTimeRange):
-                return self.start <= other.start < self.end and self.start <= other.end < self.end
-            return NotImplemented
-        return self.start <= other < self.end
-
-    def is_before(self, other):
+    def contains(self, other: dt.datetime | DateTimeRange) -> bool:
+        """
+        Check whether a moment or a range lies entirely within this range
+        :param other: datetime.datetime (a moment) or DateTimeRange
+        :return: True if other is within this range. A range ending exactly at this range's end is within it,
+        but a moment exactly at this range's end isn't, since the end is excluded.
+        """
+        if isinstance(other, DateTimeRange):
+            return self.start <= other.start and other.end <= self.end
         if isinstance(other, dt.datetime):
-            return self.end < other
-        elif isinstance(other, DateTimeRange):
-            return self.end < other.start
-        return NotImplemented
+            return self.start <= other < self.end
+        raise TypeError(f"other must be a datetime.datetime or a DateTimeRange, not {type(other).__name__}")
 
-    def is_after(self, other):
-        if isinstance(other, dt.datetime):
-            return self.start > other
-        elif isinstance(other, DateTimeRange):
-            return self.start > other.end
-        return NotImplemented
+    def overlaps(self, other: DateTimeRange) -> bool:
+        """True if the two ranges share some time. Ranges that only touch (one ends as the other starts) don't."""
+        return self.start < other.end and other.start < self.end
 
-    def time_str(self):
-        return "{!r} - {!r}".format(self.start.time(), self.end.time())
-
-    def intersect(self, other):
-        """Return an intersection of two DateTimeRange objects
-        That is, a DateTimeRange contained within both self and other
-        If the intersection is empty, returns None"""
-        if not isinstance(DateTimeRange, other):
-            return NotImplemented
+    def intersection(self, other: DateTimeRange) -> DateTimeRange | None:
+        """
+        Find the time shared by two ranges
+        :param other: DateTimeRange
+        :return: the range contained in both ranges, or None if they don't overlap
+        """
         if not self.overlaps(other):
-            return None # no overlap and thus no intersection
-        # from here, self and other definitely overlap, return that overlap
-        if self < other: # self begins before other
-            return DateTimeRange(other.start, self.end)
-        return DateTimeRange(self.start, other.end)
-
-    def pad(self, padding: dt.timedelta):
-        """
-        pad the DateTimeRange by a certain timedelta
-        If applying the (negative) padding results in start >= end, returns None.
-        :param padding: datetime.timedelta object
-        :return: [original_start + padding] -> [original_end + padding]
-        """
-        try:
-            return DateTimeRange(self.start + padding, self.end + padding)
-        except ValueError:
             return None
+        return DateTimeRange(max(self.start, other.start), min(self.end, other.end))
 
-    @staticmethod
-    def forever():
-        """Get a DateTimeRange spanning from datetime.datetime.min to datetime.datetime.max"""
-        return DateTimeRange(dt.datetime.min, dt.datetime.max)
+    def gap(self, other: DateTimeRange) -> dt.timedelta:
+        """
+        Find the time between two ranges, in either order
+        :param other: DateTimeRange
+        :return: datetime.timedelta from the end of the earlier range to the start of the later one, or zero if
+        the ranges touch or overlap
+        """
+        return max(other.start - self.end, self.start - other.end, dt.timedelta(0))
 
 
-def parse_range(str_pair):
+def parse_range(str_pair: Sequence[str]) -> DateTimeRange:
     """
-    Transform a pair of strings into a DateTimeRange object
-    Raises a ValueError if either of the two strings cannot be converted via datetime.datetime.fromisoformat
-    Raises a TypeError if the input is anything other than a pair of strings
-    :param str_pair: tuple of 2 strings representing an ISO 8601 datetime range
-    :return: DateTimeRange object
+    Transform a pair of ISO 8601 date-time strings into a DateTimeRange.
+    A date without a time is taken to be midnight.
+    :param str_pair: list or tuple of two strings, (start, end)
+    :return: DateTimeRange from start to end
     """
-    if str_pair.len != 2 or not isinstance(str, str_pair[0]) or not isinstance(str, str_pair[1]):
-        raise TypeError("str_pair must be a pair of strings")
-    try:
-        start = dt.datetime.fromisoformat(str_pair[0])
-    except Exception as exc:
-        raise ValueError(f"could not parse datetime string {str_pair[0]!r}: {exc}")
-    try:
-        end = dt.datetime.fromisoformat(str_pair[0])
-    except Exception as exc:
-        raise ValueError(f"could not parse datetime string {str_pair[1]!r}: {exc}")
+    if not isinstance(str_pair, (list, tuple)) or len(str_pair) != 2 \
+            or not all(isinstance(item, str) for item in str_pair):
+        raise TypeError(f"expected a pair of strings, got {str_pair!r}")
+    start, end = (_parse_datetime(item) for item in str_pair)
     return DateTimeRange(start, end)
+
+
+def _parse_datetime(text: str) -> dt.datetime:
+    """Parse one ISO 8601 date-time string, raising a ValueError that names the string if it can't be parsed."""
+    try:
+        return dt.datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(f"could not parse date-time {text!r}: {exc}") from exc

@@ -5,7 +5,8 @@ Source: [`src/tinyscheg/model/worker.py`](https://github.com/3-kids-wearing-a-tr
 > [!IMPORTANT]
 > **Partially implemented, with known bugs.** The constructor crashes when `unavailable` is omitted and doesn't set
 > `likes` when it's omitted, and `likes`/`dislikes` are given as names while the methods below expect `Worker`
-> objects. The module is due to be rebuilt.
+> objects. It also still calls `DateTimeRange.is_before`, which the rebuilt
+> [`DateTimeRange`](datetime-range.md) no longer has. The module is due to be rebuilt.
 
 ## `class Worker(name, roles=None, unavailable=None, likes=None, dislikes=None)`
 

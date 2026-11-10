@@ -7,8 +7,8 @@ score that never decreases along the search, allowing hopeless partial schedules
 
 > [!WARNING]
 > TinyScheg is a **work in progress** and does not run end-to-end yet.
-> Code described as implemented exists but **has not been tested**, and an audit on 2026-11-10 found bugs in all of
-> it. The code is being rebuilt bottom-up, module by module with tests, starting with a walking skeleton: parse the
+> Code described as implemented exists but, unless its page says it's covered by tests, **has not been tested**; an
+> audit on 2026-11-10 found bugs in all of the original code. The code is being rebuilt bottom-up, module by module with tests, starting with a walking skeleton: parse the
 > input, generate slots, search for the first legal schedule and write it as CSV. Scoring and branch and bound come
 > after that.
 
@@ -53,7 +53,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 
 | Component                           | Status                    |
 |-------------------------------------|---------------------------|
-| `DateTimeRange`                     | Implemented (known bugs)  |
+| `DateTimeRange`                     | Implemented and tested    |
 | `Worker`                            | Partially implemented     |
 | `Post`                              | Partially implemented     |
 | `Slot` (domain, constraints, MRV)   | Partially implemented     |
