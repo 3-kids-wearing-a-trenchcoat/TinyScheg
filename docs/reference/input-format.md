@@ -5,6 +5,7 @@
 > but the parser that reads it doesn't exist yet.
 
 TinyScheg's input is a single YAML file with three top-level keys: `settings`, `workers` and `posts`.
+The file is read as UTF-8, so names may be written in any script (e.g. Hebrew).
 
 ## `settings`
 

@@ -9,7 +9,7 @@ extension:
 
 | Extension | Format | Notes |
 |-----------|--------|-------|
-| `.csv`    | CSV    | UTF-8 with a byte order mark; times as ISO 8601 text (`YYYY-MM-DDTHH:MM:SS`). |
+| `.csv`    | CSV    | Unicode (UTF-8 with a byte order mark, so Excel recognizes the encoding and shows names in any script, e.g. Hebrew, correctly); times as ISO 8601 text (`YYYY-MM-DDTHH:MM:SS`). |
 | `.xlsx`   | Microsoft Excel | Times as date-time cells; multi-row shifts as merged cells. |
 | `.ods`    | OpenDocument spreadsheet | Times as date-time cells; multi-row shifts as merged cells. |
 
