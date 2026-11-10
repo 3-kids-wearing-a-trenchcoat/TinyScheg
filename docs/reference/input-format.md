@@ -14,7 +14,7 @@ General scheduler settings.
 | Field      | Type                      | Description                                                                 |
 |------------|---------------------------|-----------------------------------------------------------------------------|
 | `time`     | pair of ISO 8601 strings  | The time period to generate a schedule for, as `[start, end]`.             |
-| `min_rest` | number (hours)            | Minimum time between two shifts assigned to the same worker (hard constraint). If omitted, defaults to 6 hours (`Slot.DEFAULT_MIN_REST`). |
+| `min_rest` | number (hours)            | Minimum time between two shifts assigned to the same worker (hard constraint). If omitted, defaults to 6 hours. |
 
 ```yaml
 settings:
@@ -38,7 +38,8 @@ A list of workers available for assignment.
 * A worker is assumed to be available at all times other than the ranges listed in `unavailable`.
 * Date-times are ISO 8601 (`YYYY-MM-DDTHH:MM:SS`). A date without a time is taken to be midnight, so
   `["2025-01-03", "2025-01-04"]` means unavailable throughout the 3rd and available on the 4th.
-* A worker shouldn't appear in both their own `likes` and `dislikes`.
+* Every name in `likes` and `dislikes` must be the name of another worker in the list: a worker can't like or
+  dislike themselves, or like and dislike the same worker.
 
 ```yaml
 workers:

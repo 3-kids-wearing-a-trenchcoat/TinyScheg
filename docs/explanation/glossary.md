@@ -14,6 +14,9 @@ See [CSP formulation](csp-formulation.md#binary-difference-constraints).
 
 **Domain** — The set of workers who can still be assigned to a slot.
 
+**Grid** — The output's layout: a row per time interval, a column per post, and the assigned workers' names in each
+cell. See [Output format](../reference/output-format.md).
+
 **Minimum rest period** — The least amount of time, in hours, that must separate two shifts assigned to the same
 worker. A hard constraint, set in the input (`min_rest`) and defaulting to 6 hours.
 
@@ -22,7 +25,7 @@ broken by the **degree heuristic**: the slot with the most constraints with unas
 See [Search algorithm](search-algorithm.md#variable-ordering).
 
 **Penalty** — The score of a schedule state: lower is better, and it never decreases as more slots are assigned.
-See [Scoring](scoring.md).
+It's the sum of each worker's own penalty. See [Scoring](scoring.md).
 
 **Pocket** — The best complete, legal schedule found so far during the search, kept for comparison with other
 schedules and for pruning. See [Search algorithm](search-algorithm.md#branch-and-bound-the-pocket).
@@ -33,7 +36,8 @@ generated. See [Domain model](domain-model.md#posts).
 **Role** — A qualification a worker has and a slot may require. The role `any` is a wildcard that every worker
 has.
 
-**Scorer** — A per-worker object holding what's needed to calculate that worker's penalty. Not yet implemented.
+**Search state** — Everything the search changes as it goes: each slot's domain and assignment. Kept in one explicit
+object passed to the search. See [Search algorithm](search-algorithm.md#search-state).
 
 **Segment** — A stretch of the schedule period during which a post's rules (shift length, roles) don't change.
 Shifts are generated per segment. See [Domain model](domain-model.md#shifts-and-slots).

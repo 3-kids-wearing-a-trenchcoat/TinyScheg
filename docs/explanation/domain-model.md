@@ -26,8 +26,9 @@ The role `any` is a wildcard: every worker has it, including workers with no rol
 
 ## Posts
 
-> [!NOTE]
-> **Implemented.** See [`Post`](../reference/api/post-and-slot.md).
+> [!IMPORTANT]
+> **Partially implemented.** See [`Post`](../reference/api/post-and-slot.md). Daily activity windows aren't
+> implemented.
 
 A **post** is something that needs to be manned, such as "front gate" or "desk". A post is a **template**: it
 describes what's needed, not who does it or when exactly. Each post defines:
@@ -66,8 +67,10 @@ Each shift is made up of **slots**, one per required worker. A slot is a single 
 specific time, with a single required role. For example, a night shift at the front gate requiring
 `{security: 1, any: 1}` consists of two slots: one requiring the security role and one that any worker can fill.
 
-Slots of the same shift are linked to one another (`Slot.same_shift`). This grouping matters for the
-likes/dislikes part of [scoring](scoring.md), which looks at who shares a shift. A variation requiring no workers
+Each slot belongs to a shift, and a shift knows its slots. This grouping matters for the likes/dislikes part of
+[scoring](scoring.md), which looks at who shares a shift, and for the [output](../reference/output-format.md), which
+shows each shift's workers together. Shifts and slots are plain, unchanging descriptions: who is assigned to them, and
+which workers can still be, is part of the search state, not of the slots themselves. A variation requiring no workers
 produces shifts with no slots, closing the post during its window.
 
 Slots have a fixed, stable order: by start time, end time, the post's position in the input, the role's position in
@@ -82,6 +85,7 @@ Slots are the unit TinyScheg actually schedules: they are the variables of the
 > [!WARNING]
 > **Not yet implemented.**
 
-A **schedule** is an assignment of workers to slots. A planned `Schedule` class will hold the list of slots (in the
-order the CSP algorithm processes them) together with the [change records](search-algorithm.md#undo) used to undo
-assignments while searching.
+A **schedule** is an assignment of workers to slots. While searching, the current (partial) schedule is part of the
+explicit [search state](search-algorithm.md#search-state); the [change records](search-algorithm.md#undo) used to
+undo assignments are kept by the search itself, not by the schedule. The best complete schedule found is written as
+the [output](../reference/output-format.md).

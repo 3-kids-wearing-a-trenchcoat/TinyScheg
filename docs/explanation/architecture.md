@@ -32,12 +32,12 @@ don't overlap. Invalid input is reported before anything else happens.
 Set up the CSP:
 
 1. Generate the slots of every post over the schedule period, segment by segment (see
-   [Domain model](domain-model.md#shifts-and-slots)), in their stable order. Each slot's domain is pruned by unary
-   constraints (availability, role) as it's created.
-2. Generate the binary difference constraints between slots, using the minimum rest period from the settings.
-3. Calculate the constants used by scoring: each worker's availability, the number of shared slots, and each
+   [Domain model](domain-model.md#shifts-and-slots)), in their stable order.
+2. Build each slot's domain: the workers who satisfy its unary constraints (availability, role).
+3. Generate the binary difference constraints between slots, using the minimum rest period from the settings.
+4. Calculate the constants used by scoring: each worker's availability, the number of shared slots, and each
    worker's worst rest deficit and packable maximum (see [Scoring](scoring.md)).
-4. If any slot's domain is already empty, no legal schedule exists: report it and stop.
+5. If any slot's domain is already empty, no legal schedule exists: report it and stop.
 
 See [Domain model](domain-model.md) and [CSP formulation](csp-formulation.md).
 

@@ -46,21 +46,23 @@ Soft constraints — fairness and preferences — are not CSP constraints in Tin
 
 ## Unary constraints
 
-> [!NOTE]
-> **Implemented**, in the `Slot` constructor.
+> [!IMPORTANT]
+> **Partially implemented**, in the `Slot` constructor, which is due to be rebuilt: domains are to be built by the
+> CSP setup (`csp/problem.py`), keeping `Slot` a plain description.
 
 A worker can fill a slot only if they:
 
 * are **available** for the whole of the slot's time range, and
 * have the slot's **required role** (`any` is satisfied by everyone).
 
-These are applied once, when each slot is created: the slot's domain starts as only the workers who satisfy them.
-All slots are therefore node consistent from the start.
+These are applied once, before the search: each slot's domain starts as only the workers who satisfy them. All slots
+are therefore node consistent from the start.
 
 ## Binary difference constraints
 
-> [!NOTE]
-> **Implemented**, in `Slot.gen_time_constraints` and `Slot.find_time_constraints`.
+> [!IMPORTANT]
+> **Partially implemented**, in `Slot.gen_time_constraints` and `Slot.find_time_constraints`, which miss constraints
+> (a known bug) and are due to be rebuilt as part of the CSP setup (`csp/problem.py`).
 
 A worker can't take a shift during, immediately before or immediately after a shift they're already assigned to.
 More precisely, two slots get a **difference constraint** (they must be assigned different workers) if they overlap
@@ -70,4 +72,4 @@ and defaults to 6 hours.
 This also covers slots of the same shift, since they overlap entirely.
 
 Constraints are generated after all slots exist: slots are sorted by time, and each slot is compared with the slots
-that follow it until the first one that is far enough away. Each constraint is recorded on both slots.
+that follow it until the first one that starts far enough after it ends. Each constraint is recorded for both slots.

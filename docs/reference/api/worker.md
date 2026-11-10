@@ -3,8 +3,9 @@
 Source: [`src/tinyscheg/model/worker.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/model/worker.py)
 
 > [!IMPORTANT]
-> **Partially implemented.** The per-worker `Scorer` (see [Scoring](../../explanation/scoring.md)) and the
-> functions exposing it to other classes don't exist yet.
+> **Partially implemented, with known bugs.** The constructor crashes when `unavailable` is omitted and doesn't set
+> `likes` when it's omitted, and `likes`/`dislikes` are given as names while the methods below expect `Worker`
+> objects. The module is due to be rebuilt.
 
 ## `class Worker(name, roles=None, unavailable=None, likes=None, dislikes=None)`
 
@@ -40,13 +41,8 @@ A single worker that can be assigned in the schedule.
 | `has_role(required_role)`       | `bool`  | `True` if the worker has `required_role`. `None` and `"any"` are equivalent wildcards that every worker has. |
 | `_prune_unavailability_list(other_time)` | `None` | *Internal.* Removes all unavailability ranges ending before `other_time` (a `datetime.datetime`, or a `DateTimeRange` whose start is used). This reduces the number of ranges checked while building slot domains in time order. |
 
-## Not yet implemented
-
-> [!WARNING]
-> **Not yet implemented.**
-
-* A `Scorer` attribute holding everything needed to calculate this worker's penalty, along with `Worker` methods
-  that hide it from outside classes.
+Workers hold no scoring or search state: each worker's penalty is calculated by the planned `scoring` package (see
+[Scoring](../../explanation/scoring.md)), and domains and assignments belong to the search state.
 
 Workers don't need any CSP-specific ordering or comparison: since the search doesn't stop at the first solution,
 the order in which values (workers) are tried doesn't matter. See

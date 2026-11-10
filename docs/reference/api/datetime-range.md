@@ -3,7 +3,9 @@
 Source: [`src/tinyscheg/timing/datetime_range.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/timing/datetime_range.py)
 
 > [!NOTE]
-> **Implemented.**
+> **Implemented, with known bugs**, and due to be rebuilt: `parse_range` and `intersect` crash, `in_range` wrongly
+> treats a range that ends exactly at this range's end as not contained, and `pad` shifts a range instead of
+> widening it.
 
 ## `class DateTimeRange(start, end)`
 

@@ -16,8 +16,9 @@ Each schedule state — **including incomplete schedules** — has a score. Scor
 *penalties*: each state's penalty is greater than or equal to the penalty of its parent state.
 
 The penalty is a sum of the penalties given by each worker, which is analogous to each worker saying how much they
-*dislike* the schedule as it currently stands. This is done by a `Scorer` class: each `Worker` holds a `Scorer`
-containing only the information and methods needed to calculate that worker's penalty.
+*dislike* the schedule as it currently stands. Each worker's penalty is calculated separately, from the current
+assignment and constants computed for that worker before the search. This is done by a planned `scoring` package;
+workers themselves hold no scoring state.
 
 The penalty is what makes the [pocket](search-algorithm.md#branch-and-bound-the-pocket) work: once a complete,
 legal schedule has been found, any partial schedule whose penalty is already higher can be pruned, since its

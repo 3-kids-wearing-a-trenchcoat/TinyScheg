@@ -14,6 +14,12 @@ See [Domain model](../../explanation/domain-model.md) for how posts, shifts and 
 > * `Slot.worker_list`, `Slot.iteration_ticker`, `last_iteration` and `unassigned_constraints`, and reporting to a
 >   `Trail`, are replaced by an explicit search state and change records
 >   ([ADR 0016](../../decisions/0016-undo-through-change-records-on-the-call-stack.md)).
+> * `Slot` is to become a plain, unchanging description of a slot (time, post, role, shift), with a `Shift` grouping
+>   the slots of each shift in place of `same_shift`. Domains, constraints and assignments move to the CSP setup and
+>   search state (`csp/`), and `Post` moves to `model/post.py` (see
+>   [Architecture](../../explanation/architecture.md#code-layout)).
+> * `DateTimeRange.forever()` is no longer needed: a post without a time window is active throughout the schedule
+>   period.
 
 ## `class Post(name, length, roles, period=None, variations=None)`
 

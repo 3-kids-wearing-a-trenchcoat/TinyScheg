@@ -18,7 +18,8 @@ consecutive periods (typically 24–48 hours), this causes two problems at the b
 
 The planned solution is to accept a **previously generated schedule** as additional input. Its assignments are
 treated as **fixed** and included in scoring, so the algorithm effectively *extends* the existing schedule rather
-than starting from scratch.
+than starting from scratch. The previous schedule is read from TinyScheg's own
+[output](../reference/output-format.md#reading-the-output-back), which is designed for this.
 
 ## Explaining infeasibility
 
@@ -80,3 +81,13 @@ minimum shift length. If the segment scheme itself doesn't work well in practice
 Workers' preferences currently concern only other workers (likes and dislikes). They could be extended to
 preferences about *when* or *where* they work, e.g. avoiding mornings or preferring a particular post. These would
 be additional, monotone penalty components.
+
+## Spreadsheet presentation
+
+> [!WARNING]
+> **Not yet implemented.** Low priority.
+
+* **Right-to-left sheets.** XLSX and ODS sheets can be displayed right to left, as rosters in Hebrew and other
+  right-to-left languages usually are, e.g. through an input setting. Output is left to right for now.
+* **Roles in the output.** The grid doesn't show which worker fills which role. Cells could show it, e.g.
+  `Jack (security)`.
