@@ -25,6 +25,7 @@ EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
 BRUTE_FORCE_LIMIT = 20000  # the most schedules (combinations of domains) a brute-force test input may have
 BRUTE_FORCE_MINIMUM = 50   # the fewest, so that every input takes some searching
 BRUTE_FORCE_INPUTS = 25    # how many random small inputs are compared with brute force
+LOCAL_CHECK_HOURS = (12, 14)  # lengths of the example that branch and bound finishes in well under a second
 SLOW_CASE_SECONDS = 5      # filling slots in stable order took minutes on this case; MRV takes a fraction of a second
 
 
@@ -254,3 +255,35 @@ def test_branch_and_bound_reports_where_an_infeasible_input_got_stuck() -> None:
     first, best = find_first_schedule(problem), find_best_schedule(problem, constants_of(schedule_input))
     assert best.assignment is None and best.penalty is None
     assert (best.deepest, best.stuck_slot) == (first.deepest, first.stuck_slot)
+
+
+def single_changes(assignment: tuple[int, ...], worker_count: int) -> list[tuple[int, ...]]:
+    """Every schedule one move (a slot to another worker) or one swap (two slots exchanging workers) away."""
+    changed = []
+    for slot in range(len(assignment)):
+        for worker in range(worker_count):
+            if worker != assignment[slot]:
+                changed.append(assignment[:slot] + (worker,) + assignment[slot + 1:])
+    for first in range(len(assignment)):
+        for second in range(first + 1, len(assignment)):
+            if assignment[first] != assignment[second]:
+                swapped = list(assignment)
+                swapped[first], swapped[second] = swapped[second], swapped[first]
+                changed.append(tuple(swapped))
+    return changed
+
+
+@pytest.mark.parametrize("hours", LOCAL_CHECK_HOURS)
+def test_no_single_change_beats_the_best_schedule(hours: int) -> None:
+    # branch and bound's schedule must be at least as good as every legal schedule one move or swap away from it
+    schedule_input = read_input(EXAMPLE_INPUT)
+    start = schedule_input.settings.period.start
+    shorter = dataclasses.replace(schedule_input, settings=dataclasses.replace(
+        schedule_input.settings, period=DateTimeRange(start, start + dt.timedelta(hours=hours))))
+    problem, constants = build_problem(shorter), constants_of(shorter)
+    result = find_best_schedule(problem, constants)
+    assert result.assignment is not None and result.penalty is not None
+    neighbours = [assignment for assignment in single_changes(result.assignment, len(shorter.workers))
+                  if not hard_constraint_violations(shorter, problem.slots, assignment)]
+    assert neighbours  # the check means something only if there are legal alternatives
+    assert all(score(constants, assignment).total >= result.penalty.total for assignment in neighbours)

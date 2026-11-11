@@ -7,8 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–4 complete; Phase 5 under way. Next: check the best schedule with the audit, then tune the
-scoring parameters.
+Progress: Phases 1–4 complete; Phase 5 under way. Next: tune the scoring parameters with the audit.
 
 ## Phase 1: Walking skeleton
 
@@ -117,7 +116,8 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
   in [Future work](explanation/future-work.md#search-performance)
 - [x] Use branch and bound on the command line, reporting each better schedule found as it goes; the example is
   now 24 hours long, so that it finishes
-- [ ] Check with the audit that no simple legal swap lowers the chosen schedule's penalty
+- [x] Check that no simple legal swap lowers the chosen schedule's penalty: no single legal move or swap beats branch
+  and bound's schedule, tested on 12- and 14-hour versions of the example and checked once on the 24-hour one
 - [ ] Tune the scoring parameters with the audit
 
 ## Phase 6: Spreadsheet output

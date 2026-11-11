@@ -110,7 +110,8 @@ Value order can still affect how *quickly* branch and bound finds the best sched
 
 > [!NOTE]
 > **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-searchresult),
-> and tested against trying every schedule on small inputs.
+> and tested against trying every schedule on small inputs, and on shortened versions of the example, where no single
+> legal move or swap of two workers beats the schedule it finds.
 
 See [ADR 0004](../decisions/0004-branch-and-bound-with-monotone-penalty.md) and
 [ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md).
