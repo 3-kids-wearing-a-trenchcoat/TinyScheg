@@ -137,6 +137,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Incremental scoring, exactly path-independent
 - [ ] Faster search: cheapest-first value order, symmetry breaking, a stronger lower bound, a time limit
 - [ ] Explaining more fully why an input is infeasible
+- [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Right-to-left spreadsheets

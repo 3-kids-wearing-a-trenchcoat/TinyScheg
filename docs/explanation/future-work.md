@@ -101,6 +101,15 @@ be additional, monotone penalty components.
 * **Roles in the output.** The grid doesn't show which worker fills which role. Cells could show it, e.g.
   `Jack (security)`.
 
+## Schedule audit
+
+> [!WARNING]
+> **Not yet implemented.** Low priority; deferred 2026-11-11.
+
+* **Samples with no easy fix at all.** In one sample of the example (seed 16 of `tools/audit_sample.py`), none of
+  its 74 complaints had an easy fix, though most samples have many. Worth finding out why: whether the greedy chain
+  search misses fixes there, or the schedule really has none.
+
 ## Documentation
 
 > [!WARNING]
