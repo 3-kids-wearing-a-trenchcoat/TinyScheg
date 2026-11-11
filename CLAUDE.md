@@ -86,6 +86,9 @@ If you get this permission, make sure to also update `environment.yml` to reflec
 * If something is ambiguous, inspect the existing code and follow its current patterns.
 * If there is more than one sensible way to accomplish a task, offer both as options, list pros and cons for each
   approach, recommend one of these approaches and ask me which one to go with.
+* No hard-coded values: every tunable value or parameter (weights, factors, defaults, thresholds) is a named
+  constant, defined once, even if it's never expected to change. Don't assume the mathematics is final; changing a
+  value should be a one-line change.
 * Type hints required on all functions.
 * Stick to PEP 8, with a 120 character line limit.
 * Do not install Python packages yourself, I will handle that.

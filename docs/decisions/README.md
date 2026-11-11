@@ -27,7 +27,7 @@ ADR that supersedes the old one.
 | [0003](0003-variable-ordering-mrv-degree.md) | Order variables by MRV and the degree heuristic; no value ordering | Accepted |
 | [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) |
 | [0005](0005-weighted-sum-of-normalized-penalties.md) | Score as a weighted sum of normalized per-worker penalties | Accepted |
-| [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted, amended by [0013](0013-availability-weighted-workload.md) |
+| [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted, amended by [0013](0013-availability-weighted-workload.md) and [0021](0021-power-function-for-workload-fairness.md) |
 | [0007](0007-greedy-bound-for-worst-rest-deficit.md) | Bound the worst rest deficit greedily | Superseded by [0014](0014-exact-worst-rest-deficit.md) |
 | [0008](0008-undo-through-trail.md) | Undo assignments through a trail | Superseded by [0016](0016-undo-through-change-records-on-the-call-stack.md) |
 | [0009](0009-yaml-input-with-time-based-variations.md) | YAML input with time-based post variations | Accepted |
@@ -42,6 +42,8 @@ ADR that supersedes the old one.
 | [0018](0018-slot-generation-by-segments.md) | Generate shifts per segment | Accepted |
 | [0019](0019-output-as-a-time-by-post-grid.md) | Output the schedule as a time-by-post grid | Accepted |
 | [0020](0020-report-where-infeasibility-was-found.md) | Report where infeasibility was found | Accepted |
+| [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
+| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted |
 
 ## Template
 

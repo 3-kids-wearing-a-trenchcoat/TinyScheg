@@ -7,8 +7,11 @@
 > [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md),
 > [ADR 0013](../decisions/0013-availability-weighted-workload.md),
 > [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md) and
-> [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md).
-> This page was corrected on 2026-11-10; see [Corrections](#corrections).
+> [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md),
+> [ADR 0021](../decisions/0021-power-function-for-workload-fairness.md) and
+> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
+> This page was corrected on 2026-11-10 and the corrections confirmed on 2026-11-11; see [Corrections](#corrections).
+> Parameter defaults are listed under [Parameters](#parameters).
 
 ## General idea
 
@@ -85,7 +88,9 @@ $$
 
 such that $\alpha ,\beta \in \mathbb{R}$ and $0 < \alpha < \beta$.
 That is, liked workers produce no penalty, workers who are neither liked nor disliked produce a relatively small
-penalty, and disliked workers produce a bigger penalty.
+penalty, and disliked workers produce a bigger penalty. Since the like score is divided by $\beta$ to normalize it
+(below), only the ratio $\alpha / \beta$ matters; it's a [parameter](#parameters), 1/3 by default. Dislikes are soft:
+they're discouraged, never forbidden.
 
 At iteration $t \in \mathbb{N}$, the **local like function** $\mathcal{L}_t:W \times S \rightarrow \mathbb{R}$ is
 ($| \cdot |$ denoting the **size** of $\cdot$):
@@ -198,6 +203,13 @@ There are two "low-hanging fruit" options for $\varphi$:
 Generally speaking, $x^p$ and $e^{ax} -1$ penalize harder as $p$ and $a$ increase respectively, and $e^{ax} - 1$ is
 *much stricter* (penalizes harder) than $x^p$.
 
+> [!NOTE]
+> **Decided:** $\varphi(x) = x^p$ with a whole number $p \geq 2$, by default $p = 2$
+> ([ADR 0021](../decisions/0021-power-function-for-workload-fairness.md)). With $p = 2$, minimizing the penalty is
+> the same as minimizing the availability-weighted variance of the workloads. It can be computed exactly, and on the
+> example input it pulled harder towards fairness than $e^{ax} - 1$ at the same scale. The exponential is described
+> here for the reasoning only.
+
 ![Plot of x^p and e^(ax) - 1 on the range [0, 1]](../images/workload-phi-functions.png)
 
 > Pictured: $x^p$ (in purple) and $e^{ax} -1$ (in red) on the range $[0,1]$, with $p$ and $a$ chosen to almost
@@ -231,6 +243,12 @@ $\mathcal{W}^*(t) = 0$.
 
 The denominator is a constant, calculated once before the search, so this only rescales the workload penalty: it
 remains monotone, and it's still minimal exactly when every worker's workload is the same.
+
+The normalized workload never gets near 0 for a complete schedule: the hours that must be worked have a minimum cost,
+reached when workloads are equal (by Jensen's inequality, $\left(\sum_i \mathrm{av}_i\right) \varphi(\overline{x})$
+before scaling). On the example input, a perfectly fair schedule scores about 4.1 of 9 with $p = 2$. Only differences
+between schedules matter to the search, but this is why the workload weight is the largest by default (see
+[Parameters](#parameters)).
 
 ### Rest
 
@@ -266,7 +284,8 @@ $$
 \Delta s_i = \begin{cases} [s_{i+1}]_\text{start} - [s_i]_\text{end} & i \neq n \\ \infty & i=n \end{cases}
 $$
 
-and the **rest target** after $s_i$ — the shift's duration times $\gamma$, for some $1 \leq \gamma \in \mathbb{R}$:
+and the **rest target** after $s_i$ — the shift's duration times $\gamma$, for some $1 \leq \gamma \in \mathbb{R}$
+(the rest factor, a [parameter](#parameters), 3 by default):
 
 $$
 r(s_i) = \gamma \cdot |s_i|
@@ -320,7 +339,8 @@ d_m(s) = \max \big(0, \; r(s) - m \big) = \max \big(0, \; \gamma \cdot |s| - m \
 $$
 
 If $\gamma \cdot |s| \leq m$, the minimum rest period already meets the rest target and $s$ can never cause a
-deficit.
+deficit. So $\gamma$ only has an effect relative to the minimum rest and the shift lengths: with 6 hours' minimum
+rest and 3-hour shifts, any $\gamma \leq 2$ turns the rest penalty off entirely.
 
 Normalizing each deficit by $d_m(s)$ isn't very helpful, because the number of rest periods varies; normalization
 should instead be relative to *each worker*, whose number is constant for a given schedule.
@@ -372,8 +392,8 @@ worst-case (or fullest) sequence **must start with a shift within $m$ hours of t
 
 ## Total score for each state
 
-For an iteration $t \in \mathbb{N}$ and three weights $a,b,c \in [0,1]$ such that $a + b + c = 1$, the penalty
-function $\mathcal{P}(t)$ is the weighted sum:
+For an iteration $t \in \mathbb{N}$ and three weights $a,b,c \in [0,1]$ such that $a + b + c = 1$ (by default
+0.25, 0.5 and 0.25; see [Parameters](#parameters)), the penalty function $\mathcal{P}(t)$ is the weighted sum:
 
 $$
 \mathcal{P}(t) = a \cdot \mathcal{L}^{**}(t) + b \cdot \mathcal{W}^*(t) + c \cdot \mathcal{R}^{**}(t)
@@ -394,17 +414,36 @@ is ever needed, it's as simple as $\frac{\mathcal{P}(t)}{k}$.
 
 Each sub-function is monotonically non-decreasing, and the weights are non-negative, so $\mathcal{P}$ is too.
 
-## Open questions
+## Parameters
 
-* Which function to use for $\varphi$: $x^p$ or $e^{ax} - 1$. [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)
-  favours $x^p$ with an integer $p$ if scores are ever updated incrementally, since it can be computed exactly.
-* The values of the parameters $\alpha$, $\beta$, $\gamma$, $p$ or $a$, and of the weights $a$, $b$, $c$ — and
-  whether they're fixed or configurable through the input.
-* Whether scores can practically be updated incrementally from their previous values.
+> [!WARNING]
+> **Not yet implemented.** Decided in [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
+
+Every parameter has a default, defined once as a named constant in the code, and can be overridden in the optional
+`scoring` section of the input's settings (see [Input format](../reference/input-format.md#scoring)).
+
+| Parameter | Symbol | Default | Input field | Allowed values |
+|-----------|--------|---------|-------------|----------------|
+| Weights of likes, workload and rest | $a$, $b$, $c$ | 0.25, 0.5, 0.25 | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
+| Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
+| Rest factor | $\gamma$ | 3 | `rest_factor` | at least 1 |
+| Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1 |
+
+What the defaults mean, on the example input (9 workers, 72 hours):
+
+| Change to a schedule | Penalty change, before weights | After default weights |
+|----------------------|-------------------------------|-----------------------|
+| Moving one 3-hour shift from the busiest worker to the least busy | about −0.23 | about −0.11 |
+| One worker paired with someone they dislike instead of a neutral partner | about +0.23 | about +0.06 |
+| One hour of rest below target | about +0.05 | about +0.01 |
+
+Still open: whether scores can practically be updated incrementally from their previous values (see
+[Future work](future-work.md#incremental-scoring)); until then, they're computed from scratch.
 
 ## Corrections
 
-This page was originally transferred as-is from the design notes. It was reviewed and corrected on 2026-11-10:
+This page was originally transferred as-is from the design notes. It was reviewed and corrected on 2026-11-10, and
+the corrections were confirmed on 2026-11-11:
 
 1. **Rest target.** It was written as $r(s_i) = \gamma \big([s_{i+1}]_\text{start} - [s_i]_\text{end}\big)$, i.e.
    $\gamma$ times the rest period itself, which made the deficit $(\gamma - 1) \cdot \Delta s_i$: the longer the
