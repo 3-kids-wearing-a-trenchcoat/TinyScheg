@@ -1,0 +1,40 @@
+name,tier,holdout,seed,hours,start,workers,minimum_staff,slack,posts,medic,driver,preferences,slots,shared_slots,slots_per_worker,seconds,default_penalty,skipped
+,sweep,,4000,20,08:00,11,10,1,2,common,common,medium,,,,,,over 300 s
+,sweep,,4001,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+sweep_01,sweep,False,4002,16,16:00,10,9,1,2,common,common,dense,17,16,1.7,174.38,3.1951,
+,sweep,,4003,20,16:00,12,11,1,2,common,common,sparse,,,,,,over 300 s
+,sweep,,4004,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4005,16,16:00,10,9,1,2,common,common,dense,,,,,,over 300 s
+,sweep,,4006,20,16:00,12,11,1,2,common,common,sparse,,,,,,over 300 s
+,sweep,,4007,24,00:00,12,11,1,2,common,common,medium,,,,,,over 300 s
+,sweep,,4008,16,16:00,10,9,1,2,common,common,sparse,,,,,,over 300 s
+sweep_02,sweep,False,4009,20,08:00,10,9,1,2,common,common,sparse,18,10,1.8,24.82,2.3829,
+,sweep,,4010,24,16:00,12,10,2,2,common,common,sparse,,,,,,over 300 s
+,sweep,,4011,16,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4012,20,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4013,24,16:00,12,11,1,2,common,common,medium,,,,,,over 300 s
+sweep_03,sweep,True,4014,16,16:00,12,10,2,2,common,common,sparse,18,12,1.5,36.83,2.7644,
+,sweep,,4015,20,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4016,24,00:00,10,9,1,2,common,common,dense,,,,,,over 300 s
+,sweep,,4017,16,08:00,12,11,1,2,common,common,medium,,,,,,over 300 s
+sweep_04,sweep,False,4018,20,08:00,11,9,2,2,common,common,medium,19,10,1.73,236.88,1.9819,
+sweep_05,sweep,False,4019,24,08:00,11,9,2,2,common,common,dense,22,12,2.0,28.48,2.5064,
+,sweep,,4020,16,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4021,20,00:00,12,11,1,2,common,common,medium,,,,,,over 300 s
+sweep_06,sweep,True,4022,24,08:00,11,10,1,2,common,common,dense,23,12,2.09,62.16,2.1064,
+sweep_07,sweep,False,4023,16,08:00,10,9,1,2,common,common,dense,14,6,1.4,2.99,2.3399,
+,sweep,,4024,20,08:00,12,10,2,2,common,common,medium,,,,,,over 300 s
+,sweep,,4025,24,00:00,12,11,1,2,common,common,sparse,,,,,,over 300 s
+,sweep,,4026,16,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4027,20,00:00,11,9,2,2,common,common,sparse,,,,,,over 300 s
+,sweep,,4028,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+sweep_08,sweep,False,4029,16,08:00,11,9,2,2,common,common,sparse,15,6,1.36,27.51,2.8511,
+sweep_09,sweep,True,4030,20,08:00,11,10,1,2,common,common,medium,20,10,1.82,151.71,1.7753,
+,sweep,,4031,24,16:00,12,11,1,2,common,common,medium,,,,,,over 300 s
+,sweep,,4032,16,16:00,10,9,1,2,common,common,sparse,,,,,,over 300 s
+,sweep,,4033,20,,,,,,,,,,,,,,no legal schedule even with the most workers
+,sweep,,4034,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+sweep_10,sweep,False,4035,16,08:00,11,10,1,2,common,common,dense,16,6,1.45,67.81,2.0759,
+,sweep,,4036,20,,,,,,,,,,,,,,no legal schedule even with the most workers
+sweep_11,sweep,False,4037,24,16:00,10,9,1,2,common,common,dense,22,12,2.2,55.73,2.3215,
+sweep_12,sweep,True,4038,16,08:00,11,10,1,2,common,common,dense,16,6,1.45,75.86,1.8716,
