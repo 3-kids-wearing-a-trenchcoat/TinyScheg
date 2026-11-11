@@ -8,7 +8,7 @@ from tinyscheg.csp.problem import Problem
 from tinyscheg.csp.state import SearchState
 from tinyscheg.model.shift import Slot
 from tinyscheg.scoring.constants import ScoringConstants
-from tinyscheg.scoring.penalty import Penalty, score
+from tinyscheg.scoring.penalty import Penalty, lower_bound, score
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +95,7 @@ class _Search:
             return self._complete()
         if self.filled > self.deepest:
             self.deepest, self.stuck_slot = self.filled, self.problem.slots[slot_index]
-        for worker in self.state.domains[slot_index]:  # domains are in input order: the order workers are tried in
+        for worker in self._value_order(slot_index):
             changes = self.state.assign(slot_index, worker)
             self.filled += 1
             if changes.emptied is None and self.search():
@@ -104,14 +104,37 @@ class _Search:
             self.filled -= 1
         return False
 
+    def _value_order(self, slot_index: int) -> list[int]:
+        """
+        The order to try a slot's workers in. For the first legal schedule, input order. For the best, cheapest first
+        (ADR 0024): by the penalty of the schedule with the worker assigned, then input order. That changes only how
+        soon good schedules are found, and so how much is pruned; of equally good schedules, the first found in this
+        order is kept.
+        """
+        domain = self.state.domains[slot_index]
+        if self.constants is None:
+            return list(domain)
+        assigned = self.state.assigned
+        costs = {}
+        try:
+            for worker in domain:
+                assigned[slot_index] = worker  # scored in place, then put back
+                costs[worker] = score(self.constants, assigned).total
+        finally:
+            assigned[slot_index] = None
+        return sorted(domain, key=lambda worker: (costs[worker], worker))
+
     def _cannot_beat_pocket(self) -> bool:
         """
-        True if the current (partial) schedule's penalty is already at least the pocket's. Filling more slots never
-        lowers the penalty, and ties keep the pocket, so nothing in this branch can replace it (ADR 0017).
+        True if no completion of the current (partial) schedule can beat the pocket: its lower bound (the penalty so
+        far, with the lowest workload the remaining hours could give, ADR 0024) is already at least the pocket's.
+        Ties keep the pocket, so a branch that can at best tie is pruned too (ADR 0017).
         """
         if self.constants is None or self.pocket_penalty is None or not self.prune:
             return False
-        return score(self.constants, self.state.assigned).total >= self.pocket_penalty.total
+        eligible = {worker for slot_index, assigned in enumerate(self.state.assigned) if assigned is None
+                    for worker in self.state.domains[slot_index]}
+        return lower_bound(self.constants, self.state.assigned, eligible) >= self.pocket_penalty.total
 
     def _complete(self) -> bool:
         """

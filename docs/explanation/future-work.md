@@ -41,41 +41,34 @@ minimal set of conflicting requirements.
 
 ## Search performance
 
-> [!WARNING]
-> **Not yet implemented.** Deferred (2026-11-11): get it working first, then make it work well. Branch and bound
-> runs to the end with no limit and can be interrupted with Ctrl+C.
+> [!IMPORTANT]
+> **Partially implemented.** Cheapest-first value ordering and a lower bound on workload were implemented on
+> 2026-11-11 ([ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md)), when search speed
+> blocked [tuning](tuning.md). The rest below is deferred. Branch and bound runs to the end with no limit and can be
+> interrupted with Ctrl+C.
 
-Measured on the example on 2026-11-11, with prototypes in which each idea below was checked against brute force on
-small inputs. Branch and bound as implemented proves the best 24-hour schedule (17 slots) in about 200 s, but doesn't
-finish a 48-hour one (32 slots) in 5 minutes, nor a 72-hour one (47 slots) in 10.
+Measured on the example on 2026-11-11, with prototypes in which each idea was checked against brute force on small
+inputs (before ADR 0024, branch and bound proved the best 24-hour schedule, 17 slots, in about 200 s, but didn't
+finish a 48-hour one, 32 slots, in 5 minutes, nor a 72-hour one, 47 slots, in 10):
 
 | Prototype | 24 h: time to prove the best | 48 h: best after 5 min | 72 h: best after 60 s |
 |---|---|---|---|
-| As implemented | 202 s | 2.70 | 3.28 |
-| Stronger workload bound (below) | 49 s | 2.70 | 3.22 |
-| Cheapest-first value ordering (below) | more than 300 s | 2.54 | 2.90 |
-| Both | 93 s | 2.53 | 2.90 (after 1.5 s) |
-| Symmetry breaking (below) | — | — | 3.28 |
+| Before ADR 0024 | 202 s | 2.70 | 3.28 |
+| Stronger workload bound | 49 s | 2.70 | 3.22 |
+| Cheapest-first value ordering | more than 300 s | 2.54 | 2.90 |
+| Both (as implemented) | 93 s | 2.53 | 2.90 (after 1.5 s) |
+| Symmetry breaking | — | — | 3.28 |
 
-Cheapest-first finds good schedules far sooner, which matters most when a run is interrupted; the stronger bound
-makes proving the best faster. Neither finished a 48-hour schedule. Tighter bounds (for rest and likes, or a
-workload bound that respects which worker can take which slot) are the likely way to get there.
+As implemented, the command line proves the 24-hour example in about 100 s. Cheapest-first finds good schedules far
+sooner, but costs time per step, so on some inputs the bound alone would be faster. Neither finishes a 48-hour
+schedule. Still deferred:
 
-
-* **Cheapest-first value ordering.** Try the worker whose assignment adds the least penalty first. This doesn't
-  change the result: as [ADR 0003](../decisions/0003-variable-ordering-mrv-degree.md) argues, the best schedule is
-  found regardless of value order, and least-constraining-value ordering is of no use when every solution is
-  considered. But with branch and bound, *how much* is pruned depends on how good the pocket schedule is when each
-  partial schedule is reached. Finding a good schedule early therefore prunes more. The ordering depends on the
-  slot and the current state, so `Worker` still needs no CSP-related ordering.
 * **Symmetry breaking.** Slots of the same shift that require the same role are interchangeable: assigning
   (Anne, Bob) or (Bob, Anne) to them yields the same schedule, so the search explores $k!$ equivalent branches for
   $k$ identical slots. Requiring workers to be assigned to identical slots in a fixed order removes the duplicates.
-* **A stronger lower bound.** The pocket comparison uses the penalty accumulated so far, which is a weak bound,
-  especially for workload, which barely grows until late in the search. Since every slot must be filled, the
-  remaining hours are known; by the same Jensen argument used in [Scoring](scoring.md#the-function-varphi-and-jensens-inequality),
-  spreading them so that every workload is equal gives a lower bound on the remaining workload penalty that can be added
-  before comparing.
+  It made no difference on the example, where few shifts have identical slots.
+* **Tighter bounds.** Lower bounds for the rest and likes penalties, which now count only what's assigned, and a
+  workload bound that respects which worker can take which slot. Likely the way to finish 48-hour schedules.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against for now (2026-11-11): the search runs to the

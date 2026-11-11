@@ -15,7 +15,7 @@ with a penalty score that is used to prune the search and pick the best schedule
 
 > [!WARNING]
 > **Work in progress.** TinyScheg runs end to end and writes the fairest schedule that meets every hard
-> constraint, but slowly: a 24-hour schedule takes a few minutes, and longer ones much more. See the
+> constraint, but slowly: a 24-hour schedule takes a minute or two, and longer ones much more. See the
 > [roadmap](docs/roadmap.md) for what's next, and [the docs](docs/index.md) for the status of each component.
 
 ## Getting started

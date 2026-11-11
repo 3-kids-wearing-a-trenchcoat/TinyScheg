@@ -18,12 +18,13 @@ from tinyscheg.model.schedule_input import ScheduleInput, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import ScoringConstants, build_constants
-from tinyscheg.scoring.penalty import score
+from tinyscheg.scoring.penalty import lower_bound, score
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
 BRUTE_FORCE_LIMIT = 20000  # the most schedules (combinations of domains) a brute-force test input may have
 BRUTE_FORCE_MINIMUM = 50   # the fewest, so that every input takes some searching
+BOUND_PARTIALS = 20         # partial schedules checked per small input in the lower-bound test
 BRUTE_FORCE_INPUTS = 25    # how many random small inputs are compared with brute force
 LOCAL_CHECK_HOURS = (12, 14)  # lengths of the example that branch and bound finishes in well under a second
 SLOW_CASE_SECONDS = 5      # filling slots in stable order took minutes on this case; MRV takes a fraction of a second
@@ -287,3 +288,22 @@ def test_no_single_change_beats_the_best_schedule(hours: int) -> None:
                   if not hard_constraint_violations(shorter, problem.slots, assignment)]
     assert neighbours  # the check means something only if there are legal alternatives
     assert all(score(constants, assignment).total >= result.penalty.total for assignment in neighbours)
+
+
+@pytest.mark.parametrize("schedule_input", small_inputs())
+def test_the_lower_bound_is_never_above_a_completion_nor_below_the_partial(schedule_input: ScheduleInput) -> None:
+    problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+    legal = [assignment for assignment in product(*problem.domains)
+             if not hard_constraint_violations(schedule_input, problem.slots, assignment)]
+    rng = random.Random(0)
+    for _ in range(BOUND_PARTIALS if legal else 0):
+        # a partial schedule: some slots of a legal schedule left unfilled
+        source = rng.choice(legal)
+        partial = [worker if rng.random() < 0.5 else None for worker in source]
+        eligible = {worker for slot, assigned in enumerate(partial) if assigned is None
+                    for worker in problem.domains[slot]}
+        bound = lower_bound(constants, partial, eligible)
+        completions = [assignment for assignment in legal
+                       if all(filled is None or filled == worker for filled, worker in zip(partial, assignment))]
+        assert bound <= min(score(constants, assignment).total for assignment in completions) + 1e-12
+        assert bound >= score(constants, partial).total - 1e-12

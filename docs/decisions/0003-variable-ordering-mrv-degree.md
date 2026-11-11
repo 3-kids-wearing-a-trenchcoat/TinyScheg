@@ -1,6 +1,6 @@
 # 0003. Order variables by MRV and the degree heuristic; no value ordering
 
-**Status:** Accepted
+**Status:** Accepted. Amended by [0024](0024-cheapest-first-value-order-and-workload-bound.md) (cheapest-first value order when looking for the best schedule).
 
 ## Context
 

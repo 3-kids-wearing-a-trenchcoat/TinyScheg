@@ -80,6 +80,7 @@ nav:
       - 0021 Whole-number power for workload: decisions/0021-power-function-for-workload-fairness.md
       - 0022 Scoring parameters: decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md
       - 0023 Dislikes outweigh likes: decisions/0023-dislikes-outweigh-likes.md
+      - 0024 Faster branch and bound: decisions/0024-cheapest-first-value-order-and-workload-bound.md
 
 markdown_extensions:
   - admonition

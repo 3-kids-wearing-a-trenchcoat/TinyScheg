@@ -121,6 +121,8 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
 - [ ] Tune the scoring parameters with the audit ([Tuning the scoring](explanation/tuning.md))
     - [x] Plan, priorities and benchmark requirements
     - [x] Benchmark generator and tuning runner (`tools/benchmarks/generate.py`, `tools/tune.py`)
+    - [x] Speed up branch and bound enough for informative benchmarks: cheapest-first value order and a lower bound
+      on workload ([ADR 0024](decisions/0024-cheapest-first-value-order-and-workload-bound.md))
     - [ ] Baseline at the defaults, and diagnosis of each complaint with an easy fix
     - [ ] Sensitivity, one parameter at a time
     - [ ] Joint sweep
@@ -147,7 +149,7 @@ Extending a previous schedule rather than starting fresh ([Future work](explanat
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Incremental scoring, exactly path-independent
-- [ ] Faster search: cheapest-first value order, symmetry breaking, stronger lower bounds, a time or node limit
+- [ ] Faster search: symmetry breaking, tighter lower bounds (rest, likes, slot-aware workload), a time or node limit
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)

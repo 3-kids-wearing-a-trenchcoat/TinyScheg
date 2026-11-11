@@ -23,8 +23,8 @@ ADR that supersedes the old one.
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-model-scheduling-as-csp.md) | Model scheduling as a constraint satisfaction problem | Accepted |
-| [0002](0002-backtracking-with-forward-checking.md) | Backtracking search with forward checking | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) |
-| [0003](0003-variable-ordering-mrv-degree.md) | Order variables by MRV and the degree heuristic; no value ordering | Accepted |
+| [0002](0002-backtracking-with-forward-checking.md) | Backtracking search with forward checking | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) and [0024](0024-cheapest-first-value-order-and-workload-bound.md) |
+| [0003](0003-variable-ordering-mrv-degree.md) | Order variables by MRV and the degree heuristic; no value ordering | Accepted, amended by [0024](0024-cheapest-first-value-order-and-workload-bound.md) |
 | [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) |
 | [0005](0005-weighted-sum-of-normalized-penalties.md) | Score as a weighted sum of normalized per-worker penalties | Accepted |
 | [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted, amended by [0013](0013-availability-weighted-workload.md) and [0021](0021-power-function-for-workload-fairness.md) |
@@ -45,6 +45,7 @@ ADR that supersedes the old one.
 | [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
 | [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md) |
 | [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
+| [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted |
 
 ## Template
 

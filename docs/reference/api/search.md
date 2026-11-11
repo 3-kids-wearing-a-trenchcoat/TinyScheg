@@ -59,10 +59,12 @@ the result is deterministic. Stops at the first complete, legal schedule.
 ### `find_best_schedule(problem, constants, prune=True, on_improvement=None) -> SearchResult`
 
 [Branch and bound](../../explanation/search-algorithm.md#branch-and-bound-the-pocket): the same search, run to the
-end, keeping the best complete schedule found so far in the pocket. At every partial schedule the
-[penalty](scoring.md#scoreconstants-assignment-penalty) is computed from scratch; if it's already at least the
-pocket's, the branch is pruned, since filling more slots never lowers it and ties keep the pocket
-([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)).
+end, keeping the best complete schedule found so far in the pocket. At every partial schedule a
+[lower bound](scoring.md#lower_boundconstants-assignment-eligible_workers-float) on the penalty of its completions
+is computed from scratch; if it's already at least the pocket's penalty, the branch is pruned, since ties keep the
+pocket ([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)). A slot's workers are tried
+cheapest first: by the penalty with them assigned, ties in input order
+([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)).
 
 * `constants` — the [`ScoringConstants`](scoring.md#class-scoringconstants) of the same input.
 * `prune` — `False` only for testing: every branch is searched, to check that pruning loses nothing.

@@ -7,7 +7,7 @@ score that never decreases along the search, allowing hopeless partial schedules
 
 > [!WARNING]
 > TinyScheg is a **work in progress**. It runs end to end and writes the fairest schedule that meets every hard
-> constraint, but slowly: a 24-hour schedule takes a few minutes, and longer ones much more. Code described as implemented
+> constraint, but slowly: a 24-hour schedule takes a minute or two, and longer ones much more. Code described as implemented
 > exists but, unless its page says it's covered by tests, **has not been tested**; an audit on 2026-11-10 found bugs
 > in all of the original code, which is being rebuilt bottom-up, module by module with tests. See the
 > [Roadmap](roadmap.md).

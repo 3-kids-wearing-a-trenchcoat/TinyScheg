@@ -6,7 +6,7 @@ partial schedule, and branches that can't beat the best complete schedule found 
 
 > [!NOTE]
 > **Implemented** in [`csp/search.py`](../reference/api/search.md), tested, and used by the command line. The search
-> always runs to the end, with no limit: about 3–4 minutes for the 24-hour example, while a 48-hour schedule can
+> always runs to the end, with no limit: about 1½ minutes for the 24-hour example, while a 48-hour schedule can
 > take much longer; it can be interrupted with Ctrl+C. Making it faster is
 > [future work](future-work.md#search-performance).
 
@@ -96,15 +96,17 @@ anything else.
 ## Value ordering
 
 > [!NOTE]
-> **Decided.** No implementation is needed beyond trying workers in input order.
+> **Implemented.** See [ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md).
 
 When looking for a single solution, a common heuristic is to try the **least constraining value** first. But when
 the search explores all solutions rather than stopping at the first, the order in which values are tried doesn't
-change the result. TinyScheg searches for the best schedule, so workers are tried in a fixed, stable order (their
-order in the input), and `Worker` needs no CSP-related ordering.
+change the result, so that heuristic doesn't apply, and `Worker` needs no CSP-related ordering.
 
-Value order can still affect how *quickly* branch and bound finds the best schedule; see
-[Future work](future-work.md#search-performance).
+Value order still affects how *quickly* branch and bound finds and proves the best schedule: the sooner the pocket
+holds a good schedule, the more branches can be pruned. So when looking for the best schedule, a slot's workers are
+tried **cheapest first**: in order of the penalty of the schedule with them assigned, ties in input order. The best
+penalty found is the same either way; of several equally good schedules, the first found in this order is kept, so
+the result stays deterministic. When looking for the first legal schedule, workers are tried in input order.
 
 ## Branch and bound: the pocket
 
@@ -122,9 +124,18 @@ decreases as more slots are assigned: each state's penalty is greater than or eq
 * When the search reaches a complete, legal schedule, it's saved together with its penalty "in a pocket".
 * Each new complete, legal schedule is compared with the pocket schedule. If its penalty is lower, it replaces the
   pocket schedule; otherwise it's discarded. On equal penalties, the schedule found first stays.
-* Once there's a pocket schedule, each partial schedule's penalty is compared with the pocket's. If it's already
-  **greater than or equal to** the pocket's, no schedule in its branch can replace the pocket (because penalty never
-  decreases, and ties keep the pocket), so the whole branch is pruned.
+* Once there's a pocket schedule, each partial schedule is compared with the pocket. If no schedule in its branch
+  can have a lower penalty than the pocket's, the whole branch is pruned; ties keep the pocket, so a branch that can
+  at best tie is pruned too.
+
+What's compared is a **lower bound** on the penalty of every schedule in the branch
+([ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md)). The penalty so far would do, since
+it never decreases, but it's weak: the workload penalty barely grows until the last slots are filled. So the bound
+takes the likes and rest penalties so far, and for workload, the lowest penalty the remaining hours could give.
+Every unfilled slot's hours must go to some worker who can still fill one; since each worker's workload term is
+convex, the total is lowest when those hours top up the least-loaded of them to a common level of hours per
+available hour, like water filling a vessel. Ignoring which worker can take which slot makes this a bound that may
+be lower than anything reachable, but never higher.
 
 When the search ends, the pocket holds the best schedule.
 

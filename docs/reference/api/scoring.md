@@ -94,6 +94,23 @@ The penalty of a (partial) schedule.
 Immutable. `likes`, `workload` and `rest` are the normalized parts, each in $[0, k]$ for $k$ workers; `total` is
 their weighted sum, $a \cdot$ `likes` $+ \; b \cdot$ `workload` $+ \; c \cdot$ `rest`, also in $[0, k]$.
 
+### `lower_bound(constants, assignment, eligible_workers) -> float`
+
+A lower bound on the total penalty of every complete schedule extending a partial one, for pruning
+([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)): the weighted likes and rest
+penalties so far, plus the weighted `workload_lower_bound`. At most the total penalty of every completion, and at
+least the partial schedule's own.
+
+* `eligible_workers` — every worker who can still fill some unfilled slot (in the search, the union of the unfilled
+  slots' domains).
+
+### `workload_lower_bound(constants, assignment, eligible_workers) -> float`
+
+The lowest normalized workload penalty any completion could have: the unfilled slots' hours spread over the eligible
+workers so that the least loaded are topped up to a common level of hours per available hour ("water-filling"),
+which minimizes the sum of convex terms. Ignores which worker can take which slot, so it may be lower than anything
+reachable. In $[\mathcal{W}^*(\text{partial}), k]$.
+
 ### `likes_penalty(constants, assignment) -> float`
 
 $\mathcal{L}^{**}$: for each filled slot in a shift of more than one slot, its worker's like value of the workers in

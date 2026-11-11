@@ -14,7 +14,7 @@ has to be put on the import path with `PYTHONPATH=src`.
    ```bash
    python src/main.py exampleInput.yml -o schedule.csv
    ```
-   This finds the best schedule, which takes a few minutes (see [Command line](../reference/command-line.md)).
+   This finds the best schedule, which takes a minute or two (see [Command line](../reference/command-line.md)).
 2. Audit it against the same input:
    ```bash
    PYTHONPATH=src python tools/audit.py exampleInput.yml schedule.csv
