@@ -41,6 +41,7 @@ nav:
           - parsing: reference/api/parsing.md
           - Problem: reference/api/problem.md
           - Search: reference/api/search.md
+          - output: reference/api/output.md
   - Explanation:
       - Architecture: explanation/architecture.md
       - Domain model: explanation/domain-model.md

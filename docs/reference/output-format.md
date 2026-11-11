@@ -1,7 +1,8 @@
 # Output format
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!IMPORTANT]
+> **Partially implemented.** The grid and CSV are implemented ([`output`](api/output.md)); XLSX and ODS, and
+> choosing the format by extension (in the command-line interface), aren't.
 
 TinyScheg writes the finished schedule as a grid of time against post
 ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)), in one of three formats chosen by the output file's
@@ -32,13 +33,14 @@ of 4-hour shifts open from 08:00 to 20:00, a schedule starting at 06:00 begins:
 
 | start               | end                 | front gate    | desk |
 |---------------------|---------------------|---------------|------|
-| 2025-01-01T06:00:00 | 2025-01-01T07:00:00 | Anne & Enkidu |      |
+| 2025-01-01T06:00:00 | 2025-01-01T07:00:00 | Enkidu & Anne |      |
 | 2025-01-01T07:00:00 | 2025-01-01T08:00:00 | Jack          |      |
 | 2025-01-01T08:00:00 | 2025-01-01T10:00:00 | Jack          | Jill |
 | 2025-01-01T10:00:00 | 2025-01-01T12:00:00 | Anne          | Jill |
 | 2025-01-01T12:00:00 | 2025-01-01T13:00:00 | Anne          | Bob  |
 
-Here the front gate's 06:00–07:00 shift is cut short at the end of the night variation, its 07:00–10:00 shift covers
+Here the front gate's 06:00–07:00 shift is cut short at the end of the night variation (Enkidu fills its
+`security` slot, which comes first in the night variation's roles, and Anne its `any` slot), its 07:00–10:00 shift covers
 two rows, and so do the desk's 08:00–12:00 and the front gate's 10:00–13:00 shifts.
 
 ## Reading the output back

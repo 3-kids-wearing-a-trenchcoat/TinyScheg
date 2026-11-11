@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phase 1 — 5 of 7 steps done.
+Progress: Phase 1 — 6 of 7 steps done.
 
 ## Phase 1: Walking skeleton
 
@@ -36,10 +36,11 @@ confirms meets every hard constraint.
     - [x] Tracking the deepest point reached, for reporting infeasibility
       ([ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
     - [x] Independent hard-constraint checker for tests (`tests/schedule_checker.py`)
-- [ ] **6. Grid output, CSV** — `output/grid.py`, `output/csv_writer.py`
+- [x] **6. Grid output, CSV** — `output/grid.py`, `output/csv_writer.py`
   ([ADR 0019](decisions/0019-output-as-a-time-by-post-grid.md))
-    - [ ] Assigned slots → time-by-post grid (rows between shift boundaries, names joined with `" & "`)
-    - [ ] CSV writer (UTF-8 with BOM, ISO 8601 times)
+    - [x] Assigned slots → time-by-post grid (rows between shift boundaries, names joined with `" & "`), each cell
+      holding its covering shift
+    - [x] CSV writer (UTF-8 with BOM, ISO 8601 times)
 - [ ] **7. Command line and end-to-end test** — `cli.py`, `src/main.py`
     - [ ] `python src/main.py input.yml -o schedule.csv`; output format chosen by file extension
     - [ ] Reporting invalid input

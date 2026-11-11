@@ -58,11 +58,13 @@ See [Search algorithm](search-algorithm.md) and [Scoring](scoring.md).
 
 ## 4. Build output
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!IMPORTANT]
+> **Partially implemented.** The grid and the CSV writer are implemented ([`output`](../reference/api/output.md));
+> XLSX and ODS aren't.
 
 Transform the best schedule's list of assigned slots into a grid of time against post, written as CSV, XLSX or ODS
-(see [Output format](../reference/output-format.md)).
+(see [Output format](../reference/output-format.md)). The grid is an internal table that knows nothing about file
+formats; each format has a writer that translates it.
 
 ## 5. Return output
 
@@ -91,8 +93,8 @@ entry point. Modules marked *planned* don't exist yet.
 | `csp/problem.py` | [`Problem`](../reference/api/problem.md): domains and difference constraints, by slot and worker index. |
 | `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module); MRV/degree ordering and branch and bound are planned. |
-| `output/grid.py` | *Planned.* Assigned slots to the time-by-post grid ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
-| `output/csv_writer.py` | *Planned.* The grid as CSV; XLSX and ODS writers will sit next to it. |
+| `output/grid.py` | [Assigned slots to the time-by-post grid](../reference/api/output.md#grid-module) ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
+| `output/csv_writer.py` | [The grid as CSV](../reference/api/output.md#csv_writer-module); XLSX and ODS writers will sit next to it. |
 
 Dependencies point one way: `timing` ← `model` ← (`parsing`, `csp`, `output`), with `cli` using all of them.
 `parsing`, `csp` and `output` don't import each other. A planned `scoring` package will depend only on `model` and be
