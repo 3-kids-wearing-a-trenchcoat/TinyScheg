@@ -45,8 +45,8 @@ can override the roles and the shift length; anything it doesn't specify is inhe
 
 ## Shifts and slots
 
-> [!IMPORTANT]
-> **Partially implemented.** See [`Slot`](../reference/api/post-and-slot.md#class-slottime-role-post).
+> [!NOTE]
+> **Implemented.** See [`Shift`, `Slot` and shift generation](../reference/api/post-and-slot.md#shift-module).
 
 Over the schedule period, each post is split into **shifts**
 ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)):
@@ -71,7 +71,7 @@ Each slot belongs to a shift, and a shift knows its slots. This grouping matters
 [scoring](scoring.md), which looks at who shares a shift, and for the [output](../reference/output-format.md), which
 shows each shift's workers together. Shifts and slots are plain, unchanging descriptions: who is assigned to them, and
 which workers can still be, is part of the search state, not of the slots themselves. A variation requiring no workers
-produces shifts with no slots, closing the post during its window.
+produces no shifts, closing the post during its window.
 
 Slots have a fixed, stable order: by start time, end time, the post's position in the input, the role's position in
 the post's role list, and index. This order is used wherever ties need breaking, so that the same input always

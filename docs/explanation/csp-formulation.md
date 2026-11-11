@@ -46,9 +46,8 @@ Soft constraints — fairness and preferences — are not CSP constraints in Tin
 
 ## Unary constraints
 
-> [!IMPORTANT]
-> **Partially implemented**, in the `Slot` constructor, which is due to be rebuilt: domains are to be built by the
-> CSP setup (`csp/problem.py`), keeping `Slot` a plain description.
+> [!WARNING]
+> **Not yet implemented.** Domains are to be built by the CSP setup (`csp/problem.py`).
 
 A worker can fill a slot only if they:
 
@@ -60,9 +59,8 @@ are therefore node consistent from the start.
 
 ## Binary difference constraints
 
-> [!IMPORTANT]
-> **Partially implemented**, in `Slot.gen_time_constraints` and `Slot.find_time_constraints`, which miss constraints
-> (a known bug) and are due to be rebuilt as part of the CSP setup (`csp/problem.py`).
+> [!WARNING]
+> **Not yet implemented.** Difference constraints are to be built by the CSP setup (`csp/problem.py`).
 
 A worker can't take a shift during, immediately before or immediately after a shift they're already assigned to.
 More precisely, two slots get a **difference constraint** (they must be assigned different workers) if they overlap

@@ -5,7 +5,7 @@ over the [CSP](csp-formulation.md), combined with branch and bound: a [penalty s
 partial schedule, and branches that can't beat the best complete schedule found so far are pruned.
 
 > [!WARNING]
-> **Not yet implemented.** Pieces of an earlier design exist in `Slot`; see the [API reference](../reference/api/post-and-slot.md).
+> **Not yet implemented.**
 
 ## Overview
 

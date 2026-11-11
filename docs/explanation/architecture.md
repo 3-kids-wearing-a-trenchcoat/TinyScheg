@@ -28,8 +28,8 @@ don't overlap. Invalid input is reported before anything else happens.
 ## 2. Initialize
 
 > [!IMPORTANT]
-> **Partially implemented.** Old building blocks exist (`Slot` domain building and `Slot.gen_time_constraints`), but
-> are due to be rebuilt; shift generation per segment isn't implemented.
+> **Partially implemented.** Generating shifts and slots (step 1) is implemented; building domains and constraints,
+> and the scoring constants, aren't.
 
 Set up the CSP:
 
@@ -78,10 +78,10 @@ entry point. Modules marked *planned* don't exist yet.
 | `timing/datetime_range.py` | [`DateTimeRange`](../reference/api/datetime-range.md) and `parse_range`. |
 | `timing/daily_window.py` | [`DailyWindow`](../reference/api/daily-window.md): recurring `"HH:MM-HH:MM"` windows, turned into concrete ranges over a period. |
 | `model/worker.py` | [`Worker`](../reference/api/worker.md). |
-| `model/shift.py` | The old [`Slot`](../reference/api/post-and-slot.md#shift-module); to become plain, immutable `Shift` and `Slot` descriptions. |
+| `model/shift.py` | [`Shift` and `Slot`](../reference/api/post-and-slot.md#shift-module): plain, immutable descriptions. |
 | `model/post.py` | [`Post`, `Variation` and `ShiftRules`](../reference/api/post-and-slot.md#post-module). |
 | `model/schedule_input.py` | [`Settings` and `ScheduleInput`](../reference/api/schedule-input.md): the parsed input as a whole. |
-| `model/shift_generation.py` | *Planned.* Segments, shifts and slots in stable order ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). |
+| `model/shift_generation.py` | [Segments, shifts and slots in stable order](../reference/api/post-and-slot.md#shift_generation-module) ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). |
 | `parsing/input_reader.py` | [`read_input`](../reference/api/parsing.md#input_reader-module): YAML input to model objects. |
 | `parsing/validation.py` | [`InputError` and the validation rules](../reference/api/parsing.md#validation-module). |
 | `csp/problem.py` | *Planned.* Domains and difference constraints, by slot index. |
