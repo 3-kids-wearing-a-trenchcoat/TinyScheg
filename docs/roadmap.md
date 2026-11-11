@@ -63,12 +63,12 @@ pure function of a (partial) assignment, so it's built and tested on fixed assig
 - [x] Scoring parameters: defaults as named constants, and the optional `scoring` input settings (parsing,
   validation)
 - [x] Constants: each worker's availability, the number of shared slots, worst rest deficit, packable maximum
-- [ ] Workload penalty ([ADR 0013](decisions/0013-availability-weighted-workload.md),
+- [x] Workload penalty ([ADR 0013](decisions/0013-availability-weighted-workload.md),
   [ADR 0015](decisions/0015-normalize-workload-by-packable-maximum.md))
-- [ ] Rest penalty ([ADR 0014](decisions/0014-exact-worst-rest-deficit.md))
-- [ ] Likes/dislikes penalty
-- [ ] Weighted sum of normalized penalties ([ADR 0005](decisions/0005-weighted-sum-of-normalized-penalties.md))
-- [ ] Property tests: monotone along the search, path-independent and deterministic
+- [x] Rest penalty ([ADR 0014](decisions/0014-exact-worst-rest-deficit.md))
+- [x] Likes/dislikes penalty
+- [x] Weighted sum of normalized penalties ([ADR 0005](decisions/0005-weighted-sum-of-normalized-penalties.md))
+- [x] Property tests: monotone along the search, path-independent and deterministic
   ([ADR 0012](decisions/0012-deterministic-path-independent-scoring.md))
 
 ## Phase 3: Efficient search

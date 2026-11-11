@@ -72,7 +72,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Search (backtracking, pocket)       | Partially implemented     |
 | Undo (change records)               | Implemented and tested    |
 | Scoring parameters and constants    | Implemented and tested    |
-| Scoring penalties                   | Not yet implemented       |
+| Scoring penalties                   | Implemented and tested    |
 | Output (CSV grid)                   | Implemented and tested    |
 | Output (XLSX, ODS)                  | Not yet implemented       |
 | Command-line interface              | Implemented and tested    |

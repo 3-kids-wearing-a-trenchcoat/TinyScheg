@@ -1,6 +1,7 @@
 # `scoring` package
 
-Source: [`src/tinyscheg/scoring/constants.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/constants.py)
+Sources: [`src/tinyscheg/scoring/constants.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/constants.py) and
+[`src/tinyscheg/scoring/penalty.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/penalty.py)
 
 See [Scoring](../../explanation/scoring.md) for the formulas and why, and
 [`ScoringParameters`](schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner)
@@ -69,3 +70,45 @@ The workload penalty's largest possible value, as above.
 ### `hours(length) -> float`
 
 A `datetime.timedelta` in hours.
+
+## `penalty` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_penalty.py`). Not yet used by the search, which takes the first
+> legal schedule; branch and bound will use it.
+
+The penalty of a (partial) schedule. An **assignment** holds a worker index per slot, in stable slot order, or
+`None` for an unfilled slot, as the search state's `assigned` list does. Unfilled slots contribute nothing.
+
+Every penalty is computed from scratch, as a `float`, with sums always taken in the same order (shifts, slots and
+workers in their stable order). The same assignment therefore always gets exactly the same penalty, however it was
+reached, and filling another slot never lowers it.
+
+### `score(constants, assignment) -> Penalty`
+
+The penalty of a (partial) schedule.
+
+### `class Penalty(total, likes, workload, rest)`
+
+Immutable. `likes`, `workload` and `rest` are the normalized parts, each in $[0, k]$ for $k$ workers; `total` is
+their weighted sum, $a \cdot$ `likes` $+ \; b \cdot$ `workload` $+ \; c \cdot$ `rest`, also in $[0, k]$.
+
+### `likes_penalty(constants, assignment) -> float`
+
+$\mathcal{L}^{**}$: for each filled slot in a shift of more than one slot, its worker's like value of the workers in
+the shift's other slots, averaged over those other slots; normalized by $\beta \cdot n_\text{shared}$ and scaled to
+$[0, k]$. The like values are named constants with $\beta$ as the unit: `LIKED_PARTNER = 0.0`,
+`DISLIKED_PARTNER = 1.0`, and a neutral partner is `neutral_partner` times `DISLIKED_PARTNER`. 0 if every shift has
+one slot.
+
+### `workload_penalty(constants, assignment) -> float`
+
+$\mathcal{W}^*$: the sum of $\mathrm{av} \cdot (\text{assigned hours} / \mathrm{av})^p$ over workers with some
+availability, divided by `workload_scale` and scaled to $[0, k]$. 0 if no worker can be assigned anything.
+
+### `rest_penalty(constants, assignment) -> float`
+
+$\mathcal{R}^{**}$: for each worker, the sum over their consecutive shifts of
+$\max(0, \gamma \cdot |s| - \text{rest after } s)$, divided by their `worst_deficit`. Workers whose worst deficit is
+0 can never have one, and count 0.
+
