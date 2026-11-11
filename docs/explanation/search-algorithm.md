@@ -5,9 +5,10 @@ over the [CSP](csp-formulation.md), combined with branch and bound: a [penalty s
 partial schedule, and branches that can't beat the best complete schedule found so far are pruned.
 
 > [!IMPORTANT]
-> **Partially implemented.** Backtracking with forward checking, undo and MRV/degree ordering finds the **first**
-> legal schedule ([`csp/search.py`](../reference/api/search.md)). [Scoring](scoring.md) is implemented but not yet
-> used by the search; branch and bound isn't implemented yet.
+> **Partially implemented.** Everything on this page is implemented in [`csp/search.py`](../reference/api/search.md)
+> and tested, but the command line still writes the **first** legal schedule: branch and bound is only checked on
+> small inputs so far, and its speed on realistic inputs is still to be measured (see the
+> [Roadmap](../roadmap.md#phase-5-branch-and-bound)).
 
 ## Overview
 
@@ -34,9 +35,9 @@ deepest point the search reached and the slot it couldn't fill there
 
 ## Backtracking search
 
-> [!IMPORTANT]
-> **Partially implemented.** Steps 2–5 are implemented, stopping at the first complete schedule. Scoring and pruning
-> (step 1) and the pocket aren't.
+> [!NOTE]
+> **Implemented**, both for the best schedule (all steps) and for the first legal one (steps 2–5, stopping at the
+> first complete schedule).
 
 The search is recursive, much like a depth-first search
 ([ADR 0002](../decisions/0002-backtracking-with-forward-checking.md)):
@@ -107,8 +108,9 @@ Value order can still affect how *quickly* branch and bound finds the best sched
 
 ## Branch and bound: the pocket
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!NOTE]
+> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-searchresult),
+> and tested against trying every schedule on small inputs. Not yet used by the command line.
 
 See [ADR 0004](../decisions/0004-branch-and-bound-with-monotone-penalty.md) and
 [ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md).

@@ -1,24 +1,31 @@
 """Tests for tinyscheg.csp.search."""
 import dataclasses
 import datetime as dt
+import math
 import pathlib
 import random
 import time
+from itertools import product
 
 import pytest
 
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
-from tinyscheg.csp.search import _Search, choose_slot, find_first_schedule
+from tinyscheg.csp.search import _Search, choose_slot, find_best_schedule, find_first_schedule
 from tinyscheg.csp.state import SearchState
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
+from tinyscheg.scoring.constants import ScoringConstants, build_constants
+from tinyscheg.scoring.penalty import score
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
-SLOW_CASE_SECONDS = 5  # filling slots in stable order took minutes on this case; MRV takes a fraction of a second
+BRUTE_FORCE_LIMIT = 20000  # the most schedules (combinations of domains) a brute-force test input may have
+BRUTE_FORCE_MINIMUM = 50   # the fewest, so that every input takes some searching
+BRUTE_FORCE_INPUTS = 25    # how many random small inputs are compared with brute force
+SLOW_CASE_SECONDS = 5      # filling slots in stable order took minutes on this case; MRV takes a fraction of a second
 
 
 def assert_legal(schedule_input: ScheduleInput) -> tuple[int, ...]:
@@ -145,3 +152,103 @@ def test_infeasibility_is_found_quickly_on_a_hard_input() -> None:
     result = find_first_schedule(build_problem(hard))
     assert time.perf_counter() - started < SLOW_CASE_SECONDS
     assert result.assignment is None
+
+
+# --- branch and bound ---
+
+def random_small_input(seed: int) -> ScheduleInput:
+    """A random input small enough to try every schedule: 3 or 4 workers, a few short shifts on one or two posts."""
+    rng = random.Random(seed)
+    names = ["Anne", "Bob", "Cy", "Dan"][:rng.randint(3, 4)]
+    period = DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 1, rng.choice([8, 12])))
+    workers = []
+    for name in names:
+        others = [other for other in names if other != name]
+        liked = frozenset(other for other in others if rng.random() < 0.3)
+        disliked = frozenset(other for other in others if other not in liked and rng.random() < 0.3)
+        unavailable = ()
+        if rng.random() < 0.3:
+            start = period.start + dt.timedelta(hours=rng.randrange(0, 8, 2))
+            unavailable = (DateTimeRange(start, start + dt.timedelta(hours=rng.choice([2, 4]))),)
+        roles = frozenset({"medic"}) if rng.random() < 0.5 else frozenset()
+        workers.append(Worker(name, roles, unavailable, liked, disliked))
+    posts = [Post("gate", ShiftRules(dt.timedelta(hours=rng.choice([2, 4])), (("any", rng.randint(1, 2)),)))]
+    if rng.random() < 0.5:
+        posts.append(Post("aid", ShiftRules(dt.timedelta(hours=4), (("medic", 1),))))
+    settings = Settings(period, dt.timedelta(hours=rng.choice([0, 1, 2, 4])))
+    return ScheduleInput(settings, tuple(workers), tuple(posts))
+
+
+def small_inputs() -> list[ScheduleInput]:
+    """The first BRUTE_FORCE_INPUTS random small inputs with between BRUTE_FORCE_MINIMUM and BRUTE_FORCE_LIMIT
+    schedules to try."""
+    inputs = []
+    seed = 0
+    while len(inputs) < BRUTE_FORCE_INPUTS:
+        schedule_input = random_small_input(seed)
+        if BRUTE_FORCE_MINIMUM <= math.prod(len(domain) for domain in build_problem(schedule_input).domains) \
+                <= BRUTE_FORCE_LIMIT:
+            inputs.append(schedule_input)
+        seed += 1
+    return inputs
+
+
+def constants_of(schedule_input: ScheduleInput) -> ScoringConstants:
+    """The scoring constants of an input."""
+    problem = build_problem(schedule_input)
+    return build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+
+
+@pytest.mark.parametrize("schedule_input", small_inputs())
+def test_branch_and_bound_finds_the_best_schedule(schedule_input: ScheduleInput) -> None:
+    problem = build_problem(schedule_input)
+    constants = constants_of(schedule_input)
+    legal = [assignment for assignment in product(*problem.domains)
+             if not hard_constraint_violations(schedule_input, problem.slots, assignment)]
+    result = find_best_schedule(problem, constants)
+    if not legal:
+        assert result.assignment is None and result.penalty is None
+        return
+    penalties = {assignment: score(constants, assignment).total for assignment in legal}
+    lowest = min(penalties.values())
+    assert result.assignment is not None and result.penalty is not None
+    assert hard_constraint_violations(schedule_input, problem.slots, result.assignment) == []
+    assert result.penalty.total == lowest  # exactly: penalties are computed from scratch, the same way
+    assert result.penalty == score(constants, result.assignment)
+    best = [assignment for assignment, penalty in penalties.items() if penalty == lowest]
+    if len(best) == 1:
+        assert result.assignment == best[0]
+
+
+def test_the_small_inputs_cover_feasible_and_infeasible_cases() -> None:
+    found = [find_best_schedule(build_problem(schedule_input), constants_of(schedule_input)).assignment
+             for schedule_input in small_inputs()]
+    assert any(assignment is None for assignment in found) and any(assignment is not None for assignment in found)
+
+
+def test_pruning_loses_nothing() -> None:
+    fewer = 0
+    for schedule_input in small_inputs():
+        problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+        pruned, full = find_best_schedule(problem, constants), find_best_schedule(problem, constants, prune=False)
+        assert (pruned.assignment, pruned.penalty) == (full.assignment, full.penalty)
+        assert pruned.nodes <= full.nodes and full.pruned == 0
+        fewer += pruned.nodes < full.nodes
+    assert fewer > 0
+
+
+def test_branch_and_bound_is_deterministic() -> None:
+    schedule_input = small_inputs()[0]
+    problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+    assert find_best_schedule(problem, constants) == find_best_schedule(problem, constants)
+
+
+def test_branch_and_bound_reports_where_an_infeasible_input_got_stuck() -> None:
+    period = DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 1, 8))
+    post = Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 2),)))
+    workers = tuple(Worker(name) for name in ("Anne", "Bob", "Cy"))
+    schedule_input = ScheduleInput(Settings(period, dt.timedelta(hours=1)), workers, (post,))
+    problem = build_problem(schedule_input)
+    first, best = find_first_schedule(problem), find_best_schedule(problem, constants_of(schedule_input))
+    assert best.assignment is None and best.penalty is None
+    assert (best.deepest, best.stuck_slot) == (first.deepest, first.stuck_slot)

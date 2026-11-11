@@ -49,13 +49,27 @@ Everything one `assign` changed. Immutable.
 ## `search` module
 
 > [!NOTE]
-> **Implemented** for finding the first legal schedule, and covered by tests (`tests/test_search.py`).
-> Branch and bound is [not yet implemented](../../explanation/search-algorithm.md).
+> **Implemented**, and covered by tests (`tests/test_search.py`). The command line still uses
+> `find_first_schedule`.
 
 ### `find_first_schedule(problem) -> SearchResult`
 
 Backtracking search with forward checking. Slots are chosen by `choose_slot` and workers tried in input order, so
 the result is deterministic. Stops at the first complete, legal schedule.
+
+### `find_best_schedule(problem, constants, prune=True) -> SearchResult`
+
+[Branch and bound](../../explanation/search-algorithm.md#branch-and-bound-the-pocket): the same search, run to the
+end, keeping the best complete schedule found so far in the pocket. At every partial schedule the
+[penalty](scoring.md#scoreconstants-assignment-penalty) is computed from scratch; if it's already at least the
+pocket's, the branch is pruned, since filling more slots never lowers it and ties keep the pocket
+([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)).
+
+* `constants` — the [`ScoringConstants`](scoring.md#class-scoringconstants) of the same input.
+* `prune` — `False` only for testing: every branch is searched, to check that pruning loses nothing.
+
+Returns the legal schedule with the lowest penalty; of equally good schedules, the first found, so the result is
+deterministic. If there's none, it reports where the search got stuck, as `find_first_schedule` does.
 
 ### `choose_slot(state) -> int | None`
 
@@ -64,13 +78,17 @@ The next slot to fill, by [variable ordering](../../explanation/search-algorithm
 left in its domain; among those, the one constrained with the most unassigned slots; among those, the lowest index.
 `None` if every slot is assigned. Computed by scanning the state each time; nothing is stored.
 
-### `class SearchResult(assignment, deepest, stuck_slot)`
+### `class SearchResult(assignment, deepest, stuck_slot, penalty=None, nodes=0, pruned=0)`
 
 * `assignment` — `tuple[int, ...] | None`: a worker index per slot, or `None` if no legal schedule exists.
 * `deepest` — `int`, the most slots the search had filled at once (all of them if it found a schedule).
 * `stuck_slot` — `Slot | None`, the slot the search had to fill next at its deepest point; `None` if it found a
   schedule. Used to report where an infeasible input got stuck
   ([ADR 0020](../../decisions/0020-report-where-infeasibility-was-found.md)).
+* `penalty` — `Penalty | None`, the schedule's penalty, from `find_best_schedule`; `None` from
+  `find_first_schedule`, or if no legal schedule exists.
+* `nodes` — `int`, how many (partial) schedules the search visited.
+* `pruned` — `int`, how many branches branch and bound cut off because they couldn't beat the pocket.
 
 The stuck slot is where the search found out, not necessarily the cause: forward checking stops an assignment as soon
 as it leaves some *other* slot with no workers, so the actual conflict may be a slot or two later. Since a slot with

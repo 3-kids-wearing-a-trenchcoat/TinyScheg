@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–4 complete. Next: Phase 5 (branch and bound).
+Progress: Phases 1–4 complete; Phase 5 under way. Next: measure branch and bound on the example.
 
 ## Phase 1: Walking skeleton
 
@@ -107,12 +107,14 @@ code with `csp/` or `scoring/`.
 
 The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monotone-penalty.md)).
 
-- [ ] Search all solutions, keeping the best in the pocket
-- [ ] Prune branches whose score is already at least the pocket's (ties included)
-- [ ] Tests: same result as brute force on small inputs
+- [x] Search all solutions, keeping the best in the pocket (`find_best_schedule`)
+- [x] Prune branches whose score is already at least the pocket's (ties included)
+- [x] Tests: same result as brute force on small inputs
+- [ ] Measure the search on the example, and decide on the scoring-based speedups in [Later](#later) (and a time
+  limit) that it needs
+- [ ] Use branch and bound on the command line
 - [ ] Check with the audit that no simple legal swap lowers the chosen schedule's penalty
 - [ ] Tune the scoring parameters with the audit
-- [ ] Measure the search, and decide on the scoring-based speedups in [Later](#later)
 
 ## Phase 6: Spreadsheet output
 

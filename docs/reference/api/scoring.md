@@ -74,8 +74,9 @@ A `datetime.timedelta` in hours.
 ## `penalty` module
 
 > [!NOTE]
-> **Implemented**, and covered by tests (`tests/test_penalty.py`). Not yet used by the search, which takes the first
-> legal schedule; branch and bound will use it.
+> **Implemented**, and covered by tests (`tests/test_penalty.py`). Used by branch and bound
+> ([`find_best_schedule`](search.md#find_best_scheduleproblem-constants-prunetrue-searchresult)), and by the command
+> line to show the written schedule's penalty.
 
 The penalty of a (partial) schedule. An **assignment** holds a worker index per slot, in stable slot order, or
 `None` for an unfilled slot, as the search state's `assigned` list does. Unfilled slots contribute nothing.

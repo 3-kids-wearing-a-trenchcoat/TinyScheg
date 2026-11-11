@@ -6,11 +6,12 @@ It models scheduling as a constraint satisfaction problem (CSP) and searches for
 score that never decreases along the search, allowing hopeless partial schedules to be pruned early.
 
 > [!WARNING]
-> TinyScheg is a **work in progress** and does not run end-to-end yet.
-> Code described as implemented exists but, unless its page says it's covered by tests, **has not been tested**; an
-> audit on 2026-11-10 found bugs in all of the original code. The code is being rebuilt bottom-up, module by module with tests, starting with a walking skeleton: parse the
-> input, generate slots, search for the first legal schedule and write it as CSV. Scoring and branch and bound come
-> after that.
+> TinyScheg is a **work in progress**. It runs end to end and writes a schedule that meets every hard constraint,
+> but the command line still writes the first legal schedule found, not yet the fairest: branch and bound is built
+> and tested on small inputs, and its speed on realistic inputs is being measured. Code described as implemented
+> exists but, unless its page says it's covered by tests, **has not been tested**; an audit on 2026-11-10 found bugs
+> in all of the original code, which is being rebuilt bottom-up, module by module with tests. See the
+> [Roadmap](roadmap.md).
 
 ## Roadmap
 
@@ -72,7 +73,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | `DailyWindow`                       | Implemented and tested    |
 | Input parsing and validation        | Implemented and tested    |
 | Search (backtracking, ordering)     | Implemented and tested    |
-| Branch and bound (pocket)           | Not yet implemented       |
+| Branch and bound (pocket)           | Implemented and tested    |
 | Undo (change records)               | Implemented and tested    |
 | Scoring parameters and constants    | Implemented and tested    |
 | Scoring penalties                   | Implemented and tested    |

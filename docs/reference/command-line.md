@@ -4,8 +4,8 @@ Source: [`src/tinyscheg/cli.py`](https://github.com/3-kids-wearing-a-trenchcoat/
 
 > [!IMPORTANT]
 > **Partially implemented.** Everything on this page works, but the schedule written is the **first** legal schedule
-> found, not yet the fairest one: scoring and branch and bound aren't implemented yet (see the
-> [Roadmap](../roadmap.md)).
+> found, not yet the fairest one: branch and bound is built but not yet used here (see the
+> [Roadmap](../roadmap.md#phase-5-branch-and-bound)).
 
 ## Usage
 
@@ -33,7 +33,7 @@ penalty 4.09 (likes 3.23, workload 4.84, rest 3.42)
 ```
 
 The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals. Until
-branch and bound is built, the schedule is the first legal one found, so the penalty shows how fair it happens to be
+the command line uses branch and bound, the schedule is the first legal one found, so the penalty shows how fair it happens to be
 rather than the best achievable.
 
 ## Errors

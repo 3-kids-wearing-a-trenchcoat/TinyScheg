@@ -1,4 +1,4 @@
-"""Backtracking search with forward checking, stopping at the first legal schedule."""
+"""Backtracking search with forward checking: for the first legal schedule, or the best one by branch and bound."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from tinyscheg.csp.problem import Problem
 from tinyscheg.csp.state import SearchState
 from tinyscheg.model.shift import Slot
+from tinyscheg.scoring.constants import ScoringConstants
+from tinyscheg.scoring.penalty import Penalty, score
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,11 +16,16 @@ class SearchResult:
     The outcome of a search.
     assignment holds a worker index per slot, or is None if no legal schedule exists. deepest is the most slots the
     search had filled at once, and stuck_slot the slot it had to fill next at that point (None if it found a
-    schedule), for reporting where an infeasible input got stuck (ADR 0020).
+    schedule), for reporting where an infeasible input got stuck (ADR 0020). penalty is the schedule's penalty when
+    the search looked for the best schedule (None otherwise, or if there is none). nodes counts the (partial)
+    schedules the search visited, and pruned the branches it cut off because they couldn't beat the pocket.
     """
     assignment: tuple[int, ...] | None
     deepest: int
     stuck_slot: Slot | None
+    penalty: Penalty | None = None
+    nodes: int = 0
+    pruned: int = 0
 
 
 def choose_slot(state: SearchState) -> int | None:
@@ -44,27 +51,44 @@ def _unassigned_neighbours(state: SearchState, slot_index: int) -> int:
 
 
 class _Search:
-    """One run of the search: the state, and how far the search has got."""
+    """
+    One run of the search: the state, how far the search has got and, when looking for the best schedule, the
+    pocket (the best complete schedule found so far, ADR 0004)
+    """
 
-    def __init__(self, problem: Problem) -> None:
+    def __init__(self, problem: Problem, constants: ScoringConstants | None = None, prune: bool = True) -> None:
         """
         :param problem: Problem
+        :param constants: ScoringConstants to look for the best schedule with; None to stop at the first legal one
+        :param prune: False to visit every branch even when it can't beat the pocket (for testing the pruning)
         """
         self.problem = problem
         self.state = SearchState(problem)
+        self.constants = constants
+        self.prune = prune
         self.filled = 0
         self.deepest = -1
         self.stuck_slot: Slot | None = None
+        self.pocket: tuple[int, ...] | None = None
+        self.pocket_penalty: Penalty | None = None
+        self.nodes = 0
+        self.pruned = 0
 
     def search(self) -> bool:
         """
         Fill the remaining slots, recursively
-        :return: True once every slot is assigned (the state then holds the schedule); False if no assignment of
-        the remaining slots is legal, with the state restored to what it was
+        :return: True to stop the search: when looking for the first legal schedule, once every slot is assigned
+        (the state then holds the schedule). False otherwise, with the state restored to what it was: when looking
+        for the first schedule, no assignment of the remaining slots is legal; when looking for the best, this
+        branch has been searched (or pruned), and the pocket holds the best schedule found so far
         """
+        self.nodes += 1
+        if self._cannot_beat_pocket():
+            self.pruned += 1
+            return False
         slot_index = choose_slot(self.state)
         if slot_index is None:
-            return True
+            return self._complete()
         if self.filled > self.deepest:
             self.deepest, self.stuck_slot = self.filled, self.problem.slots[slot_index]
         for worker in self.state.domains[slot_index]:  # domains are in input order: the order workers are tried in
@@ -74,6 +98,28 @@ class _Search:
                 return True
             self.state.undo(changes)
             self.filled -= 1
+        return False
+
+    def _cannot_beat_pocket(self) -> bool:
+        """
+        True if the current (partial) schedule's penalty is already at least the pocket's. Filling more slots never
+        lowers the penalty, and ties keep the pocket, so nothing in this branch can replace it (ADR 0017).
+        """
+        if self.constants is None or self.pocket_penalty is None or not self.prune:
+            return False
+        return score(self.constants, self.state.assigned).total >= self.pocket_penalty.total
+
+    def _complete(self) -> bool:
+        """
+        Handle a complete, legal schedule
+        :return: True to stop at the first schedule; when looking for the best, put it in the pocket if it's better
+        than the pocket's (on equal penalties the one found first stays), and return False to keep searching
+        """
+        if self.constants is None:
+            return True
+        penalty = score(self.constants, self.state.assigned)
+        if self.pocket_penalty is None or penalty.total < self.pocket_penalty.total:
+            self.pocket, self.pocket_penalty = tuple(self.state.assigned), penalty
         return False
 
 
@@ -86,5 +132,22 @@ def find_first_schedule(problem: Problem) -> SearchResult:
     """
     run = _Search(problem)
     if run.search():
-        return SearchResult(tuple(run.state.assigned), run.filled, None)
-    return SearchResult(None, run.deepest, run.stuck_slot)
+        return SearchResult(tuple(run.state.assigned), run.filled, None, nodes=run.nodes)
+    return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes)
+
+
+def find_best_schedule(problem: Problem, constants: ScoringConstants, prune: bool = True) -> SearchResult:
+    """
+    Search for the best legal schedule by branch and bound: every branch is searched unless its penalty is already
+    at least the pocket's
+    :param problem: Problem
+    :param constants: ScoringConstants, built for the same input
+    :param prune: False only for testing: search every branch, to check that pruning loses nothing
+    :return: the legal schedule with the lowest penalty and its penalty (deterministically: of equally good
+    schedules, the first found), or the point at which the search got stuck if there is none
+    """
+    run = _Search(problem, constants, prune)
+    run.search()
+    if run.pocket is None:
+        return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes, pruned=run.pruned)
+    return SearchResult(run.pocket, len(problem.slots), None, run.pocket_penalty, run.nodes, run.pruned)

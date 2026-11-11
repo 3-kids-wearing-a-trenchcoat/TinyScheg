@@ -15,7 +15,7 @@ with a penalty score that is used to prune the search and pick the best schedule
 
 > [!WARNING]
 > **Work in progress.** TinyScheg runs end to end and writes a schedule that meets every hard constraint, but not
-> yet the fairest one: scoring and branch and bound aren't implemented yet. See the
+> yet the fairest one: branch and bound is built, but the command line doesn't use it yet. See the
 > [roadmap](docs/roadmap.md) for what's next, and [the docs](docs/index.md) for the status of each component.
 
 ## Getting started
