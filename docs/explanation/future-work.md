@@ -42,9 +42,25 @@ minimal set of conflicting requirements.
 ## Search performance
 
 > [!WARNING]
-> **Not yet implemented.** Deferred until TinyScheg works end to end; performance isn't a concern at the intended
-> schedule sizes yet. With MRV ordering, finding a first legal schedule is instant at these sizes (decided
-> 2026-11-11); the ideas below are to be reconsidered once branch and bound can be measured.
+> **Not yet implemented.** Deferred (2026-11-11): get it working first, then make it work well. Branch and bound
+> runs to the end with no limit and can be interrupted with Ctrl+C.
+
+Measured on the example on 2026-11-11, with prototypes in which each idea below was checked against brute force on
+small inputs. Branch and bound as implemented proves the best 24-hour schedule (17 slots) in about 200 s, but doesn't
+finish a 48-hour one (32 slots) in 5 minutes, nor a 72-hour one (47 slots) in 10.
+
+| Prototype | 24 h: time to prove the best | 48 h: best after 5 min | 72 h: best after 60 s |
+|---|---|---|---|
+| As implemented | 202 s | 2.70 | 3.28 |
+| Stronger workload bound (below) | 49 s | 2.70 | 3.22 |
+| Cheapest-first value ordering (below) | more than 300 s | 2.54 | 2.90 |
+| Both | 93 s | 2.53 | 2.90 (after 1.5 s) |
+| Symmetry breaking (below) | — | — | 3.28 |
+
+Cheapest-first finds good schedules far sooner, which matters most when a run is interrupted; the stronger bound
+makes proving the best faster. Neither finished a 48-hour schedule. Tighter bounds (for rest and likes, or a
+workload bound that respects which worker can take which slot) are the likely way to get there.
+
 
 * **Cheapest-first value ordering.** Try the worker whose assignment adds the least penalty first. This doesn't
   change the result: as [ADR 0003](../decisions/0003-variable-ordering-mrv-degree.md) argues, the best schedule is
@@ -60,8 +76,10 @@ minimal set of conflicting requirements.
   remaining hours are known; by the same Jensen argument used in [Scoring](scoring.md#the-function-varphi-and-jensens-inequality),
   spreading them so that every workload is equal gives a lower bound on the remaining workload penalty that can be added
   before comparing.
-* **Time limit.** Stop the search after a given time and return the best pocket schedule found so far. Note that
-  with a time limit, value ordering affects the *result* and not just the speed.
+* **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
+  far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
+  ordering affects the *result* and not just the speed. Decided against for now (2026-11-11): the search runs to the
+  end, and Ctrl+C stops it without writing anything.
 
 ## Incremental scoring
 

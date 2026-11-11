@@ -75,7 +75,7 @@ A `datetime.timedelta` in hours.
 
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_penalty.py`). Used by branch and bound
-> ([`find_best_schedule`](search.md#find_best_scheduleproblem-constants-prunetrue-searchresult)), and by the command
+> ([`find_best_schedule`](search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-searchresult)), and by the command
 > line to show the written schedule's penalty.
 
 The penalty of a (partial) schedule. An **assignment** holds a worker index per slot, in stable slot order, or

@@ -1,9 +1,8 @@
 # Scoring
 
 > [!IMPORTANT]
-> **Partially implemented.** This page is the specification for TinyScheg's scoring. All of it is implemented
-> ([`scoring`](../reference/api/scoring.md)), but the search doesn't use it yet: it takes the first legal schedule,
-> until branch and bound is built.
+> **Implemented.** This page is the specification for TinyScheg's scoring, implemented in
+> [`scoring`](../reference/api/scoring.md) and used by branch and bound to find the best schedule.
 > See [ADR 0005](../decisions/0005-weighted-sum-of-normalized-penalties.md),
 > [ADR 0006](../decisions/0006-convex-function-for-workload-fairness.md),
 > [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md),
@@ -433,7 +432,7 @@ Every parameter has a default, defined once as a named constant in the code, and
 | Rest factor | $\gamma$ | 3 | `rest_factor` | at least 1 |
 | Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1 |
 
-What the defaults mean, on the example input (9 workers, 72 hours):
+What the defaults mean, on a 72-hour version of the example input (9 workers):
 
 | Change to a schedule | Penalty change, before weights | After default weights |
 |----------------------|-------------------------------|-----------------------|

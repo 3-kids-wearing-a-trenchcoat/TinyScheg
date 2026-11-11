@@ -49,15 +49,14 @@ Everything one `assign` changed. Immutable.
 ## `search` module
 
 > [!NOTE]
-> **Implemented**, and covered by tests (`tests/test_search.py`). The command line still uses
-> `find_first_schedule`.
+> **Implemented**, and covered by tests (`tests/test_search.py`). The command line uses `find_best_schedule`.
 
 ### `find_first_schedule(problem) -> SearchResult`
 
 Backtracking search with forward checking. Slots are chosen by `choose_slot` and workers tried in input order, so
 the result is deterministic. Stops at the first complete, legal schedule.
 
-### `find_best_schedule(problem, constants, prune=True) -> SearchResult`
+### `find_best_schedule(problem, constants, prune=True, on_improvement=None) -> SearchResult`
 
 [Branch and bound](../../explanation/search-algorithm.md#branch-and-bound-the-pocket): the same search, run to the
 end, keeping the best complete schedule found so far in the pocket. At every partial schedule the
@@ -67,6 +66,10 @@ pocket's, the branch is pruned, since filling more slots never lowers it and tie
 
 * `constants` — the [`ScoringConstants`](scoring.md#class-scoringconstants) of the same input.
 * `prune` — `False` only for testing: every branch is searched, to check that pruning loses nothing.
+* `on_improvement` — `Callable[[Penalty], None] | None`: called with the penalty of each better schedule as it's
+  put in the pocket, e.g. to show progress.
+
+The search always runs to the end, however long that takes.
 
 Returns the legal schedule with the lowest penalty; of equally good schedules, the first found, so the result is
 deterministic. If there's none, it reports where the search got stuck, as `find_first_schedule` does.

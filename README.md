@@ -14,8 +14,8 @@ with a penalty score that is used to prune the search and pick the best schedule
 ## Status
 
 > [!WARNING]
-> **Work in progress.** TinyScheg runs end to end and writes a schedule that meets every hard constraint, but not
-> yet the fairest one: branch and bound is built, but the command line doesn't use it yet. See the
+> **Work in progress.** TinyScheg runs end to end and writes the fairest schedule that meets every hard
+> constraint, but slowly: a 24-hour schedule takes a few minutes, and longer ones much more. See the
 > [roadmap](docs/roadmap.md) for what's next, and [the docs](docs/index.md) for the status of each component.
 
 ## Getting started

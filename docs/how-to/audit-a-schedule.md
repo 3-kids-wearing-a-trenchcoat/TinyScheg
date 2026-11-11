@@ -14,24 +14,23 @@ has to be put on the import path with `PYTHONPATH=src`.
    ```bash
    python src/main.py exampleInput.yml -o schedule.csv
    ```
+   This finds the best schedule, which takes a few minutes (see [Command line](../reference/command-line.md)).
 2. Audit it against the same input:
    ```bash
    PYTHONPATH=src python tools/audit.py exampleInput.yml schedule.csv
    ```
 
-The report has a card per worker, then the group summary. A card looks like this:
+The report has a card per worker, then the group summary. A card looks like this (some complaints left out):
 
 ```
-Jill: 4 shifts, 14 h; available 48 h
-  2025-01-01: 2 shifts, 7 h; available 24 h
-  2025-01-02: 2 shifts, 7 h; available 24 h
-  2025-01-03: 0 shifts, 0 h; available 0 h
-  rests: 10 h, 7 h, 7 h
-  short straws: 2 (short rest 2, heaviest day 0, disliked partner 0)
-  partners: Jeff ×1, Gilgamesh ×1; with someone they like: 0, with someone they dislike: 0
+Gilgamesh: 3 shifts, 8 h; available 24 h
+  2025-01-01: 3 shifts, 8 h; available 24 h
+  rests: 7 h, 9 h
+  short straws: 2 (short rest 1, heaviest day 1, disliked partner 0)
+  partners: Enkidu ×2; with someone they like: 2, with someone they dislike: 0
   complaints:
-    - [3] load overall: 4 shifts (14 h), against Siduri's 0 (0 h); no easy fix found
-    - [1] load on 2025-01-01: 2 shifts (7 h), against Siduri's 0 (0 h); easy fix: giving Siduri front gate 2025-01-01 07:00–10:00 instead of Jack
+    - [1] load on 2025-01-01: 3 shifts (8 h), against Jill's 1 (4 h); no easy fix found
+    - [1] short straws: 2, against Anne's 0; easy fix: swapping Siduri's front gate 2025-01-01 16:00–19:00 with Anne's front gate 2025-01-01 19:00–22:00
 ```
 
 Each complaint starts with its severity in brackets, and ends with its [easy fix](../explanation/schedule-audit.md#easy-fixes),
@@ -39,7 +38,7 @@ a chain of up to three harmless moves and swaps, if one was found. The summary g
 how many have an easy fix, the severity with and without one, how many workers have complaints, and the
 concentration: the most aggrieved worker's share of all severity.
 
-An audit of the example takes about a second.
+An audit of the example takes well under a second.
 
 The audit exits with 1 if the schedule breaks a hard constraint (listing the violations), and with 2 if the files
 can't be read or don't match each other.
@@ -53,8 +52,8 @@ PYTHONPATH=src python tools/audit_sample.py exampleInput.yml -n 30
 This samples 30 schedules (20 by default) by shuffling the workers' order before the search, and lists each, best
 penalty first, with its audit summary. It ends with the rank correlations between the penalty and the severity with
 an easy fix, and between the penalty and the total severity, and the **disagreements**: schedules among the best
-quarter by penalty with the most severity with an easy fix, named by the seed of their shuffle. 30 samples take
-about 25 seconds.
+quarter by penalty with the most severity with an easy fix, named by the seed of their shuffle. 30 samples of
+the example take about 5 seconds.
 
 The audit's thresholds are named constants at the top of `tools/audit.py`, and the sampler's at the top of
 `tools/audit_sample.py`.

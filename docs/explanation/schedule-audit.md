@@ -130,8 +130,9 @@ workers' order before the search, then audits and scores each. It reports:
 * **disagreements**: the schedules among the best by internal penalty that have the most severity with an easy fix,
   with their summaries.
 
-Until [branch and bound](search-algorithm.md#branch-and-bound-the-pocket) exists, these are first legal schedules,
-not a random sample of all legal ones, which is enough to find blind spots.
+These are first legal schedules (the sampler doesn't use [branch and bound](search-algorithm.md#branch-and-bound-the-pocket),
+which would give the same best schedule every time), not a random sample of all legal ones, which is enough to find
+blind spots.
 
 ## Parameters
 

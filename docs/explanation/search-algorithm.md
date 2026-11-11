@@ -4,11 +4,11 @@ TinyScheg looks for the **best** legal schedule, not just any legal one. It does
 over the [CSP](csp-formulation.md), combined with branch and bound: a [penalty score](scoring.md) is kept for every
 partial schedule, and branches that can't beat the best complete schedule found so far are pruned.
 
-> [!IMPORTANT]
-> **Partially implemented.** Everything on this page is implemented in [`csp/search.py`](../reference/api/search.md)
-> and tested, but the command line still writes the **first** legal schedule: branch and bound is only checked on
-> small inputs so far, and its speed on realistic inputs is still to be measured (see the
-> [Roadmap](../roadmap.md#phase-5-branch-and-bound)).
+> [!NOTE]
+> **Implemented** in [`csp/search.py`](../reference/api/search.md), tested, and used by the command line. The search
+> always runs to the end, with no limit: about 3–4 minutes for the 24-hour example, while a 48-hour schedule can
+> take much longer; it can be interrupted with Ctrl+C. Making it faster is
+> [future work](future-work.md#search-performance).
 
 ## Overview
 
@@ -109,8 +109,8 @@ Value order can still affect how *quickly* branch and bound finds the best sched
 ## Branch and bound: the pocket
 
 > [!NOTE]
-> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-searchresult),
-> and tested against trying every schedule on small inputs. Not yet used by the command line.
+> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-searchresult),
+> and tested against trying every schedule on small inputs.
 
 See [ADR 0004](../decisions/0004-branch-and-bound-with-monotone-penalty.md) and
 [ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md).

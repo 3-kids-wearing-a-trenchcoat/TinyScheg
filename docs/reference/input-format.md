@@ -35,10 +35,8 @@ settings:
 
 ### `scoring`
 
-> [!IMPORTANT]
-> **Partially implemented.** The section is read and validated
-> ([ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md)), but scoring itself isn't
-> implemented yet, so it doesn't affect the schedule.
+> [!NOTE]
+> **Implemented** ([ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md)).
 
 Optional parameters of the [penalty score](../explanation/scoring.md#parameters) that picks the fairest schedule.
 Every field is optional; an omitted field keeps its default.

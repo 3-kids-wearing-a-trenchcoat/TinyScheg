@@ -7,7 +7,8 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–4 complete; Phase 5 under way. Next: measure branch and bound on the example.
+Progress: Phases 1–4 complete; Phase 5 under way. Next: check the best schedule with the audit, then tune the
+scoring parameters.
 
 ## Phase 1: Walking skeleton
 
@@ -110,9 +111,12 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
 - [x] Search all solutions, keeping the best in the pocket (`find_best_schedule`)
 - [x] Prune branches whose score is already at least the pocket's (ties included)
 - [x] Tests: same result as brute force on small inputs
-- [ ] Measure the search on the example, and decide on the scoring-based speedups in [Later](#later) (and a time
-  limit) that it needs
-- [ ] Use branch and bound on the command line
+- [x] Measure the search on the example, and decide on the scoring-based speedups in [Later](#later) (and a time
+  limit) that it needs. **None for now:** get it working first. The search runs to the end with no limit (about
+  3–4 minutes for 24 hours; 48 hours and more much longer) and can be interrupted with Ctrl+C; the measurements are
+  in [Future work](explanation/future-work.md#search-performance)
+- [x] Use branch and bound on the command line, reporting each better schedule found as it goes; the example is
+  now 24 hours long, so that it finishes
 - [ ] Check with the audit that no simple legal swap lowers the chosen schedule's penalty
 - [ ] Tune the scoring parameters with the audit
 
@@ -137,7 +141,7 @@ Extending a previous schedule rather than starting fresh ([Future work](explanat
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Incremental scoring, exactly path-independent
-- [ ] Faster search: cheapest-first value order, symmetry breaking, a stronger lower bound, a time limit
+- [ ] Faster search: cheapest-first value order, symmetry breaking, stronger lower bounds, a time or node limit
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)

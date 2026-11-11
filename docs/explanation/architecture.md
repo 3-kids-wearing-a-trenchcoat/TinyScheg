@@ -46,10 +46,9 @@ See [Domain model](domain-model.md) and [CSP formulation](csp-formulation.md).
 
 ## 3. Run CSP search
 
-> [!IMPORTANT]
-> **Partially implemented.** Backtracking with forward checking finds the first legal schedule, or where the search
-> got stuck ([`csp/search.py`](../reference/api/search.md)); MRV/degree ordering and pruning by penalty aren't
-> implemented yet.
+> [!NOTE]
+> **Implemented** ([`csp/search.py`](../reference/api/search.md)): the best legal schedule, or where the search got
+> stuck if there's none.
 
 Search for the best schedule: a backtracking search with constraint propagation, ordered by MRV and the degree
 heuristic, pruned by comparing each partial schedule's penalty against the best complete schedule found so far.

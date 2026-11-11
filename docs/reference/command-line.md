@@ -2,10 +2,8 @@
 
 Source: [`src/tinyscheg/cli.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/cli.py)
 
-> [!IMPORTANT]
-> **Partially implemented.** Everything on this page works, but the schedule written is the **first** legal schedule
-> found, not yet the fairest one: branch and bound is built but not yet used here (see the
-> [Roadmap](../roadmap.md#phase-5-branch-and-bound)).
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_cli.py`).
 
 ## Usage
 
@@ -24,17 +22,33 @@ python src/main.py INPUT [-o OUTPUT]
 An existing file at the output path is replaced, but only once a schedule has been found: if anything goes wrong, no
 file is written and an existing one is left as it was.
 
-On success, two lines are printed: what was written, and the schedule's
-[penalty](../explanation/scoring.md) — lower is better — with its three parts before weighting, e.g.:
+The schedule written is the **best** legal one: the one with the lowest
+[penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
+The search runs to the end, with no limit, which takes a while: about 3½ minutes for the 24-hour
+`exampleInput.yml`, and much longer for longer schedules. Ctrl+C stops it (see [Errors](#errors)).
+
+While it runs, each better schedule found is reported on standard error, with the time since the search started, so
+that a long run can be seen to be working:
 
 ```
-wrote exampleInput_schedule.csv: 34 shifts, 47 slots, 9 workers
-penalty 4.09 (likes 3.23, workload 4.84, rest 3.42)
+tinyscheg: found penalty 3.48 after 0 s
+tinyscheg: found penalty 2.25 after 0 s
+tinyscheg: found penalty 2.22 after 2 s
+tinyscheg: found penalty 2.18 after 12 s
+tinyscheg: found penalty 2.16 after 14 s
 ```
 
-The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals. Until
-the command line uses branch and bound, the schedule is the first legal one found, so the penalty shows how fair it happens to be
-rather than the best achievable.
+The best schedule is often found long before the search ends: the rest of the time goes into making sure nothing
+beats it. When it ends, two lines are printed on standard output: what was written, and the schedule's penalty —
+lower is better — with its three parts before weighting, e.g.:
+
+```
+wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
+penalty 2.16 (likes 1.80, workload 3.32, rest 0.22), the best possible
+```
+
+The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals; the
+seconds in progress lines to `ELAPSED_DECIMALS` (0).
 
 ## Errors
 
@@ -57,7 +71,8 @@ Every problem is reported on standard error, prefixed with `tinyscheg:`, and not
       ```
       This is where the search found out, not necessarily the cause, which may be a slot or two later. The search
       fills the most constrained slots first, so it usually gets stuck early, at or near the bottleneck.
-* **Interrupted** (Ctrl+C) — `interrupted; no schedule written`.
+* **Interrupted** (Ctrl+C) — `interrupted; no schedule written`. Interrupting a search discards it, including the
+  best schedule found so far.
 
 ## Exit codes
 
