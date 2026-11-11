@@ -26,6 +26,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Roadmap: roadmap.md
   - How-to guides:
       - Development setup: how-to/development-setup.md
   - Reference:
@@ -83,6 +84,8 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  - pymdownx.tasklist:        # - [ ] / - [x] checkboxes, as on GitHub
+      custom_checkbox: true
 
 extra_javascript:
   - javascripts/mathjax.js

@@ -12,6 +12,10 @@ score that never decreases along the search, allowing hopeless partial schedules
 > input, generate slots, search for the first legal schedule and write it as CSV. Scoring and branch and bound come
 > after that.
 
+## Roadmap
+
+What's left to do, and in what order, is in the [Roadmap](roadmap.md).
+
 ## How these docs are organized
 
 The docs follow the [Diátaxis](https://diataxis.fr/) framework, with design decisions recorded as

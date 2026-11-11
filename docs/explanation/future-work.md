@@ -3,6 +3,9 @@
 Ideas and features that have been discussed and deliberately **deferred**. Nothing on this page is implemented or
 decided; each item would get its own ADR when it's taken up. Items are listed in priority order.
 
+When and in what order items are taken up is in the [Roadmap](../roadmap.md); each item deferred here is also listed
+in its "Later" section.
+
 ## Schedule history
 
 > [!WARNING]
@@ -91,3 +94,12 @@ be additional, monotone penalty components.
   right-to-left languages usually are, e.g. through an input setting. Output is left to right for now.
 * **Roles in the output.** The grid doesn't show which worker fills which role. Cells could show it, e.g.
   `Jack (security)`.
+
+## Documentation
+
+> [!WARNING]
+> **Not yet implemented.** Low priority.
+
+* **Tutorials**, once TinyScheg runs end to end.
+* **A generated API reference** (e.g. mkdocstrings), replacing the hand-written pages in `docs/reference/api/`.
+* **Publishing the docs site**, e.g. to GitHub Pages.

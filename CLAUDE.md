@@ -20,6 +20,13 @@ ODS (see `docs/reference/output-format.md`).
 * The design reflects the plans made so far. These plans are **open to revision** — they are a starting point, not a
   commitment.
 
+## Roadmap
+`docs/roadmap.md` is **the reference point for what needs to be done and in what order**. When starting a session
+without context, read it first to see where the work stands and what the next step is.
+* Tick a step's checkboxes in the same commit as the work that completes it, and keep the progress line accurate.
+* New scheduled work goes into the roadmap, in its place in the order.
+* Anything deferred goes into **both** the roadmap's "Later" section and `docs/explanation/future-work.md`.
+
 ## Documentation
 The docs in `docs/` are the **source of truth** for TinyScheg's design. Start at `docs/index.md`.
 They follow the [Diátaxis](https://diataxis.fr/) structure:
