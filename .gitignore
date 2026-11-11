@@ -4,3 +4,7 @@
 __pycache__/
 # Schedules written by TinyScheg next to their input (python src/main.py <input>.yml)
 *_schedule.csv
+
+# Tuning: raw results and logs (summaries go in docs/explanation/tuning.md)
+/tools/benchmarks/results/
+/tools/benchmarks/logs/

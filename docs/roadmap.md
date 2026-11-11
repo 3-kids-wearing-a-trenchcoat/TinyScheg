@@ -118,7 +118,13 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
   now 24 hours long, so that it finishes
 - [x] Check that no simple legal swap lowers the chosen schedule's penalty: no single legal move or swap beats branch
   and bound's schedule, tested on 12- and 14-hour versions of the example and checked once on the 24-hour one
-- [ ] Tune the scoring parameters with the audit
+- [ ] Tune the scoring parameters with the audit ([Tuning the scoring](explanation/tuning.md))
+    - [x] Plan, priorities and benchmark requirements
+    - [x] Benchmark generator and tuning runner (`tools/benchmarks/generate.py`, `tools/tune.py`)
+    - [ ] Baseline at the defaults, and diagnosis of each complaint with an easy fix
+    - [ ] Sensitivity, one parameter at a time
+    - [ ] Joint sweep
+    - [ ] Choose and check the defaults (held-back inputs, longer tiers, cards read by hand); ADR
 
 ## Phase 6: Spreadsheet output
 

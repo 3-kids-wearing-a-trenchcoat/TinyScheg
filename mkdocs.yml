@@ -52,6 +52,7 @@ nav:
       - Search algorithm: explanation/search-algorithm.md
       - Scoring: explanation/scoring.md
       - Schedule audit: explanation/schedule-audit.md
+      - Tuning the scoring: explanation/tuning.md
       - Glossary: explanation/glossary.md
       - Future work: explanation/future-work.md
   - Decisions:

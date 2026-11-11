@@ -1,0 +1,80 @@
+# Tuning the scoring
+
+How the [scoring parameters](scoring.md#parameters) get their default values: by comparing the best schedules they
+produce with the [schedule audit](schedule-audit.md), on a set of benchmark inputs. The values found are a starting
+point, not final, but they shape how every later output is read, so the method is recorded here.
+
+> [!IMPORTANT]
+> **Partially implemented.** The benchmark generator (`tools/benchmarks/generate.py`) and the tuning runner
+> (`tools/tune.py`) exist and are tested; the stages below are being run. No default has been changed yet.
+
+## What's tuned, against what
+
+The five independent parameters: the weights of likes, workload and rest (two independent values, since only their
+ratios matter), the workload power $p$, the rest factor $\gamma$, and the neutral partner value $\alpha / \beta$,
+which stays below 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)).
+
+The yardstick is the audit, **held fixed**: its own thresholds aren't tuned, or the two would just drift towards each
+other. Since branch and bound gives the proven best schedule for each setting, any difference in the result comes
+from the parameters, not from search luck.
+
+## What "better" means
+
+Decided before looking at any numbers (2026-11-11), in this order:
+
+1. **Severity with an easy fix**, as low as possible: unfairness that could easily have been avoided.
+2. **Concentration**: unfairness shouldn't pile up on one or two workers.
+3. **Total severity**, including complaints with no easy fix, only as a tie-breaker: much of it is unavoidable.
+
+The measures aren't collapsed into one number; trade-offs between them are a decision, not a calculation.
+
+## Benchmark inputs
+
+What counts as realistic changes from one deployment to the next, so there's no standard setup. Every benchmark
+input has at least 2 posts, at least 6 workers, a post needing more than one worker some of the time, and some
+workers who like or dislike others; everything else varies. Most are **loose**: in practice the hard schedules are
+the ones with many legitimate choices, where every choice invites "why didn't you do this instead?", not the
+constrained ones that decide themselves.
+
+`tools/benchmarks/generate.py` draws each input from a seed (the knobs are named constants at its top):
+
+| Knob | Values |
+|---|---|
+| Length | 12 or 16 hours (sweep tier), 24 (confirm tier), 48 (multiday tier) |
+| Start time | 00:00, 08:00 or 16:00 |
+| Posts | a gate that always has a shared shift (a 19:00–07:00 variation needing a role and one more worker, or 2 workers throughout); a desk needing one role, sometimes only 08:00–20:00; sometimes a patrol of 2 |
+| Roles (`medic`, `driver`) | each common (half the first workers) three times in four, otherwise scarce (3 holders) |
+| Unavailability | one worker in five has one block of 2, 4 or 8 hours |
+| Preferences | sparse, medium or dense likes and dislikes; at least 2 workers have some |
+| Staffing | start at 6 workers and add workers until a legal schedule exists (at most 12), then add 2–5 more (loose), or none for one input in five (tight) |
+| Minimum rest | 6 hours |
+
+An input is kept only if branch and bound finds its best schedule within the tier's time limit (30 s for the sweep
+tier, 10 minutes for the others). This quietly drops the loosest inputs, which take longest to search; the manifest
+(`tools/benchmarks/manifest.csv`) lists every skipped candidate and why, so the bias stays visible. Every third input
+of a tier is **held back**: never used to choose values, only to check the chosen ones at the end. The inputs are
+committed, so changing the generator never silently changes what was tuned on.
+
+## Stages
+
+Run with `tools/tune.py`, which finds and audits the best schedule for each input at each setting, many in
+parallel. Each run's result is appended to `tools/benchmarks/results/<stage>.csv` as it finishes, so a stage can be
+stopped and resumed, and `python tools/tune.py status` shows how far along it is.
+
+1. **Baseline** — the defaults, on every input. Each complaint with an easy fix is then diagnosed by breaking the
+   fixing change's penalty difference down by part: a **parameter** question (e.g. likes weighed too low against
+   rest) is for tuning; a **formula** question (e.g. averaging that rewards concentrating good pairings) is a design
+   decision, needing its own ADR, since no parameter setting can fix it.
+2. **Sensitivity** — one parameter at a time over a range, the others at their defaults, on the tuning inputs: which
+   parameters matter, and over what range.
+3. **Joint sweep** — over the parameters that matter, looking for wide good regions rather than single best points.
+4. **Choice and check** — a few candidate settings, checked on the held-back inputs and the longer tiers, with the
+   feedback cards of some schedules read by hand: the audit models the workers, but isn't them. The chosen defaults
+   then go in as named constants, with an ADR.
+
+## Known limits
+
+* Tuning to the audit's quirks: reading cards by hand at the last stage guards against it.
+* The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
+* Benchmarks are small (12–16 hours) so that branch and bound finishes; the longer tiers check that results carry
+  over. Fairness across days can only be studied on 48-hour inputs, if any finish.

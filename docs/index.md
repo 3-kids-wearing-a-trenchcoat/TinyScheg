@@ -40,6 +40,7 @@ Architecture Decision Records (ADRs).
   * [Search algorithm](explanation/search-algorithm.md)
   * [Scoring](explanation/scoring.md)
   * [Schedule audit](explanation/schedule-audit.md) (development tool)
+  * [Tuning the scoring](explanation/tuning.md) (how the default parameters are chosen)
   * [Glossary](explanation/glossary.md)
   * [Future work](explanation/future-work.md)
 * **[Decisions](decisions/README.md)** — the design decisions made so far and the reasoning behind them.
