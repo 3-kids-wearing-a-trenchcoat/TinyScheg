@@ -7,10 +7,12 @@ import textwrap
 import pytest
 
 from schedule_checker import hard_constraint_violations
-from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, main
+from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, describe_penalty, main
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.output.writers import UnsupportedFormatError, writer_for
 from tinyscheg.parsing.input_reader import read_input
+from tinyscheg.scoring.constants import build_constants
+from tinyscheg.scoring.penalty import Penalty, score
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
 
@@ -72,10 +74,21 @@ def read_assignment(csv_path: pathlib.Path, input_path: pathlib.Path) -> tuple:
 def test_example_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     output = tmp_path / "schedule.csv"
     assert main([str(EXAMPLE_INPUT), "-o", str(output)]) == EXIT_SUCCESS
-    assert capsys.readouterr().out.startswith(f"wrote {output}: ")
+    wrote, penalty = capsys.readouterr().out.splitlines()
+    assert wrote.startswith(f"wrote {output}: ")
     schedule_input = read_input(EXAMPLE_INPUT)
-    slots = build_problem(schedule_input).slots
-    assert hard_constraint_violations(schedule_input, slots, read_assignment(output, EXAMPLE_INPUT)) == []
+    problem = build_problem(schedule_input)
+    assignment = read_assignment(output, EXAMPLE_INPUT)
+    assert hard_constraint_violations(schedule_input, problem.slots, assignment) == []
+    # the penalty shown is the written schedule's
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.domains)
+    assert penalty == describe_penalty(score(constants, assignment))
+
+
+def test_describe_penalty() -> None:
+    assert describe_penalty(Penalty(2.8449, 0.3125, 4.6188, 0.1201)) == (
+        "penalty 2.84 (likes 0.31, workload 4.62, rest 0.12)")
 
 
 def test_default_output_is_next_to_the_input(tmp_path: pathlib.Path) -> None:

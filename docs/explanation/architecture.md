@@ -70,7 +70,8 @@ formats; each format has a writer that translates it.
 > [!NOTE]
 > **Implemented.** See [Command line](../reference/command-line.md).
 
-Write the grid to the output file, in the format its extension names, and report what was written. If no legal
+Write the grid to the output file, in the format its extension names, and report what was written and the
+schedule's penalty. If no legal
 schedule was found, nothing is written, and the problem is reported instead
 ([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)).
 

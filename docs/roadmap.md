@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phase 1 complete (7 of 7 steps). Next: Phase 2 (scoring), starting with the open design questions.
+Progress: Phases 1 and 2 complete. Next: Phase 3 (efficient search).
 
 ## Phase 1: Walking skeleton
 
@@ -70,6 +70,7 @@ pure function of a (partial) assignment, so it's built and tested on fixed assig
 - [x] Weighted sum of normalized penalties ([ADR 0005](decisions/0005-weighted-sum-of-normalized-penalties.md))
 - [x] Property tests: monotone along the search, path-independent and deterministic
   ([ADR 0012](decisions/0012-deterministic-path-independent-scoring.md))
+- [x] Show the written schedule's penalty on the command line
 
 ## Phase 3: Efficient search
 

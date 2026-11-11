@@ -16,6 +16,8 @@ from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import DEFAULT_EXTENSION, UnsupportedFormatError, write_schedule, writer_for
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.parsing.validation import InputError
+from tinyscheg.scoring.constants import build_constants
+from tinyscheg.scoring.penalty import Penalty, score
 
 EXIT_SUCCESS = 0
 EXIT_NO_SCHEDULE = 1   # the input is valid, but no legal schedule exists
@@ -23,6 +25,7 @@ EXIT_USAGE = 2         # invalid arguments or input (argparse uses 2 as well)
 EXIT_INTERRUPTED = 130  # the conventional code for a program stopped with Ctrl+C
 
 PROGRAM = "tinyscheg"
+PENALTY_DECIMALS = 2  # how many decimals of the penalty are shown
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -93,7 +96,18 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
         return EXIT_USAGE
     print(f"wrote {output_path}: {len(problem.shifts)} shifts, {len(problem.slots)} slots, "
           f"{len(problem.workers)} workers")
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.domains)
+    print(describe_penalty(score(constants, result.assignment)))
     return EXIT_SUCCESS
+
+
+def describe_penalty(penalty: Penalty) -> str:
+    """A penalty for messages, e.g. 'penalty 2.84 (likes 0.31, workload 4.62, rest 0.12)'; lower is better."""
+    def shown(value: float) -> str:
+        return f"{value:.{PENALTY_DECIMALS}f}"
+    return (f"penalty {shown(penalty.total)} (likes {shown(penalty.likes)}, workload {shown(penalty.workload)}, "
+            f"rest {shown(penalty.rest)})")
 
 
 def describe_slot(slot: Slot) -> str:

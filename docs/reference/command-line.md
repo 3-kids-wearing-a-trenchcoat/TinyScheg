@@ -24,11 +24,17 @@ python src/main.py INPUT [-o OUTPUT]
 An existing file at the output path is replaced, but only once a schedule has been found: if anything goes wrong, no
 file is written and an existing one is left as it was.
 
-On success, one line is printed, e.g.:
+On success, two lines are printed: what was written, and the schedule's
+[penalty](../explanation/scoring.md) — lower is better — with its three parts before weighting, e.g.:
 
 ```
 wrote exampleInput_schedule.csv: 34 shifts, 47 slots, 9 workers
+penalty 4.36 (likes 3.69, workload 5.03, rest 3.71)
 ```
+
+The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals. Until
+branch and bound is built, the schedule is the first legal one found, so the penalty shows how fair it happens to be
+rather than the best achievable.
 
 ## Errors
 
