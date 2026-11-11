@@ -46,8 +46,8 @@ Soft constraints — fairness and preferences — are not CSP constraints in Tin
 
 ## Unary constraints
 
-> [!WARNING]
-> **Not yet implemented.** Domains are to be built by the CSP setup (`csp/problem.py`).
+> [!NOTE]
+> **Implemented.** See [`initial_domain`](../reference/api/problem.md#initial_domainslot-workers-tupleint).
 
 A worker can fill a slot only if they:
 
@@ -59,13 +59,14 @@ are therefore node consistent from the start.
 
 ## Binary difference constraints
 
-> [!WARNING]
-> **Not yet implemented.** Difference constraints are to be built by the CSP setup (`csp/problem.py`).
+> [!NOTE]
+> **Implemented.** See [`difference_constraints`](../reference/api/problem.md#difference_constraintsslots-min_rest-tupletupleint).
 
 A worker can't take a shift during, immediately before or immediately after a shift they're already assigned to.
 More precisely, two slots get a **difference constraint** (they must be assigned different workers) if they overlap
 in time or are less than the **minimum rest period** apart. The minimum rest period comes from the input settings
-and defaults to 6 hours.
+and defaults to 6 hours. A rest of exactly the minimum rest period is allowed, so with a minimum rest of 0,
+back-to-back shifts can go to the same worker.
 
 This also covers slots of the same shift, since they overlap entirely.
 

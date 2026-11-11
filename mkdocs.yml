@@ -39,6 +39,7 @@ nav:
           - Post, Shift and Slot: reference/api/post-and-slot.md
           - ScheduleInput: reference/api/schedule-input.md
           - parsing: reference/api/parsing.md
+          - Problem: reference/api/problem.md
   - Explanation:
       - Architecture: explanation/architecture.md
       - Domain model: explanation/domain-model.md
@@ -68,6 +69,7 @@ nav:
       - 0017 Forward checking and ties: decisions/0017-plain-forward-checking-and-pruning-on-ties.md
       - 0018 Shifts per segment: decisions/0018-slot-generation-by-segments.md
       - 0019 Time-by-post grid output: decisions/0019-output-as-a-time-by-post-grid.md
+      - 0020 Report where infeasibility was found: decisions/0020-report-where-infeasibility-was-found.md
 
 markdown_extensions:
   - admonition

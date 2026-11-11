@@ -41,6 +41,7 @@ ADR that supersedes the old one.
 | [0017](0017-plain-forward-checking-and-pruning-on-ties.md) | Plain forward checking, and pruning on ties | Accepted |
 | [0018](0018-slot-generation-by-segments.md) | Generate shifts per segment | Accepted |
 | [0019](0019-output-as-a-time-by-post-grid.md) | Output the schedule as a time-by-post grid | Accepted |
+| [0020](0020-report-where-infeasibility-was-found.md) | Report where infeasibility was found | Accepted |
 
 ## Template
 

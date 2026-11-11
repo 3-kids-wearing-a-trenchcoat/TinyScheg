@@ -28,7 +28,8 @@ Architecture Decision Records (ADRs).
   * [Output format](reference/output-format.md)
   * API: [`DateTimeRange`](reference/api/datetime-range.md) · [`Worker`](reference/api/worker.md) ·
     [`DailyWindow`](reference/api/daily-window.md) · [`Post`, `Shift` and `Slot`](reference/api/post-and-slot.md) ·
-    [`ScheduleInput`](reference/api/schedule-input.md) · [`parsing`](reference/api/parsing.md)
+    [`ScheduleInput`](reference/api/schedule-input.md) · [`parsing`](reference/api/parsing.md) ·
+    [`Problem`](reference/api/problem.md)
 * **Explanation** — how TinyScheg works and why.
   * [Architecture](explanation/architecture.md)
   * [Domain model](explanation/domain-model.md)
@@ -63,7 +64,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | `Post`                              | Implemented and tested    |
 | `Shift` and `Slot`                  | Implemented and tested    |
 | Shift generation (segments)         | Implemented and tested    |
-| Domains and constraints (CSP setup) | Not yet implemented       |
+| Domains and constraints (CSP setup) | Implemented and tested    |
 | `DailyWindow`                       | Implemented and tested    |
 | Input parsing and validation        | Implemented and tested    |
 | Search (backtracking, pocket)       | Not yet implemented       |

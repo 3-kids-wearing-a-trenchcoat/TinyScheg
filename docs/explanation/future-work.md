@@ -34,6 +34,11 @@ When no legal schedule exists, TinyScheg reports that and produces no output (se
 before the search can catch many causes, e.g. a slot whose domain is empty right after availability and role
 pruning ("no worker with the supervisor role is available on 2025-01-02 04:00–07:00").
 
+Reporting the slots no worker can fill, and the point at which the search ran out of options, is decided
+([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)). What remains here is a fuller explanation:
+further cheap checks (e.g. a shift needing more distinct workers than its slots' domains hold together), or a
+minimal set of conflicting requirements.
+
 ## Search performance
 
 > [!WARNING]

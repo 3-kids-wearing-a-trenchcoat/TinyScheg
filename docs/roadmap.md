@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phase 1 — 3 of 7 steps done.
+Progress: Phase 1 — 4 of 7 steps done.
 
 ## Phase 1: Walking skeleton
 
@@ -23,23 +23,27 @@ confirms meets every hard constraint.
 - [x] **3. Shift generation by segments** ([ADR 0018](decisions/0018-slot-generation-by-segments.md))
     - [x] Immutable `Shift` and `Slot`, in stable order
     - [x] Segments, back-to-back shifts, dangling last shift, closing a post with a zero-worker variation
-- [ ] **4. CSP setup** — `csp/problem.py` ([CSP formulation](explanation/csp-formulation.md))
-    - [ ] Initial domains (availability, role), with workers by index
-    - [ ] Difference constraints (overlap, minimum rest)
-    - [ ] Detecting slots no worker can fill
+- [x] **4. CSP setup** — `csp/problem.py` ([CSP formulation](explanation/csp-formulation.md))
+    - [x] Initial domains (availability, role), with workers by index
+    - [x] Difference constraints (overlap, minimum rest)
+    - [x] Detecting slots no worker can fill
 - [ ] **5. Search state and plain backtracking** — `csp/state.py`, `csp/search.py`
   ([ADR 0016](decisions/0016-undo-through-change-records-on-the-call-stack.md))
     - [ ] Explicit search state: domains and assignments
     - [ ] Change records, undone on backtracking
     - [ ] Backtracking to the first legal schedule, slots in stable order
+    - [ ] Tracking the deepest point reached, for reporting infeasibility
+      ([ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
 - [ ] **6. Grid output, CSV** — `output/grid.py`, `output/csv_writer.py`
   ([ADR 0019](decisions/0019-output-as-a-time-by-post-grid.md))
     - [ ] Assigned slots → time-by-post grid (rows between shift boundaries, names joined with `" & "`)
     - [ ] CSV writer (UTF-8 with BOM, ISO 8601 times)
 - [ ] **7. Command line and end-to-end test** — `cli.py`, `src/main.py`
     - [ ] `python src/main.py input.yml -o schedule.csv`; output format chosen by file extension
-    - [ ] Reporting invalid input, and infeasible input with no output
-      ([ADR 0011](decisions/0011-no-output-for-infeasible-inputs.md))
+    - [ ] Reporting invalid input
+    - [ ] Reporting infeasible input on the command line, with no output file: the unfillable slots, or where the
+      search got stuck ([ADR 0011](decisions/0011-no-output-for-infeasible-inputs.md),
+      [ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
     - [ ] Independent hard-constraint checker for tests (`tests/schedule_checker.py`)
     - [ ] End-to-end test on `exampleInput.yml`
 
@@ -97,7 +101,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Incremental scoring, exactly path-independent
 - [ ] Faster search: cheapest-first value order, symmetry breaking, a stronger lower bound, a time limit
-- [ ] Explaining why an input is infeasible
+- [ ] Explaining more fully why an input is infeasible
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Right-to-left spreadsheets

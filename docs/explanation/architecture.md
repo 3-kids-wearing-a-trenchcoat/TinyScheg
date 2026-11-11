@@ -28,8 +28,9 @@ don't overlap. Invalid input is reported before anything else happens.
 ## 2. Initialize
 
 > [!IMPORTANT]
-> **Partially implemented.** Generating shifts and slots (step 1) is implemented; building domains and constraints,
-> and the scoring constants, aren't.
+> **Partially implemented.** Steps 1–3 and finding slots no worker can fill are implemented
+> ([`Problem`](../reference/api/problem.md)); the scoring constants (step 4) and reporting (step 5, in the
+> command-line interface) aren't.
 
 Set up the CSP:
 
@@ -39,7 +40,8 @@ Set up the CSP:
 3. Generate the binary difference constraints between slots, using the minimum rest period from the settings.
 4. Calculate the constants used by scoring: each worker's availability, the number of shared slots, and each
    worker's worst rest deficit and packable maximum (see [Scoring](scoring.md)).
-5. If any slot's domain is already empty, no legal schedule exists: report it and stop.
+5. If any slot's domain is already empty, no legal schedule exists: report every such slot and stop, writing no
+   output ([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)).
 
 See [Domain model](domain-model.md) and [CSP formulation](csp-formulation.md).
 
@@ -84,7 +86,7 @@ entry point. Modules marked *planned* don't exist yet.
 | `model/shift_generation.py` | [Segments, shifts and slots in stable order](../reference/api/post-and-slot.md#shift_generation-module) ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). |
 | `parsing/input_reader.py` | [`read_input`](../reference/api/parsing.md#input_reader-module): YAML input to model objects. |
 | `parsing/validation.py` | [`InputError` and the validation rules](../reference/api/parsing.md#validation-module). |
-| `csp/problem.py` | *Planned.* Domains and difference constraints, by slot index. |
+| `csp/problem.py` | [`Problem`](../reference/api/problem.md): domains and difference constraints, by slot and worker index. |
 | `csp/state.py` | *Planned.* The explicit search state and change records ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | *Planned.* Backtracking search with forward checking and MRV/degree ordering. |
 | `output/grid.py` | *Planned.* Assigned slots to the time-by-post grid ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |

@@ -26,7 +26,9 @@ search(state):
 ```
 
 When the search ends, the pocket holds the best schedule. If it's empty, no legal schedule exists: TinyScheg
-reports that and produces no output ([ADR 0011](../decisions/0011-no-output-for-infeasible-inputs.md)).
+reports that and produces no output ([ADR 0011](../decisions/0011-no-output-for-infeasible-inputs.md)), naming the
+deepest point the search reached and the slot it couldn't fill there
+([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)).
 
 ## Backtracking search
 
