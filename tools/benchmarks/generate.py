@@ -34,16 +34,13 @@ MIN_WORKERS = 6                 # every benchmark has at least this many workers
 MAX_WORKERS = len(NAMES)
 MIN_REST = 6                    # hours; generally not lower (user)
 START_HOURS = (0, 8, 16)        # the time of day a schedule starts
-SCARCITY = ("common", "common", "common", "scarce")  # each role is common three times in four
 SCARCE_HOLDERS = 3              # how many of the first workers have a scarce role
 COMMON_SHARE = 0.5              # the share of the first workers who have a common role
 ADDED_ROLE_CHANCE = 0.5         # the chance that a worker added to staff up has each role
-AWAY_CHANCE = 0.2               # the chance that a worker has a block of unavailability
 AWAY_HOURS = (2, 4, 8)
 DENSITY = {"sparse": (0.05, 0.03), "medium": (0.15, 0.08), "dense": (0.3, 0.15)}  # chance to like, to dislike
 MIN_WITH_PREFERENCES = 2        # at least this many workers like or dislike someone (user requirement)
-SLACK = (0, 2, 3, 4, 5)         # workers beyond the minimum staffing: one tight input in five, the rest loose
-GATE_LENGTHS, DESK_LENGTHS, PATROL_LENGTH = (3, 4), (4, 6), 4
+DESK_LENGTHS, PATROL_LENGTH = (4, 6), 4
 NIGHT, DAY = "19:00-07:00", "08:00-20:00"
 GATE_NIGHT_CHANCE = 0.7         # the gate needs a role holder and one more worker at night; otherwise 2 throughout
 DESK_DAY_CHANCE = 0.5           # the desk is only open during the day
@@ -54,42 +51,66 @@ HOLDOUT_EVERY = 3               # every third input of a tier is held back from 
 
 
 @dataclass(frozen=True, slots=True)
+class Profile:
+    """
+    The knobs that differ between tiers: each role's scarcity (drawn from scarcity), the chance that a worker has a
+    block of unavailability, the workers beyond the minimum staffing (drawn from slack) and the gate's shift lengths
+    """
+    scarcity: tuple[str, ...]
+    away_chance: float
+    slack: tuple[int, ...]
+    gate_lengths: tuple[int, ...]
+
+
+# many staff, few shifts each: one tight input in five, the rest with plenty of spare workers
+STAFFED = Profile(scarcity=("common", "common", "common", "scarce"), away_chance=0.2, slack=(0, 2, 3, 4, 5),
+                  gate_lengths=(3, 4))
+# several shifts per worker, so that the audit has unevenness to see: short gate shifts, 1-2 spare workers, and
+# choice coming from common roles and little unavailability rather than from a large staff
+SHIFTS = Profile(scarcity=("common",), away_chance=0.1, slack=(1, 1, 2), gate_lengths=(2,))
+
+
+@dataclass(frozen=True, slots=True)
 class Tier:
-    """A group of benchmarks: their length, how many, the first seed, and how long branch and bound may take."""
+    """A group of benchmarks: their length, how many, the first seed, how long branch and bound may take, and the
+    knobs they're generated with."""
     name: str
     hours: tuple[int, ...]
     count: int
     first_seed: int
     time_limit: float
+    profile: Profile
 
 
 TIERS = {
-    "sweep": Tier("sweep", (12, 16), 12, 1000, 30.0),
-    "confirm": Tier("confirm", (24,), 3, 2000, 600.0),
-    "multiday": Tier("multiday", (48,), 2, 3000, 600.0),
+    "sweep": Tier("sweep", (16, 20, 24), 12, 4000, 300.0, SHIFTS),
+    "confirm": Tier("confirm", (24,), 3, 2000, 600.0, STAFFED),
+    "multiday": Tier("multiday", (48,), 2, 3000, 600.0, STAFFED),
 }
 
 
 # --- generating one input ---
 
-def generate(seed: int, hours: int) -> tuple[dict[str, Any], dict[str, Any]] | None:
+def generate(seed: int, hours: int, profile: Profile = STAFFED) -> tuple[dict[str, Any], dict[str, Any]] | None:
     """
     Generate one input
     :param seed: int, the random seed
     :param hours: int, the schedule's length
+    :param profile: Profile, the knobs that differ between tiers
     :return: (the input document, its knobs), or None if no legal schedule exists even with MAX_WORKERS
     """
     rng = random.Random(seed)
     start = dt.datetime(2025, 1, 1, rng.choice(START_HOURS))
     period = (start, start + dt.timedelta(hours=hours))
-    posts = _posts(rng)
-    scarcity = {role: rng.choice(SCARCITY) for role in ROLES}
+    posts = _posts(rng, profile)
+    scarcity = {role: rng.choice(profile.scarcity) for role in ROLES}
     density = rng.choice(list(DENSITY))
-    slack = rng.choice(SLACK)
+    slack = rng.choice(profile.slack)
     first = NAMES[:MIN_WORKERS]
     holders = {role: set(rng.sample(first, SCARCE_HOLDERS if scarcity[role] == "scarce"
                                     else round(MIN_WORKERS * COMMON_SHARE))) for role in ROLES}
-    workers = [_worker(rng, name, period, {role for role in ROLES if name in holders[role]}) for name in first]
+    workers = [_worker(rng, name, period, {role for role in ROLES if name in holders[role]}, profile.away_chance)
+               for name in first]
     preference_seed = rng.randrange(2 ** 32)  # preferences are redrawn for every staffing, from the same seed
 
     def document() -> dict[str, Any]:
@@ -98,19 +119,19 @@ def generate(seed: int, hours: int) -> tuple[dict[str, Any], dict[str, Any]] | N
     while not _has_legal_schedule(document()):
         if len(workers) == MAX_WORKERS:
             return None
-        workers.append(_added_worker(rng, NAMES[len(workers)], period))
+        workers.append(_added_worker(rng, NAMES[len(workers)], period, profile.away_chance))
     minimum = len(workers)
     while len(workers) < min(minimum + slack, MAX_WORKERS):
-        workers.append(_added_worker(rng, NAMES[len(workers)], period))
+        workers.append(_added_worker(rng, NAMES[len(workers)], period, profile.away_chance))
     knobs = {"seed": seed, "hours": hours, "start": start.strftime("%H:%M"), "workers": len(workers),
              "minimum_staff": minimum, "slack": len(workers) - minimum, "posts": len(posts),
              "medic": scarcity["medic"], "driver": scarcity["driver"], "preferences": density}
     return document(), knobs
 
 
-def _posts(rng: random.Random) -> list[dict[str, Any]]:
+def _posts(rng: random.Random, profile: Profile) -> list[dict[str, Any]]:
     """The posts: a gate with a shared shift, a desk needing a role, and sometimes a patrol of two."""
-    gate: dict[str, Any] = {"name": "gate", "roles": {"any": 1}, "length": rng.choice(GATE_LENGTHS)}
+    gate: dict[str, Any] = {"name": "gate", "roles": {"any": 1}, "length": rng.choice(profile.gate_lengths)}
     if rng.random() < GATE_NIGHT_CHANCE:
         gate["variations"] = [{"time": NIGHT, "roles": {rng.choice(ROLES): 1, "any": 1}}]
     else:
@@ -125,20 +146,21 @@ def _posts(rng: random.Random) -> list[dict[str, Any]]:
     return posts
 
 
-def _worker(rng: random.Random, name: str, period: tuple[dt.datetime, dt.datetime],
-            roles: set[str]) -> dict[str, Any]:
-    """A worker with the given roles, and with AWAY_CHANCE a block of unavailability within the period."""
+def _worker(rng: random.Random, name: str, period: tuple[dt.datetime, dt.datetime], roles: set[str],
+            away_chance: float) -> dict[str, Any]:
+    """A worker with the given roles, and with away_chance a block of unavailability within the period."""
     worker: dict[str, Any] = {"name": name, "roles": sorted(roles)}
-    if rng.random() < AWAY_CHANCE:
+    if rng.random() < away_chance:
         hours = int((period[1] - period[0]) / dt.timedelta(hours=1))
         away = period[0] + dt.timedelta(hours=rng.randrange(hours))
         worker["unavailable"] = [[away.isoformat(), (away + dt.timedelta(hours=rng.choice(AWAY_HOURS))).isoformat()]]
     return worker
 
 
-def _added_worker(rng: random.Random, name: str, period: tuple[dt.datetime, dt.datetime]) -> dict[str, Any]:
+def _added_worker(rng: random.Random, name: str, period: tuple[dt.datetime, dt.datetime],
+                  away_chance: float) -> dict[str, Any]:
     """A worker added to staff up, with each role at ADDED_ROLE_CHANCE."""
-    return _worker(rng, name, period, {role for role in ROLES if rng.random() < ADDED_ROLE_CHANCE})
+    return _worker(rng, name, period, {role for role in ROLES if rng.random() < ADDED_ROLE_CHANCE}, away_chance)
 
 
 def _with_preferences(workers: list[dict[str, Any]], density: str, seed: int) -> list[dict[str, Any]]:
@@ -257,7 +279,7 @@ def build_tier(tier: Tier) -> list[dict[str, Any]]:
     seed, kept = tier.first_seed, 0
     while kept < tier.count:
         hours = tier.hours[seed % len(tier.hours)]
-        generated = generate(seed, hours)
+        generated = generate(seed, hours, tier.profile)
         seed += 1
         if generated is None:
             rows.append({"name": "", "tier": tier.name, "seed": seed - 1, "hours": hours,
@@ -274,7 +296,8 @@ def build_tier(tier: Tier) -> list[dict[str, Any]]:
         name = f"{tier.name}_{kept + 1:02d}"
         write_input(INPUTS / f"{name}.yml", document, knobs)
         rows.append({"name": name, "tier": tier.name, **knobs, "holdout": (kept + 1) % HOLDOUT_EVERY == 0,
-                     "slots": slots, "shared_slots": shared, "seconds": round(seconds, 2),
+                     "slots": slots, "shared_slots": shared,
+                     "slots_per_worker": round(slots / knobs["workers"], 2), "seconds": round(seconds, 2),
                      "default_penalty": round(penalty, 4), "skipped": ""})
         print(f"{tier.name}: {name} (seed {knobs['seed']}), {knobs['workers']} workers, {slots} slots, "
               f"{seconds:.1f} s", flush=True)
@@ -283,7 +306,8 @@ def build_tier(tier: Tier) -> list[dict[str, Any]]:
 
 
 MANIFEST_FIELDS = ("name", "tier", "holdout", "seed", "hours", "start", "workers", "minimum_staff", "slack", "posts",
-                   "medic", "driver", "preferences", "slots", "shared_slots", "seconds", "default_penalty", "skipped")
+                   "medic", "driver", "preferences", "slots", "shared_slots", "slots_per_worker", "seconds",
+                   "default_penalty", "skipped")
 
 
 def main() -> None:
