@@ -22,8 +22,10 @@ is better off: if A dislikes B but B likes A, the pairing should be a net negati
 
 `neutral_partner` must be **more than 0 and less than 1/2**, the limit being the named constant
 `MAX_NEUTRAL_PARTNER` (0.5, exclusive). This replaces ADR 0022's upper limit of 1; the default, 1/3, is unchanged
-and already meets it (a dislike counts twice as much as a like). An input setting 0.5 or more is rejected with an
-error saying why. Tuning chooses only within this range.
+and already meets it (a dislike counts twice as much as a like). An input file whose `scoring` settings set
+`neutral_partner` to 0.5 or more is reported as invalid, with an error saying why. This is about that one setting
+only: disliked pairings themselves stay allowed, penalized in the score but never forbidden. Tuning chooses only
+within this range.
 
 ## Consequences
 
@@ -31,4 +33,4 @@ error saying why. Tuning chooses only within this range.
   default, 1 against 2/3.
 * The parameter still sets *how much* a dislike outweighs a like: $(1 - \alpha/\beta) / (\alpha/\beta)$ times, e.g.
   twice at 1/3, three times at 1/4, one and a half times at 0.4.
-* Inputs that relied on values of 0.5 or more are now invalid. None are known; the parameter was introduced recently.
+* Input files that set `neutral_partner` to 0.5 or more are now invalid. None are known; the parameter was introduced recently.

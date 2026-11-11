@@ -108,7 +108,8 @@ count more. With the default 1/3, a dislike counts twice as much as a like:
 | both dislike each other | 2 |
 
 At $\alpha / \beta = 1/2$, a dislike and a like would cancel out exactly (a dislike/like pair would cost the same
-as a neutral one), and above it a like would outweigh a dislike, so values from 1/2 up aren't allowed.
+as a neutral one), and above it a like would outweigh a dislike, so the `neutral_partner` setting must be below 1/2.
+This limits the setting only: disliked pairings are still allowed, just penalized.
 
 At iteration $t \in \mathbb{N}$, the **local like function** $\mathcal{L}_t:W \times S \rightarrow \mathbb{R}$ is
 ($| \cdot |$ denoting the **size** of $\cdot$):
