@@ -1,7 +1,9 @@
 # Scoring
 
-> [!WARNING]
-> **Not yet implemented.** This page is the specification for TinyScheg's scoring. None of it exists in code yet.
+> [!IMPORTANT]
+> **Partially implemented.** This page is the specification for TinyScheg's scoring. The parameters and the
+> constants calculated before the search ([`scoring`](../reference/api/scoring.md)) are implemented; the penalties
+> themselves aren't yet.
 > See [ADR 0005](../decisions/0005-weighted-sum-of-normalized-penalties.md),
 > [ADR 0006](../decisions/0006-convex-function-for-workload-fairness.md),
 > [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md),

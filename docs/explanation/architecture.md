@@ -28,9 +28,8 @@ don't overlap. Invalid input is reported before anything else happens.
 ## 2. Initialize
 
 > [!IMPORTANT]
-> **Partially implemented.** Steps 1–3 and finding slots no worker can fill are implemented
-> ([`Problem`](../reference/api/problem.md)); the scoring constants (step 4) and reporting (step 5, in the
-> command-line interface) aren't.
+> **Implemented.** Steps 1–3 and 5 by [`Problem`](../reference/api/problem.md) (step 5 is reported by the
+> [command line](../reference/command-line.md)), step 4 by [`scoring.constants`](../reference/api/scoring.md#constants-module).
 
 Set up the CSP:
 
@@ -88,20 +87,21 @@ entry point. Modules marked *planned* don't exist yet.
 | `model/worker.py` | [`Worker`](../reference/api/worker.md). |
 | `model/shift.py` | [`Shift` and `Slot`](../reference/api/post-and-slot.md#shift-module): plain, immutable descriptions. |
 | `model/post.py` | [`Post`, `Variation` and `ShiftRules`](../reference/api/post-and-slot.md#post-module). |
-| `model/schedule_input.py` | [`Settings` and `ScheduleInput`](../reference/api/schedule-input.md): the parsed input as a whole. |
+| `model/schedule_input.py` | [`Settings`, `ScoringParameters` and `ScheduleInput`](../reference/api/schedule-input.md): the parsed input as a whole, and the scoring defaults. |
 | `model/shift_generation.py` | [Segments, shifts and slots in stable order](../reference/api/post-and-slot.md#shift_generation-module) ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). |
 | `parsing/input_reader.py` | [`read_input`](../reference/api/parsing.md#input_reader-module): YAML input to model objects. |
 | `parsing/validation.py` | [`InputError` and the validation rules](../reference/api/parsing.md#validation-module). |
 | `csp/problem.py` | [`Problem`](../reference/api/problem.md): domains and difference constraints, by slot and worker index. |
 | `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module); MRV/degree ordering and branch and bound are planned. |
+| `scoring/constants.py` | [The constants of the penalty score](../reference/api/scoring.md#constants-module), calculated once per run. |
 | `output/grid.py` | [Assigned slots to the time-by-post grid](../reference/api/output.md#grid-module) ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
 | `output/writers.py` | [Choosing the format by extension](../reference/api/output.md#writers-module), and `write_schedule`. |
 | `output/csv_writer.py` | [The grid as CSV](../reference/api/output.md#csv_writer-module); XLSX and ODS writers will sit next to it. |
 
 Dependencies point one way: `timing` ← `model` ← (`parsing`, `csp`, `output`), with `cli` using all of them.
-`parsing`, `csp` and `output` don't import each other. A planned `scoring` package will depend only on `model` and be
-used by `csp`.
+`parsing`, `csp` and `output` don't import each other. `scoring` depends only on `model` and `timing`, and will be
+used by `csp` once branch and bound is built.
 
 Tests live in `tests/`, one test file per module, plus an independent schedule checker that verifies every hard
 constraint of a search result.

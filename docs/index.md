@@ -31,7 +31,7 @@ Architecture Decision Records (ADRs).
     [`DailyWindow`](reference/api/daily-window.md) · [`Post`, `Shift` and `Slot`](reference/api/post-and-slot.md) ·
     [`ScheduleInput`](reference/api/schedule-input.md) · [`parsing`](reference/api/parsing.md) ·
     [`Problem`](reference/api/problem.md) · [search](reference/api/search.md) ·
-    [`output`](reference/api/output.md)
+    [`output`](reference/api/output.md) · [`scoring`](reference/api/scoring.md)
 * **Explanation** — how TinyScheg works and why.
   * [Architecture](explanation/architecture.md)
   * [Domain model](explanation/domain-model.md)
@@ -71,7 +71,8 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Input parsing and validation        | Implemented and tested    |
 | Search (backtracking, pocket)       | Partially implemented     |
 | Undo (change records)               | Implemented and tested    |
-| Scoring                             | Not yet implemented       |
+| Scoring parameters and constants    | Implemented and tested    |
+| Scoring penalties                   | Not yet implemented       |
 | Output (CSV grid)                   | Implemented and tested    |
 | Output (XLSX, ODS)                  | Not yet implemented       |
 | Command-line interface              | Implemented and tested    |

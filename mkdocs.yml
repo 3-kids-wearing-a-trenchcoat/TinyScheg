@@ -43,6 +43,7 @@ nav:
           - Problem: reference/api/problem.md
           - Search: reference/api/search.md
           - output: reference/api/output.md
+          - scoring: reference/api/scoring.md
   - Explanation:
       - Architecture: explanation/architecture.md
       - Domain model: explanation/domain-model.md
