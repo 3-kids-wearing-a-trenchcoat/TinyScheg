@@ -52,7 +52,7 @@ NEUTRAL_PARTNERS = (0.1, 0.2, 0.25, 1 / 3, 0.4, 0.45)  # all below 1/2: a dislik
 RESULT_FIELDS = ("stage", "setting", "input", "tier", "holdout", "likes_weight", "workload_weight", "rest_weight",
                  "workload_power", "rest_factor", "neutral_partner", "status", "seconds", "nodes", "penalty",
                  "likes", "workload", "rest", "complaints", "easy_fixes", "easy_fix_severity", "no_fix_severity",
-                 "aggrieved", "concentration", "assignment")
+                 "aggrieved", "concentration", "separate_complaints", "separate_severity", "assignment")
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +185,8 @@ def audit_fields(schedule_input: ScheduleInput, problem: Problem, assignment: tu
     return {"complaints": summary.complaints, "easy_fixes": summary.easy_fixes,
             "easy_fix_severity": round(summary.easy_fix_severity, 4),
             "no_fix_severity": round(summary.no_fix_severity, 4), "aggrieved": summary.aggrieved,
-            "concentration": round(summary.concentration, 4)}
+            "concentration": round(summary.concentration, 4), "separate_complaints": summary.separate_complaints,
+            "separate_severity": round(summary.separate_severity, 4)}
 
 
 def reaudit_row(row: dict[str, str]) -> dict[str, str]:
@@ -229,6 +230,10 @@ def run_stage(stage: str, jobs: int) -> None:
     keeping the status file up to date
     """
     RESULTS.mkdir(exist_ok=True)
+    if results_path(stage).exists():
+        with open(results_path(stage), encoding="utf-8", newline="") as file:
+            if tuple(csv.DictReader(file).fieldnames or ()) != RESULT_FIELDS:
+                raise ValueError(f"{stage}'s results have older columns; re-audit them first (tune.py reaudit)")
     done = {(row["setting"], row["input"]) for row in read_results(stage)}
     planned = stage_jobs(stage)
     todo = [(stage, setting, benchmark) for setting, benchmark in planned if (setting.name, benchmark.name) not in done]
@@ -290,7 +295,8 @@ def _write_status(stage: str, status: dict[str, Any], started: float) -> None:
 def setting_summaries(rows: list[dict[str, str]], include_holdout: bool = False) -> list[dict[str, Any]]:
     """
     Each setting's results over the inputs it finished, ranked by the tuning priorities: severity with an easy fix,
-    then concentration, then total severity (all means over the inputs; lower is better)
+    then concentration, then total severity (all means over the inputs; lower is better). The severity of the
+    complaints the audit counts apart (liked partners) is shown, but not ranked on.
     """
     by_setting: dict[str, list[dict[str, str]]] = {}
     for row in rows:
@@ -303,7 +309,8 @@ def setting_summaries(rows: list[dict[str, str]], include_holdout: bool = False)
         summaries.append({"setting": setting, "inputs": len(done), "easy_fix_severity": mean("easy_fix_severity"),
                           "concentration": mean("concentration"),
                           "total_severity": mean("easy_fix_severity") + mean("no_fix_severity"),
-                          "complaints": mean("complaints"), "seconds": mean("seconds")})
+                          "complaints": mean("complaints"), "separate_severity": mean("separate_severity"),
+                          "seconds": mean("seconds")})
     return sorted(summaries, key=lambda s: (round(s["easy_fix_severity"], 6), round(s["concentration"], 6),
                                             s["total_severity"]))
 
@@ -341,7 +348,11 @@ def main(argv: list[str] | None = None) -> int:
     reaudit.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel audits (default {DEFAULT_JOBS})")
     arguments = parser.parse_args(argv)
     if arguments.command == "run":
-        run_stage(arguments.stage, arguments.jobs)
+        try:
+            run_stage(arguments.stage, arguments.jobs)
+        except ValueError as exc:
+            print(f"tune: {exc}", file=sys.stderr)
+            return 1
     elif arguments.command == "reaudit":
         try:
             reaudit_stage(arguments.stage, arguments.jobs)
@@ -353,10 +364,11 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(describe_status(stage)))
     else:
         print(f"{'setting':<22} {'inputs':>6} {'easy-fix sev.':>13} {'concentration':>13} {'total sev.':>10} "
-              f"{'seconds':>8}")
+              f"{'liked-p. sev.':>13} {'seconds':>8}")
         for summary in setting_summaries(read_results(arguments.stage), arguments.holdout):
             print(f"{summary['setting']:<22} {summary['inputs']:>6} {summary['easy_fix_severity']:>13.2f} "
-                  f"{summary['concentration']:>13.2f} {summary['total_severity']:>10.2f} {summary['seconds']:>8.1f}")
+                  f"{summary['concentration']:>13.2f} {summary['total_severity']:>10.2f} "
+                  f"{summary['separate_severity']:>13.2f} {summary['seconds']:>8.1f}")
     return 0
 
 

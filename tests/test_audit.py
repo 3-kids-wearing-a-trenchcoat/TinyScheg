@@ -4,7 +4,8 @@ import pathlib
 
 import pytest
 
-from audit import (EXIT_ILLEGAL, EXIT_SUCCESS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD, Audit, AuditContext, Complaint,
+from audit import (EXIT_ILLEGAL, EXIT_SUCCESS, LIKED_PARTNERS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD, Audit,
+                   AuditContext, Complaint,
                    available_hours, build_context, candidate_changes, days, evaluate, find_fixes, is_harmless,
                    is_legal_change, main, slots_by_worker, summarize)
 from schedule_checker import hard_constraint_violations
@@ -188,6 +189,24 @@ def test_concentration_is_the_most_aggrieved_workers_share() -> None:
     summary = summarize(audit, {})
     assert summary.aggrieved == 1 and summary.concentration == 1
     assert summary.severity_by_worker[0][0] == 0
+
+
+def test_liked_partner_complaints_are_counted_apart_from_the_main_measures() -> None:
+    # Cy and Dan like each other and share both shifts; Anne and Bob like each other and never share one
+    workers = [Worker("Anne", likes=frozenset({"Bob"})), Worker("Bob", likes=frozenset({"Anne"})),
+               Worker("Cy", likes=frozenset({"Dan"})), Worker("Dan", likes=frozenset({"Cy"})), Worker("Eve"),
+               Worker("Fay")]
+    context = context_for(workers, {"gate": {"any": 2}, "desk": {"any": 2}, "patrol": {"any": 2}}, 8)
+    assignment = (2, 3, 0, 4, 1, 5) * 2  # gate: Cy and Dan; desk: Anne and Eve; patrol: Bob and Fay; twice
+    audit = evaluate(context, assignment)
+    liked = [c for c in audit.complaints if c.kind == LIKED_PARTNERS]
+    assert liked
+    summary = summarize(audit, find_fixes(context, assignment, audit))
+    main = [c for c in audit.complaints if c.kind != LIKED_PARTNERS]
+    assert summary.complaints == len(main)
+    assert summary.easy_fix_severity + summary.no_fix_severity == pytest.approx(sum(c.severity for c in main))
+    assert summary.separate_complaints == len(liked)
+    assert summary.separate_severity == pytest.approx(sum(c.severity for c in liked))
 
 
 @pytest.mark.parametrize("illegal", [False, True])

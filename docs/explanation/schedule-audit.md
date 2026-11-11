@@ -122,7 +122,25 @@ Each candidate change is audited in full, which is slow but straightforward.
   easy fix, if one was found.
 * A **group summary**: the number of complaints and how many have an easy fix; the total severity of those with an
   easy fix and of those without; how many workers have any complaint; and **concentration**, the share of all severity held by the worker
-  with the most, with the workers ranked by severity.
+  with the most, with the workers ranked by severity. All of these leave out liked-partner complaints, which are
+  counted apart (below).
+
+### Liked-partner complaints are counted apart
+
+Decided 2026-11-11, during the tuning baseline. Liked-partner complaints are still listed on the cards, with their
+easy fixes, but the summary's main measures (and so tuning's priorities) leave them out; their number and severity are
+reported on a line of their own.
+
+* **Why.** Once the double-counted short straws were gone, 28 of the baseline's 34 distinct problems with an easy fix
+  were liked-partner complaints, and in every one, the fix *raised* the likes penalty as well as the others. The likes
+  penalty rewards how much liked pairing there is in total, not how evenly it's spread, so no parameter setting can
+  remove them; only a change to the formula could. It also isn't clear that workers hold "they got their friends
+  more often than I got mine" against a schedule the way they hold load or short straws against it.
+* **The alternative not taken:** a fairness term in the likes penalty, each worker's shortfall of liked pairings
+  through a convex function, as workload does ([Future work](future-work.md#a-fairness-term-for-liked-pairings)).
+* **Signs this was the wrong choice:** workers complaining about who got paired with their friends; schedules whose
+  liked-partner severity (shown by `tools/tune.py report`) grows as settings get better on the main measures; or
+  cards read by hand where the liked-partner complaints look like the ones that matter most.
 
 ## Sampling
 

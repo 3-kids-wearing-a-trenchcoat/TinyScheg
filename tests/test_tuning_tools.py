@@ -96,7 +96,8 @@ def test_every_sensitivity_setting_is_valid_and_named_uniquely() -> None:
 def test_settings_are_ranked_by_the_tuning_priorities() -> None:
     def row(setting: str, easy: float, concentration: float, holdout: str = "False") -> dict[str, str]:
         return {"setting": setting, "status": "done", "holdout": holdout, "easy_fix_severity": str(easy),
-                "no_fix_severity": "1", "concentration": str(concentration), "complaints": "3", "seconds": "1"}
+                "no_fix_severity": "1", "concentration": str(concentration), "complaints": "3",
+                "separate_severity": "0", "seconds": "1"}
     rows = [row("a", 2, 0.1), row("b", 1, 0.9), row("c", 1, 0.5), row("c", 1, 0.5, holdout="True")]
     assert [summary["setting"] for summary in tune.setting_summaries(rows)] == ["c", "b", "a"]
     assert tune.setting_summaries(rows)[0]["inputs"] == 1  # held-back inputs are left out by default

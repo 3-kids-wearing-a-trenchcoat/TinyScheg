@@ -34,6 +34,10 @@ WHOLE_PERIOD = "overall"                    # the label of the window covering t
 LOAD = "load"
 SHORT_STRAWS = "short straws"
 LIKED_PARTNERS = "liked partners"
+# complaints listed on the cards and reported apart, but left out of the summary's main measures (decided 2026-11-11;
+# see docs/explanation/schedule-audit.md#liked-partner-complaints-are-counted-apart): the likes penalty can't weigh
+# how evenly liked pairings are spread, and it isn't clear workers hold that against a schedule
+SEPARATE_KINDS = (LIKED_PARTNERS,)
 
 SHORT_REST = "short rest"
 DISLIKED_PARTNER = "disliked partner"
@@ -484,7 +488,8 @@ def find_fixes(context: AuditContext, assignment: tuple[int, ...], audit: Audit)
 class AuditSummary:
     """
     The group summary: how many complaints there are and how many have an easy fix, the severity of those with and
-    without one, and severity_by_worker, each worker's total as (worker, severity), most first.
+    without one, and severity_by_worker, each worker's total as (worker, severity), most first. All of these leave out
+    the SEPARATE_KINDS complaints, which are counted apart: how many, and their severity.
     """
     complaints: int
     easy_fixes: int
@@ -493,6 +498,8 @@ class AuditSummary:
     aggrieved: int
     concentration: float
     severity_by_worker: tuple[tuple[int, float], ...]
+    separate_complaints: int = 0
+    separate_severity: float = 0.0
 
 
 def summarize(audit: Audit, fixes: dict[ComplaintKey, Fix]) -> AuditSummary:
@@ -502,17 +509,20 @@ def summarize(audit: Audit, fixes: dict[ComplaintKey, Fix]) -> AuditSummary:
     :param fixes: the fixes found, by complaint key
     :return: the AuditSummary; concentration is the most aggrieved worker's share of all severity (0 if none)
     """
+    main = [complaint for complaint in audit.complaints if complaint.kind not in SEPARATE_KINDS]
+    separate = [complaint for complaint in audit.complaints if complaint.kind in SEPARATE_KINDS]
     by_worker: Counter[int] = Counter()
-    for complaint in audit.complaints:
+    for complaint in main:
         by_worker[complaint.worker] += complaint.severity
     total = sum(by_worker.values())
-    fixable = [complaint for complaint in audit.complaints if complaint.key in fixes]
+    fixable = [complaint for complaint in main if complaint.key in fixes]
     ranked = tuple(sorted(by_worker.items(), key=lambda item: (-item[1], item[0])))
     fixable_severity = sum(complaint.severity for complaint in fixable)
-    return AuditSummary(complaints=len(audit.complaints), easy_fixes=len(fixable), easy_fix_severity=fixable_severity,
+    return AuditSummary(complaints=len(main), easy_fixes=len(fixable), easy_fix_severity=fixable_severity,
                         no_fix_severity=total - fixable_severity,
                         aggrieved=len(by_worker), concentration=ranked[0][1] / total if total else 0.0,
-                        severity_by_worker=ranked)
+                        severity_by_worker=ranked, separate_complaints=len(separate),
+                        separate_severity=sum(complaint.severity for complaint in separate))
 
 
 def shown(value: float) -> str:
@@ -578,6 +588,8 @@ def describe_summary(context: AuditContext, summary: AuditSummary) -> str:
         f"{shown(summary.no_fix_severity)}",
         f"workers with complaints: {summary.aggrieved} of {len(names)}",
         f"concentration: {shown(summary.concentration)}" + (f" ({ranking})" if ranking else ""),
+        f"left out of the above: {', '.join(SEPARATE_KINDS)}, {summary.separate_complaints} complaints, severity "
+        f"{shown(summary.separate_severity)}",
     ])
 
 

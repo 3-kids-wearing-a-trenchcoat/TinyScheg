@@ -112,6 +112,18 @@ be additional, monotone penalty components.
 * **Roles in the output.** The grid doesn't show which worker fills which role. Cells could show it, e.g.
   `Jack (security)`.
 
+## A fairness term for liked pairings
+
+> [!WARNING]
+> **Not yet implemented.** The alternative not taken, 2026-11-11; revisit if the
+> [choice made instead](schedule-audit.md#liked-partner-complaints-are-counted-apart) turns out wrong.
+
+The likes penalty rewards the total of liked pairing, not how evenly it's spread, so the best schedule can leave one
+worker never sharing a shift with anyone they like while a pair of friends share several. The audit counts such
+liked-partner complaints apart instead of fixing them through tuning. If they turn out to matter, the fix is in the
+formula: each worker's shortfall of liked pairings through a convex function, as workload does, which needs an ADR,
+a check that the penalty stays monotone along the search, and new tuning runs.
+
 ## Schedule audit
 
 > [!WARNING]
