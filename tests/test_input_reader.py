@@ -5,6 +5,7 @@ import textwrap
 
 import pytest
 
+from tinyscheg.model.schedule_input import ScoringParameters
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.parsing.validation import InputError
@@ -191,3 +192,57 @@ def test_structural_problems_are_collected(tmp_path: pathlib.Path) -> None:
 def test_validation_runs_after_structure(tmp_path: pathlib.Path) -> None:
     text = MINIMAL.replace('- name: "Anne"', '- name: "Anne"\n    likes: ["Nobody"]')
     assert problems_of(tmp_path, text) == ('worker #1 ("Anne"), likes: unknown worker "Nobody"',)
+
+
+# --- scoring settings ---
+
+def with_scoring(text: str) -> str:
+    """MINIMAL with a scoring section in its settings."""
+    return MINIMAL.replace('  time: ["2025-01-01", "2025-01-02"]\n',
+                           '  time: ["2025-01-01", "2025-01-02"]\n  scoring:\n' + textwrap.indent(text, "    "))
+
+
+def test_scoring_defaults_when_omitted(tmp_path: pathlib.Path) -> None:
+    assert read_input(write(tmp_path, MINIMAL)).settings.scoring == ScoringParameters()
+
+
+def test_scoring_overrides(tmp_path: pathlib.Path) -> None:
+    text = with_scoring("weights: {likes: 1, workload: 2, rest: 1}\nworkload_power: 3\nrest_factor: 2.5\n"
+                        "neutral_partner: 0.5\n")
+    scoring = read_input(write(tmp_path, text)).settings.scoring
+    assert scoring == ScoringParameters(1, 2, 1, workload_power=3, rest_factor=2.5, neutral_partner=0.5)
+
+
+def test_omitted_weights_keep_their_defaults(tmp_path: pathlib.Path) -> None:
+    scoring = read_input(write(tmp_path, with_scoring("weights: {likes: 0}\n"))).settings.scoring
+    assert scoring == ScoringParameters(likes_weight=0)
+    assert scoring.workload_weight == pytest.approx(2 / 3)
+
+
+def test_empty_scoring_section_keeps_the_defaults(tmp_path: pathlib.Path) -> None:
+    text = MINIMAL.replace('  time: ["2025-01-01", "2025-01-02"]\n',
+                           '  time: ["2025-01-01", "2025-01-02"]\n  scoring:\n')
+    assert read_input(write(tmp_path, text)).settings.scoring == ScoringParameters()
+
+
+def test_every_invalid_scoring_field_is_reported(tmp_path: pathlib.Path) -> None:
+    text = with_scoring("weights: {likes: -1, wrokload: 1}\nworkload_power: 1\nrest_factor: fast\n"
+                        "neutal_partner: 0.5\n")
+    problems = problems_of(tmp_path, text)
+    assert len(problems) == 5, problems
+    assert any(problem.startswith("settings, scoring: unknown field 'neutal_partner'") for problem in problems)
+    assert any(problem.startswith("settings, scoring, weights: unknown field 'wrokload'") for problem in problems)
+    assert "settings, scoring: the likes weight must be at least 0, got -1" in problems
+    assert "settings, scoring: workload_power must be a whole number of at least 2, got 1" in problems
+    assert "settings, scoring: rest_factor must be a number, got 'fast'" in problems
+
+
+def test_all_zero_weights(tmp_path: pathlib.Path) -> None:
+    text = with_scoring("weights: {likes: 0, workload: 0, rest: 0}\n")
+    assert problems_of(tmp_path, text) == ("settings, scoring: the weights must not all be 0",)
+
+
+def test_scoring_must_be_a_mapping(tmp_path: pathlib.Path) -> None:
+    text = MINIMAL.replace('  time: ["2025-01-01", "2025-01-02"]\n',
+                           '  time: ["2025-01-01", "2025-01-02"]\n  scoring: 3\n')
+    assert problems_of(tmp_path, text) == ("settings, scoring: must be a mapping of fields",)

@@ -16,7 +16,7 @@ from typing import Any, TypeVar
 import yaml
 
 from tinyscheg.model.post import Post, ShiftRules, Variation
-from tinyscheg.model.schedule_input import DEFAULT_MIN_REST, ScheduleInput, Settings
+from tinyscheg.model.schedule_input import DEFAULT_MIN_REST, ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.validation import InputError, location, validate
 from tinyscheg.timing.daily_window import DailyWindow
@@ -25,7 +25,9 @@ from tinyscheg.timing.datetime_range import DateTimeRange, parse_range
 T = TypeVar("T")
 
 _TOP_LEVEL_FIELDS = {"settings", "workers", "posts"}
-_SETTINGS_FIELDS = {"time", "min_rest"}
+_SETTINGS_FIELDS = {"time", "min_rest", "scoring"}
+_SCORING_FIELDS = {"weights", "workload_power", "rest_factor", "neutral_partner"}
+_WEIGHT_FIELDS = {"likes", "workload", "rest"}
 _WORKER_FIELDS = {"name", "roles", "unavailable", "likes", "dislikes"}
 _POST_FIELDS = {"name", "roles", "length", "time", "variations"}
 _VARIATION_FIELDS = {"time", "roles", "length"}
@@ -81,7 +83,38 @@ def _parse_settings(raw: dict[Any, Any], problems: list[str]) -> Settings:
     _check_fields(section, _SETTINGS_FIELDS, "settings", problems)
     period = _convert(problems, "settings, time", lambda: _date_time_range(_required_value(section, "time")))
     min_rest = _convert(problems, "settings, min_rest", lambda: _optional_hours(section, "min_rest", DEFAULT_MIN_REST))
-    return _convert(problems, "settings", lambda: Settings(_ok(period), _ok(min_rest)))
+    scoring = _attempt(problems, lambda: _parse_scoring(section.get("scoring"), problems))
+    return _convert(problems, "settings", lambda: Settings(_ok(period), _ok(min_rest), _ok(scoring)))
+
+
+def _parse_scoring(raw: object, problems: list[str]) -> ScoringParameters:
+    """
+    Convert the optional scoring section of the settings
+    :param raw: the section as loaded, or None if it's omitted or empty
+    :param problems: list to record problems in
+    :return: ScoringParameters; omitted fields (and omitted weights) keep their defaults
+    """
+    if raw is None:
+        return ScoringParameters()
+    where = "settings, scoring"
+    section = _entry_mapping(raw, where, _SCORING_FIELDS, problems)
+    overrides: dict[str, Any] = {}
+    weights = section.get("weights")
+    if weights is not None:
+        weights = _entry_mapping(weights, f"{where}, weights", _WEIGHT_FIELDS, problems)
+        for name in sorted(_WEIGHT_FIELDS & weights.keys()):
+            if weights[name] is not None:
+                overrides[f"{name}_weight"] = weights[name]
+    for name in sorted(_SCORING_FIELDS - {"weights"}):
+        if section.get(name) is not None:
+            overrides[name] = section[name]
+    # ScoringParameters checks the values, naming the field in its message. Checking each one on its own (the others
+    # at their defaults) reports every invalid field rather than only the first; then they're checked together.
+    checked = [_convert(problems, where, lambda: ScoringParameters(**{name: value}))
+               for name, value in overrides.items()]
+    if any(parameters is None for parameters in checked):
+        raise _Failed
+    return _ok(_convert(problems, where, lambda: ScoringParameters(**overrides)))
 
 
 def _parse_worker(raw: object, index: int, problems: list[str]) -> Worker:

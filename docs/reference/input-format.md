@@ -35,17 +35,17 @@ settings:
 
 ### `scoring`
 
-> [!WARNING]
-> **Not yet implemented.** Decided in
-> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md); until it's implemented, a
-> `scoring` section is rejected as an unknown field.
+> [!IMPORTANT]
+> **Partially implemented.** The section is read and validated
+> ([ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md)), but scoring itself isn't
+> implemented yet, so it doesn't affect the schedule.
 
 Optional parameters of the [penalty score](../explanation/scoring.md#parameters) that picks the fairest schedule.
 Every field is optional; an omitted field keeps its default.
 
 | Field             | Type                                  | Default        | Description |
 |-------------------|---------------------------------------|----------------|-------------|
-| `weights`         | mapping of `likes`, `workload`, `rest` to numbers | 0.25, 0.5, 0.25 | How much each part of the score counts. Each at least 0, not all 0. They're relative: each is divided by their sum, so `{likes: 1, workload: 2, rest: 1}` means the same as the default. An omitted key keeps its default weight. |
+| `weights`         | mapping of `likes`, `workload`, `rest` to numbers | 0.25, 0.5, 0.25 | How much each part of the score counts. Each at least 0, not all 0. They're relative: each is divided by their sum, so `{likes: 1, workload: 2, rest: 1}` means the same as the default. An omitted key keeps its default weight, before dividing: `{likes: 0}` gives 0, 0.5 and 0.25, i.e. 0, ⅔ and ⅓. |
 | `workload_power`  | whole number                          | 2              | How harshly unequal workloads are penalized. At least 2; higher values lean harder on the most loaded workers. |
 | `rest_factor`     | number                                | 3              | The ideal rest after a shift, as a multiple of its length. At least 1. Only rest targets longer than `min_rest` have an effect. |
 | `neutral_partner` | number                                | 1/3 (0.333…)   | How bad sharing a shift with a neutral worker is, relative to a disliked one (a liked one costs nothing). More than 0, less than 1. |

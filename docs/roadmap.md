@@ -60,7 +60,7 @@ pure function of a (partial) assignment, so it's built and tested on fixed assig
   $e^{ax}-1$), parameter and weight values, whether they're set in the input
   ([ADR 0021](decisions/0021-power-function-for-workload-fairness.md),
   [ADR 0022](decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md))
-- [ ] Scoring parameters: defaults as named constants, and the optional `scoring` input settings (parsing,
+- [x] Scoring parameters: defaults as named constants, and the optional `scoring` input settings (parsing,
   validation)
 - [ ] Constants: each worker's availability, the number of shared slots, worst rest deficit, packable maximum
 - [ ] Workload penalty ([ADR 0013](decisions/0013-availability-weighted-workload.md),

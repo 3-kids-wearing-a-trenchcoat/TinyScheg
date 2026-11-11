@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 
 from tinyscheg.model.post import Post
 from tinyscheg.model.worker import Worker
@@ -10,12 +11,72 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 
 DEFAULT_MIN_REST = dt.timedelta(hours=6)
 
+# Scoring parameter defaults (ADR 0022). Weights are relative: they're divided by their sum.
+DEFAULT_LIKES_WEIGHT = 0.25
+DEFAULT_WORKLOAD_WEIGHT = 0.5
+DEFAULT_REST_WEIGHT = 0.25
+DEFAULT_WORKLOAD_POWER = 2       # phi(x) = x ** p (ADR 0021)
+DEFAULT_REST_FACTOR = 3.0        # gamma: the rest target after a shift is this many times its length
+DEFAULT_NEUTRAL_PARTNER = 1 / 3  # alpha / beta: a neutral shift partner's penalty relative to a disliked one's
+
+# Limits on the scoring parameters
+MIN_WORKLOAD_POWER = 2  # phi must be strictly convex
+MIN_REST_FACTOR = 1.0   # a rest target shorter than the shift itself isn't meaningful
+
+
+@dataclass(frozen=True, slots=True)
+class ScoringParameters:
+    """
+    The parameters of the penalty score (see docs/explanation/scoring.md#parameters).
+    The weights are stored divided by their sum, so they always add up to 1.
+    """
+    likes_weight: float = DEFAULT_LIKES_WEIGHT
+    workload_weight: float = DEFAULT_WORKLOAD_WEIGHT
+    rest_weight: float = DEFAULT_REST_WEIGHT
+    workload_power: int = DEFAULT_WORKLOAD_POWER
+    rest_factor: float = DEFAULT_REST_FACTOR
+    neutral_partner: float = DEFAULT_NEUTRAL_PARTNER
+
+    def __post_init__(self) -> None:
+        """Validate the parameters and normalize the weights."""
+        weights = {"likes": self.likes_weight, "workload": self.workload_weight, "rest": self.rest_weight}
+        for name, weight in weights.items():
+            _check_number(f"the {name} weight", weight)
+            if weight < 0:
+                raise ValueError(f"the {name} weight must be at least 0, got {weight!r}")
+        total = sum(weights.values())
+        if total == 0:
+            raise ValueError("the weights must not all be 0")
+        object.__setattr__(self, "likes_weight", self.likes_weight / total)
+        object.__setattr__(self, "workload_weight", self.workload_weight / total)
+        object.__setattr__(self, "rest_weight", self.rest_weight / total)
+
+        power = self.workload_power
+        if isinstance(power, bool) or not isinstance(power, int) or power < MIN_WORKLOAD_POWER:
+            raise ValueError(f"workload_power must be a whole number of at least {MIN_WORKLOAD_POWER}, got {power!r}")
+        _check_number("rest_factor", self.rest_factor)
+        if self.rest_factor < MIN_REST_FACTOR:
+            raise ValueError(f"rest_factor must be at least {MIN_REST_FACTOR:g}, got {self.rest_factor!r}")
+        _check_number("neutral_partner", self.neutral_partner)
+        if not 0 < self.neutral_partner < 1:
+            raise ValueError(f"neutral_partner must be more than 0 and less than 1, got {self.neutral_partner!r}")
+
+
+def _check_number(name: str, value: object) -> None:
+    """Raise TypeError unless value is a finite int or float (bool doesn't count)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise TypeError(f"{name} must be a number, got {value!r}")
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    """General scheduler settings: the period to schedule, and the minimum rest between a worker's shifts."""
+    """
+    General scheduler settings: the period to schedule, the minimum rest between a worker's shifts, and the scoring
+    parameters.
+    """
     period: DateTimeRange
     min_rest: dt.timedelta = DEFAULT_MIN_REST
+    scoring: ScoringParameters = field(default_factory=ScoringParameters)
 
     def __post_init__(self) -> None:
         """Validate the settings."""

@@ -416,8 +416,10 @@ Each sub-function is monotonically non-decreasing, and the weights are non-negat
 
 ## Parameters
 
-> [!WARNING]
-> **Not yet implemented.** Decided in [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
+> [!NOTE]
+> **Implemented**: [`ScoringParameters`](../reference/api/schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner)
+> and the `scoring` input settings. Decided in
+> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
 
 Every parameter has a default, defined once as a named constant in the code, and can be overridden in the optional
 `scoring` section of the input's settings (see [Input format](../reference/input-format.md#scoring)).
@@ -436,6 +438,10 @@ What the defaults mean, on the example input (9 workers, 72 hours):
 | Moving one 3-hour shift from the busiest worker to the least busy | about −0.23 | about −0.11 |
 | One worker paired with someone they dislike instead of a neutral partner | about +0.23 | about +0.06 |
 | One hour of rest below target | about +0.05 | about +0.01 |
+
+Scores are floating-point numbers. Each one is computed from scratch, with sums always taken in the same order, so
+the same state always gets exactly the same score, and since every operation involved is monotone under rounding,
+a state never scores lower than its parent. Exactness would only matter if scores were updated incrementally.
 
 Still open: whether scores can practically be updated incrementally from their previous values (see
 [Future work](future-work.md#incremental-scoring)); until then, they're computed from scratch.
