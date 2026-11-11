@@ -29,6 +29,7 @@ nav:
   - Roadmap: roadmap.md
   - How-to guides:
       - Development setup: how-to/development-setup.md
+      - Auditing a schedule: how-to/audit-a-schedule.md
   - Reference:
       - Command line: reference/command-line.md
       - Input format: reference/input-format.md

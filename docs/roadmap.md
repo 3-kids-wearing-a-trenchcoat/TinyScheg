@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–3 complete. Next: Phase 4 (schedule audit).
+Progress: Phases 1–4 complete. Next: Phase 5 (branch and bound).
 
 ## Phase 1: Walking skeleton
 
@@ -98,10 +98,10 @@ code with `csp/` or `scoring/`.
   worker draws the short straw, and social pairings
 - [x] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit,
   with a reader for written CSV schedules (`tools/schedule_reader.py`)
-- [ ] Per-worker feedback cards and a group summary of how concentrated the unfairness is
-- [ ] Sampling: many legal schedules (by shuffling the workers' order), each audited and shown next to its internal
+- [x] Per-worker feedback cards and a group summary of how concentrated the unfairness is
+- [x] Sampling: many legal schedules (by shuffling the workers' order), each audited and shown next to its internal
   penalty, flagging where the two disagree
-- [ ] Tests for the audit itself, and a how-to page
+- [x] Tests for the audit itself, and a how-to page ([Auditing a schedule](how-to/audit-a-schedule.md))
 
 ## Phase 5: Branch and bound
 

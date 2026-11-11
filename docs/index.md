@@ -23,6 +23,7 @@ Architecture Decision Records (ADRs).
 
 * **How-to guides** — steps for accomplishing a specific task.
   * [Development setup](how-to/development-setup.md)
+  * [Auditing a schedule](how-to/audit-a-schedule.md) (development tool)
 * **Reference** — exact technical descriptions of formats and code.
   * [Input format](reference/input-format.md)
   * [Output format](reference/output-format.md)
@@ -78,4 +79,4 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Output (CSV grid)                   | Implemented and tested    |
 | Output (XLSX, ODS)                  | Not yet implemented       |
 | Command-line interface              | Implemented and tested    |
-| Schedule audit (development tool)   | Not yet implemented       |
+| Schedule audit (development tool)   | Implemented and tested    |

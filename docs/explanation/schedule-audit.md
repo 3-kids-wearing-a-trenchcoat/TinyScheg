@@ -4,9 +4,9 @@ The schedule audit is a **development tool**: it judges a finished schedule the 
 the [scoring](scoring.md) and its tuning don't produce schedules that workers would rightly complain about, such as
 unfairness concentrated on a few workers. It isn't part of TinyScheg's regular operation.
 
-> [!WARNING]
-> **Not yet implemented.** This page is the agreed specification (2026-11-11); the audit is being built in
-> `tools/` (see the [Roadmap](../roadmap.md#phase-4-schedule-audit-development-tool)).
+> [!NOTE]
+> **Implemented** in `tools/audit.py` and `tools/audit_sample.py`, and covered by tests. See
+> [Auditing a schedule](../how-to/audit-a-schedule.md) for how to run it.
 
 ## Why a separate audit
 
