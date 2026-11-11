@@ -1,5 +1,6 @@
 """Tests for the tuning tools: tools/benchmarks/generate.py and tools/tune.py."""
 import copy
+import csv
 import pathlib
 
 import pytest
@@ -112,3 +113,30 @@ def test_one_run_finds_and_audits_the_best_schedule(tmp_path: pathlib.Path, monk
     assert row["status"] == "done" and row["penalty"] >= 0
     assert set(row) <= set(tune.RESULT_FIELDS)
     assert len(row["assignment"].split()) == len(build_problem(parse_input(generated[0])).slots)
+
+
+def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Path,
+                                                           monkeypatch: pytest.MonkeyPatch) -> None:
+    generated = next(generate.generate(seed, HOURS) for seed in SEEDS if generate.generate(seed, HOURS))
+    assert generated is not None
+    (tmp_path / "inputs").mkdir()
+    generate.write_input(tmp_path / "inputs" / "small.yml", *generated)
+    monkeypatch.setattr(tune, "BENCHMARKS", tmp_path)
+    monkeypatch.setattr(tune, "RESULTS", tmp_path / "results")
+    tune.RESULTS.mkdir()
+    row = tune.run_one("baseline", tune.DEFAULTS, tune.Benchmark("small", "sweep", False))
+    stale = {**row, "complaints": 999, "easy_fix_severity": 999}  # as if audited by an older audit
+    with open(tune.results_path("baseline"), "w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, tune.RESULT_FIELDS)
+        writer.writeheader()
+        writer.writerow(stale)
+    tune.status_path("baseline").write_text('{"finished": false}', encoding="utf-8")
+    with pytest.raises(ValueError, match="still running"):
+        tune.reaudit_stage("baseline", 1)
+    tune.status_path("baseline").write_text('{"finished": true}', encoding="utf-8")
+    tune.reaudit_stage("baseline", 1)
+    [reaudited] = tune.read_results("baseline")
+    assert reaudited["complaints"] == str(row["complaints"])
+    assert reaudited["easy_fix_severity"] == str(row["easy_fix_severity"])
+    assert reaudited["penalty"] == str(row["penalty"]) and reaudited["assignment"] == row["assignment"]
+    assert tune.results_path("baseline").with_suffix(".csv.bak").exists()

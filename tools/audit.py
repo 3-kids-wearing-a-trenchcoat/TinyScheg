@@ -36,9 +36,8 @@ SHORT_STRAWS = "short straws"
 LIKED_PARTNERS = "liked partners"
 
 SHORT_REST = "short rest"
-HEAVIEST_DAY = "heaviest day"
 DISLIKED_PARTNER = "disliked partner"
-STRAW_KINDS = (SHORT_REST, HEAVIEST_DAY, DISLIKED_PARTNER)
+STRAW_KINDS = (SHORT_REST, DISLIKED_PARTNER)  # per-day load isn't a straw: load complaints already measure it
 
 EXIT_SUCCESS = 0
 EXIT_ILLEGAL = 1  # the schedule breaks a hard constraint, so there's nothing to audit
@@ -176,13 +175,11 @@ def worker_stats(context: AuditContext, assignment: Sequence[int]) -> tuple[Work
     :return: a WorkerStats per worker, in input order
     """
     crews = workers_by_shift(context, assignment)
-    worker_count = len(context.schedule_input.workers)
-    heaviest = _heaviest_day_straws(context, crews, worker_count)
-    return tuple(_one_worker(context, crews, worker, heaviest[worker]) for worker in range(worker_count))
+    return tuple(_one_worker(context, crews, worker) for worker in range(len(context.schedule_input.workers)))
 
 
-def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int, heaviest_days: int) -> WorkerStats:
-    """The statistics of one worker, given every shift's crew and how many heaviest days they had."""
+def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int) -> WorkerStats:
+    """The statistics of one worker, given every shift's crew."""
     own = tuple(index for index, crew in enumerate(crews) if worker in crew)  # stable order is time order
     count: Counter[str] = Counter()
     worked: Counter[str] = Counter()
@@ -196,28 +193,8 @@ def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int
     liked = sum(1 for index in own if context.likes[worker] & set(crews[index]))
     disliked = sum(1 for index in own if context.dislikes[worker] & set(crews[index]))
     short_rest = hours(context.schedule_input.settings.min_rest + SHORT_REST_MARGIN)
-    straws = {SHORT_REST: sum(1 for rest in rests if rest < short_rest), HEAVIEST_DAY: heaviest_days,
-              DISLIKED_PARTNER: disliked}
+    straws = {SHORT_REST: sum(1 for rest in rests if rest < short_rest), DISLIKED_PARTNER: disliked}
     return WorkerStats(own, dict(count), dict(worked), rests, dict(partners), liked, disliked, straws)
-
-
-def _heaviest_day_straws(context: AuditContext, crews: list[tuple[int, ...]], worker_count: int) -> list[int]:
-    """
-    How many days each worker had the most shifts of anyone available that day, counting only days on which not
-    everyone available did the same number
-    """
-    straws = [0] * worker_count
-    for window in context.windows:
-        if window.label == WHOLE_PERIOD:
-            continue
-        present = [worker for worker in range(worker_count) if context.availability[worker][window.label] > 0]
-        count = Counter(worker for index, crew in enumerate(crews) if context.shift_day[index] == window.label
-                        for worker in set(crew))
-        loads = [count[worker] for worker in present]
-        if loads and max(loads) > min(loads):
-            for worker in present:
-                straws[worker] += count[worker] == max(loads)
-    return straws
 
 
 # --- complaints ---

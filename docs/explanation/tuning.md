@@ -63,7 +63,9 @@ committed, so changing the generator never silently changes what was tuned on.
 
 Run with `tools/tune.py`, which finds and audits the best schedule for each input at each setting, many in
 parallel. Each run's result is appended to `tools/benchmarks/results/<stage>.csv` as it finishes, so a stage can be
-stopped and resumed, and `python tools/tune.py status` shows how far along it is.
+stopped and resumed, and `python tools/tune.py status` shows how far along it is. Each row keeps its best schedule,
+so after a change to the audit, `python tools/tune.py reaudit STAGE` audits a finished stage again without
+searching again.
 
 1. **Baseline** — the defaults, on every input. Each complaint with an easy fix is then diagnosed by breaking the
    fixing change's penalty difference down by part: a **parameter** question (e.g. likes weighed too low against

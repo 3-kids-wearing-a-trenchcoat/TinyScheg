@@ -26,11 +26,10 @@ The report has a card per worker, then the group summary. A card looks like this
 Gilgamesh: 3 shifts, 8 h; available 24 h
   2025-01-01: 3 shifts, 8 h; available 24 h
   rests: 7 h, 9 h
-  short straws: 2 (short rest 1, heaviest day 1, disliked partner 0)
+  short straws: 1 (short rest 1, disliked partner 0)
   partners: Enkidu ×2; with someone they like: 2, with someone they dislike: 0
   complaints:
     - [1] load on 2025-01-01: 3 shifts (8 h), against Jill's 1 (4 h); no easy fix found
-    - [1] short straws: 2, against Anne's 0; easy fix: swapping Siduri's front gate 2025-01-01 16:00–19:00 with Anne's front gate 2025-01-01 19:00–22:00
 ```
 
 Each complaint starts with its severity in brackets, and ends with its [easy fix](../explanation/schedule-audit.md#easy-fixes),

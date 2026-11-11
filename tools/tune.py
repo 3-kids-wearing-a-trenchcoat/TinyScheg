@@ -5,6 +5,8 @@ Usage:
   PYTHONPATH=src python tools/tune.py run STAGE [--jobs N]   run a stage (resumable: finished runs are kept)
   PYTHONPATH=src python tools/tune.py status                 progress and results so far
   PYTHONPATH=src python tools/tune.py report STAGE           each setting's results, best first
+  PYTHONPATH=src python tools/tune.py reaudit STAGE          re-audit a finished stage's schedules, after the audit
+                                                             changed (no new search; the old file is kept as .bak)
 Stages: baseline (the defaults, on every input) and sensitivity (one parameter at a time, on the tuning inputs).
 """
 from __future__ import annotations
@@ -16,6 +18,7 @@ import json
 import multiprocessing
 import os
 import pathlib
+import shutil
 import signal
 import statistics
 import sys
@@ -25,11 +28,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from audit import build_context, evaluate, find_fixes, summarize
-from tinyscheg.csp.problem import build_problem
+from tinyscheg.csp.problem import Problem, build_problem
 from tinyscheg.csp.search import find_best_schedule
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_NEUTRAL_PARTNER, DEFAULT_REST_FACTOR,
                                             DEFAULT_REST_WEIGHT, DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT,
-                                            ScoringParameters)
+                                            ScheduleInput, ScoringParameters)
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import build_constants
 
@@ -161,16 +164,37 @@ def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any
     seconds = time.perf_counter() - started
     if result.assignment is None or result.penalty is None:
         return {**row, "status": "no schedule", "seconds": round(seconds, 2)}
-    context = build_context(schedule_input, problem.shifts, problem.slots)
-    audit = evaluate(context, result.assignment)
-    summary = summarize(audit, find_fixes(context, result.assignment, audit))
     return {**row, "status": "done", "seconds": round(seconds, 2), "nodes": result.nodes,
             "penalty": round(result.penalty.total, 6), "likes": round(result.penalty.likes, 6),
             "workload": round(result.penalty.workload, 6), "rest": round(result.penalty.rest, 6),
-            "complaints": summary.complaints, "easy_fixes": summary.easy_fixes,
+            **audit_fields(schedule_input, problem, result.assignment),
+            "assignment": " ".join(map(str, result.assignment))}
+
+
+def audit_fields(schedule_input: ScheduleInput, problem: Problem, assignment: tuple[int, ...]) -> dict[str, Any]:
+    """
+    Audit a schedule
+    :param schedule_input: ScheduleInput
+    :param problem: its Problem, for the shifts and slots
+    :param assignment: a worker index per slot
+    :return: the audit's fields of a results row
+    """
+    context = build_context(schedule_input, problem.shifts, problem.slots)
+    audit = evaluate(context, assignment)
+    summary = summarize(audit, find_fixes(context, assignment, audit))
+    return {"complaints": summary.complaints, "easy_fixes": summary.easy_fixes,
             "easy_fix_severity": round(summary.easy_fix_severity, 4),
             "no_fix_severity": round(summary.no_fix_severity, 4), "aggrieved": summary.aggrieved,
-            "concentration": round(summary.concentration, 4), "assignment": " ".join(map(str, result.assignment))}
+            "concentration": round(summary.concentration, 4)}
+
+
+def reaudit_row(row: dict[str, str]) -> dict[str, str]:
+    """A results row with its audit fields redone from its stored schedule; rows without one are kept as they are."""
+    if row["status"] != "done":
+        return row
+    schedule_input = read_input(Benchmark(row["input"], row["tier"], row["holdout"] == "True").path)
+    assignment = tuple(int(worker) for worker in row["assignment"].split())
+    return {**row, **audit_fields(schedule_input, build_problem(schedule_input), assignment)}
 
 
 def _run_job(job: tuple[str, Setting, Benchmark]) -> dict[str, Any]:
@@ -227,6 +251,28 @@ def run_stage(stage: str, jobs: int) -> None:
             _write_status(stage, status, started)
     status["finished"] = True
     _write_status(stage, status, started)
+
+
+def reaudit_stage(stage: str, jobs: int) -> None:
+    """
+    Re-audit a finished stage's stored schedules in place (after the audit changed), keeping the old file as .bak
+    :raise ValueError: if the stage has no results, or is still running
+    """
+    rows = read_results(stage)
+    if not rows:
+        raise ValueError(f"{stage} has no results")
+    path = status_path(stage)
+    if path.exists() and not json.loads(path.read_text(encoding="utf-8")).get("finished"):
+        raise ValueError(f"{stage} is still running (or was stopped); finish it first")
+    with multiprocessing.Pool(jobs) as pool:
+        reaudited = pool.map(reaudit_row, rows)
+    shutil.copyfile(results_path(stage), results_path(stage).with_suffix(".csv.bak"))
+    temporary = results_path(stage).with_suffix(".csv.new")
+    with open(temporary, "w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, RESULT_FIELDS)
+        writer.writeheader()
+        writer.writerows(reaudited)
+    os.replace(temporary, results_path(stage))
 
 
 def _write_status(stage: str, status: dict[str, Any], started: float) -> None:
@@ -290,9 +336,18 @@ def main(argv: list[str] | None = None) -> int:
     report = commands.add_parser("report", help="each setting's results, best first")
     report.add_argument("stage", choices=["baseline", "sensitivity"])
     report.add_argument("--holdout", action="store_true", help="include the held-back inputs")
+    reaudit = commands.add_parser("reaudit", help="re-audit a finished stage's schedules, after the audit changed")
+    reaudit.add_argument("stage", choices=["baseline", "sensitivity"])
+    reaudit.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel audits (default {DEFAULT_JOBS})")
     arguments = parser.parse_args(argv)
     if arguments.command == "run":
         run_stage(arguments.stage, arguments.jobs)
+    elif arguments.command == "reaudit":
+        try:
+            reaudit_stage(arguments.stage, arguments.jobs)
+        except ValueError as exc:
+            print(f"tune: {exc}", file=sys.stderr)
+            return 1
     elif arguments.command == "status":
         for stage in ("baseline", "sensitivity"):
             print("\n".join(describe_status(stage)))

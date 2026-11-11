@@ -91,11 +91,13 @@ def test_a_worker_who_was_away_longer_is_not_a_peer() -> None:
 # --- short straws and pairings ---
 
 def test_short_straws_are_counted_by_kind() -> None:
-    # Anne works 0-4 and 4-8 (no rest, a short straw) and has the heaviest day; Bob works 8-12
+    # Anne works 0-4 and 4-8 (no rest, a short straw); Bob works 8-12
     context = context_for([Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob")], {"gate": {"any": 1}}, 12)
-    stats = evaluate(context, (0, 0, 1)).stats
-    assert stats[0].straws == {"short rest": 1, "heaviest day": 1, "disliked partner": 0}
-    assert stats[1].total_straws == 0
+    audit = evaluate(context, (0, 0, 1))
+    assert audit.stats[0].straws == {"short rest": 1, "disliked partner": 0}
+    assert audit.stats[1].total_straws == 0
+    # working the day's extra shift isn't a straw of its own: that's load, and a gap of one straw is tolerated
+    assert complaints_of(audit, SHORT_STRAWS) == []
 
 
 def test_a_disliked_pairing_has_an_easy_fix_by_swapping_posts_in_the_same_hour() -> None:

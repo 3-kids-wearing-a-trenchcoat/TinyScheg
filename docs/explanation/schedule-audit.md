@@ -72,9 +72,13 @@ peers (available at least as long over the whole period) with the same tolerance
 
 * **Short rest** — a rest between two of the worker's shifts that's shorter than `min_rest + SHORT_REST_MARGIN`
   (2 hours): close to the legal minimum.
-* **Heaviest day** — having the most shifts of anyone available on a day, when not everyone available did the same
-  number.
 * **Disliked partner** — each shift shared with a worker they dislike.
+
+Having the most shifts on a day isn't a short straw: [load](#load) already compares per-day load, with the same
+tolerance. Counting it again would count one extra shift twice, since two shifts on one day usually also mean a short
+rest: a worker with two close shifts would be 2 straws ahead of a peer with one shift, a complaint, although the load
+gap of one shift is tolerated. (An earlier version did count it, and the first tuning baseline was dominated by such
+complaints.)
 
 ### Pairings
 
