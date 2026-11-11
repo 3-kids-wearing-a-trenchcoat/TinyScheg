@@ -50,12 +50,19 @@ Everything one `assign` changed. Immutable.
 
 > [!NOTE]
 > **Implemented** for finding the first legal schedule, and covered by tests (`tests/test_search.py`).
-> MRV/degree ordering and branch and bound are [not yet implemented](../../explanation/search-algorithm.md).
+> Branch and bound is [not yet implemented](../../explanation/search-algorithm.md).
 
 ### `find_first_schedule(problem) -> SearchResult`
 
-Backtracking search with forward checking. Slots are filled in stable order and workers tried in input order, so the
-result is deterministic. Stops at the first complete, legal schedule.
+Backtracking search with forward checking. Slots are chosen by `choose_slot` and workers tried in input order, so
+the result is deterministic. Stops at the first complete, legal schedule.
+
+### `choose_slot(state) -> int | None`
+
+The next slot to fill, by [variable ordering](../../explanation/search-algorithm.md#variable-ordering)
+([ADR 0003](../../decisions/0003-variable-ordering-mrv-degree.md)): the unassigned slot with the fewest workers
+left in its domain; among those, the one constrained with the most unassigned slots; among those, the lowest index.
+`None` if every slot is assigned. Computed by scanning the state each time; nothing is stored.
 
 ### `class SearchResult(assignment, deepest, stuck_slot)`
 
@@ -66,4 +73,5 @@ result is deterministic. Stops at the first complete, legal schedule.
   ([ADR 0020](../../decisions/0020-report-where-infeasibility-was-found.md)).
 
 The stuck slot is where the search found out, not necessarily the cause: forward checking stops an assignment as soon
-as it leaves some *other* slot with no workers, so the actual conflict may be a slot or two later.
+as it leaves some *other* slot with no workers, so the actual conflict may be a slot or two later. Since a slot with
+an empty domain is always chosen next, a slot no worker can fill is reported before anything is filled.

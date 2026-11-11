@@ -1,10 +1,16 @@
 """Tests for tinyscheg.csp.search."""
+import dataclasses
 import datetime as dt
 import pathlib
+import random
+import time
+
+import pytest
 
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
-from tinyscheg.csp.search import _Search, find_first_schedule
+from tinyscheg.csp.search import _Search, choose_slot, find_first_schedule
+from tinyscheg.csp.state import SearchState
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, Settings
 from tinyscheg.model.worker import Worker
@@ -12,6 +18,7 @@ from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
+SLOW_CASE_SECONDS = 5  # filling slots in stable order took minutes on this case; MRV takes a fraction of a second
 
 
 def assert_legal(schedule_input: ScheduleInput) -> tuple[int, ...]:
@@ -62,7 +69,8 @@ def test_unfillable_slot_is_where_the_search_gets_stuck() -> None:
     post = Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 1), ("medic", 1))))
     problem = build_problem(ScheduleInput(Settings(period), (Worker("Anne"), Worker("Bob")), (post,)))
     result = find_first_schedule(problem)
-    assert result.assignment is None and result.deepest == 1 and result.stuck_slot == problem.slots[1]
+    # the medic slot has the smallest (empty) domain, so it's chosen first, before anything is filled
+    assert result.assignment is None and result.deepest == 0 and result.stuck_slot == problem.slots[1]
 
 
 def test_failed_search_undoes_every_change() -> None:
@@ -75,3 +83,65 @@ def test_failed_search_undoes_every_change() -> None:
     assert run.state.domains == list(problem.domains)
     assert run.state.assigned == [None] * len(problem.slots)
     assert run.filled == 0
+
+
+# --- choosing the next slot ---
+
+def one_post_state(workers: tuple[Worker, ...], roles: dict[str, int], length: int, period_hours: int,
+                   min_rest: int = 0) -> SearchState:
+    """A fresh search state for a one-post input: shifts of `length` hours over the first period_hours of 2025."""
+    start = dt.datetime(2025, 1, 1)
+    period = DateTimeRange(start, start + dt.timedelta(hours=period_hours))
+    post = Post("gate", ShiftRules(dt.timedelta(hours=length), tuple(roles.items())))
+    return SearchState(build_problem(ScheduleInput(Settings(period, dt.timedelta(hours=min_rest)), workers, (post,))))
+
+
+def test_the_smallest_domain_is_chosen_first() -> None:
+    state = one_post_state((Worker("Anne", roles=frozenset({"medic"})), Worker("Bob"), Worker("Cy")),
+                           {"any": 1, "medic": 1}, 4, 4)
+    chosen = choose_slot(state)
+    assert chosen is not None and state.domains[chosen] == (0,)
+
+
+def test_degree_breaks_ties_in_domain_size() -> None:
+    # three single-slot shifts in a row, an hour's rest: the middle one is constrained with both others
+    state = one_post_state((Worker("Anne"), Worker("Bob"), Worker("Cy")), {"any": 1}, 4, 12, min_rest=1)
+    assert choose_slot(state) == 1
+
+
+def test_the_lowest_index_breaks_full_ties() -> None:
+    state = one_post_state((Worker("Anne"), Worker("Bob"), Worker("Cy")), {"any": 2}, 4, 4)
+    assert choose_slot(state) == 0
+
+
+def test_assigned_slots_are_skipped() -> None:
+    state = one_post_state((Worker("Anne"), Worker("Bob"), Worker("Cy")), {"any": 1}, 4, 12, min_rest=1)
+    state.assign(1, 0)
+    assert choose_slot(state) == 0  # both ends now have two workers left and no unassigned neighbours
+    state.assign(0, 1)
+    assert choose_slot(state) == 2
+    state.assign(2, 1)
+    assert choose_slot(state) is None
+
+
+# --- the search as a whole ---
+
+@pytest.mark.parametrize("seed", range(5))
+def test_legal_schedules_for_shuffled_worker_orders(seed: int) -> None:
+    schedule_input = read_input(EXAMPLE_INPUT)
+    workers = list(schedule_input.workers)
+    random.Random(seed).shuffle(workers)
+    shuffled = dataclasses.replace(schedule_input, workers=tuple(workers))
+    assert assert_legal(shuffled) == assert_legal(shuffled)
+
+
+def test_infeasibility_is_found_quickly_on_a_hard_input() -> None:
+    # the example's first six workers plus one, with five hours' rest: no legal schedule, which filling slots in
+    # stable order took minutes to establish
+    schedule_input = read_input(EXAMPLE_INPUT)
+    hard = dataclasses.replace(schedule_input, workers=schedule_input.workers[:6] + (Worker("Ninsun"),),
+                               settings=dataclasses.replace(schedule_input.settings, min_rest=dt.timedelta(hours=5)))
+    started = time.perf_counter()
+    result = find_first_schedule(build_problem(hard))
+    assert time.perf_counter() - started < SLOW_CASE_SECONDS
+    assert result.assignment is None

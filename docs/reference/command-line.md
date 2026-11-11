@@ -29,7 +29,7 @@ On success, two lines are printed: what was written, and the schedule's
 
 ```
 wrote exampleInput_schedule.csv: 34 shifts, 47 slots, 9 workers
-penalty 4.36 (likes 3.69, workload 5.03, rest 3.71)
+penalty 4.09 (likes 3.23, workload 4.84, rest 3.42)
 ```
 
 The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals. Until
@@ -55,7 +55,8 @@ Every problem is reported on standard error, prefixed with `tinyscheg:`, and not
       ```
       tinyscheg: no legal schedule exists; the search filled at most 2 of 4 slots, and got stuck at gate, 2025-01-01 04:00–08:00 (role "any")
       ```
-      This is where the search found out, not necessarily the cause, which may be a slot or two later.
+      This is where the search found out, not necessarily the cause, which may be a slot or two later. The search
+      fills the most constrained slots first, so it usually gets stuck early, at or near the bottleneck.
 * **Interrupted** (Ctrl+C) — `interrupted; no schedule written`.
 
 ## Exit codes

@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1 and 2 complete. Next: Phase 3 (efficient search).
+Progress: Phases 1–3 complete. Next: Phase 4 (schedule audit).
 
 ## Phase 1: Walking skeleton
 
@@ -77,11 +77,13 @@ pure function of a (partial) assignment, so it's built and tested on fixed assig
 Legal schedules found with far less work, before branch and bound multiplies the search. (Forward checking was
 brought forward into step 5.)
 
-- [ ] Variable ordering: MRV, then degree, then stable order
+- [x] Variable ordering: MRV, then degree, then stable order
   ([ADR 0003](decisions/0003-variable-ordering-mrv-degree.md))
-- [ ] With scoring in place, decide whether any scoring-based speedups (cheapest-first value order, a stronger
-  lower bound; see [Later](#later)) are needed before branch and bound
-- [ ] Tests: legal schedules (checked independently) on the same inputs, infeasibility still found, and determinism
+- [x] With scoring in place, decide whether any scoring-based speedups (cheapest-first value order, a stronger
+  lower bound; see [Later](#later)) are needed before branch and bound. **Not yet:** with MRV, finding a legal
+  schedule or proving there is none is instant at our sizes; whether branch and bound needs them can only be
+  measured in phase 5, so they stay in Later, to be reconsidered there
+- [x] Tests: legal schedules (checked independently) on the same inputs, infeasibility still found, and determinism
 
 ## Phase 4: Schedule audit (development tool)
 
@@ -108,6 +110,7 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
 - [ ] Tests: same result as brute force on small inputs
 - [ ] Check with the audit that no simple legal swap lowers the chosen schedule's penalty
 - [ ] Tune the scoring parameters with the audit
+- [ ] Measure the search, and decide on the scoring-based speedups in [Later](#later)
 
 ## Phase 6: Spreadsheet output
 

@@ -43,7 +43,8 @@ minimal set of conflicting requirements.
 
 > [!WARNING]
 > **Not yet implemented.** Deferred until TinyScheg works end to end; performance isn't a concern at the intended
-> schedule sizes yet.
+> schedule sizes yet. With MRV ordering, finding a first legal schedule is instant at these sizes (decided
+> 2026-11-11); the ideas below are to be reconsidered once branch and bound can be measured.
 
 * **Cheapest-first value ordering.** Try the worker whose assignment adds the least penalty first. This doesn't
   change the result: as [ADR 0003](../decisions/0003-variable-ordering-mrv-degree.md) argues, the best schedule is

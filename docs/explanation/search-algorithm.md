@@ -5,9 +5,9 @@ over the [CSP](csp-formulation.md), combined with branch and bound: a [penalty s
 partial schedule, and branches that can't beat the best complete schedule found so far are pruned.
 
 > [!IMPORTANT]
-> **Partially implemented.** Backtracking with forward checking and undo finds the **first** legal schedule
-> ([`csp/search.py`](../reference/api/search.md)), filling slots in stable order. Scoring, MRV/degree ordering and
-> branch and bound aren't implemented yet.
+> **Partially implemented.** Backtracking with forward checking, undo and MRV/degree ordering finds the **first**
+> legal schedule ([`csp/search.py`](../reference/api/search.md)). [Scoring](scoring.md) is implemented but not yet
+> used by the search; branch and bound isn't implemented yet.
 
 ## Overview
 
@@ -65,9 +65,8 @@ difference constraint with it. This avoids ever trying combinations that violate
 
 ## Variable ordering
 
-> [!IMPORTANT]
-> **Partially implemented.** Only the final tie-breaker is: slots are filled in stable order. MRV and the degree
-> heuristic aren't implemented yet.
+> [!NOTE]
+> **Implemented.** See [`choose_slot`](../reference/api/search.md#choose_slotstate-int-none).
 
 See [ADR 0003](../decisions/0003-variable-ordering-mrv-degree.md) and
 [ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md).
@@ -84,7 +83,14 @@ The next slot to assign is chosen among the unassigned slots by:
 
 Both the domain sizes and the number of unassigned neighbours are computed when the choice is made, by scanning the
 unassigned slots, rather than kept in a sorted structure. At the intended schedule sizes (around a hundred slots),
-this is cheap.
+this is cheap. The number of unassigned neighbours is only counted for the slots tied on domain size.
+
+The difference this makes is large. On an infeasible input of seven workers and 47 slots, filling slots in stable
+order hadn't established that no schedule exists after several minutes; MRV does it at once, since it fills the
+night shifts that few workers can still take before they run out. A side effect is that the slot an infeasible
+input is reported stuck at ([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)) tends to be the
+real bottleneck: a slot with no workers left is always chosen next, so the search reports it before filling
+anything else.
 
 ## Value ordering
 
