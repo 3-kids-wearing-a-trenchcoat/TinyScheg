@@ -125,7 +125,8 @@ The code is the `tinyscheg` package in `src/tinyscheg/`, split into subpackages 
 (e.g. `from tinyscheg.timing.datetime_range import DateTimeRange`). Running `python src/main.py` puts `src/` on the
 import path automatically; for anything else (such as `python -c`), set `PYTHONPATH=src`.
 Tests use pytest (a development-only dependency in `environment.yml`) and live in `tests/`. `pyproject.toml` puts
-`src/` on pytest's import path, so run them from the repository root:
+`src/` and `tools/` (development tools, outside the package) on pytest's import path, so run them from the
+repository root:
 `conda run --no-capture-output -n tinyscheg python -m pytest`.
 
 ## Git Usage Rules

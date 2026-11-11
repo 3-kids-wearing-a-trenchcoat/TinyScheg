@@ -52,7 +52,8 @@ Tests live in `tests/` and use pytest. With the environment activated, run them 
 python -m pytest
 ```
 
-`pyproject.toml` puts `src/` on pytest's import path, so no `PYTHONPATH` is needed.
+`pyproject.toml` puts `src/` and `tools/` (the development tools the tests share, such as the independent
+hard-constraint checker) on pytest's import path, so no `PYTHONPATH` is needed.
 
 ## Updating dependencies
 

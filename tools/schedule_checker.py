@@ -1,5 +1,5 @@
 """
-An independent check of a schedule's hard constraints, for tests.
+An independent check of a schedule's hard constraints, for the tests and the schedule audit.
 It works from the input and the slots alone and reuses nothing from tinyscheg.csp, so that a bug there can't hide
 the same bug here.
 """

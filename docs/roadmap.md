@@ -35,7 +35,7 @@ confirms meets every hard constraint.
     - [x] Backtracking to the first legal schedule, slots in stable order
     - [x] Tracking the deepest point reached, for reporting infeasibility
       ([ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
-    - [x] Independent hard-constraint checker for tests (`tests/schedule_checker.py`)
+    - [x] Independent hard-constraint checker for tests (now `tools/schedule_checker.py`)
 - [x] **6. Grid output, CSV** — `output/grid.py`, `output/csv_writer.py`
   ([ADR 0019](decisions/0019-output-as-a-time-by-post-grid.md))
     - [x] Assigned slots → time-by-post grid (rows between shift boundaries, names joined with `" & "`), each cell
@@ -95,7 +95,8 @@ code with `csp/` or `scoring/`.
 - [ ] Spec: the criteria and their definitions, for approval before any code. Judged **relative to other workers**:
   excess over the most even split possible (per day and overall), avoidability (could a simple legal swap or move
   fix it?), how often each worker draws the short straw, and social pairings
-- [ ] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit
+- [x] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit,
+  with a reader for written CSV schedules (`tools/schedule_reader.py`)
 - [ ] Per-worker feedback cards and a group summary of how concentrated the unfairness is
 - [ ] Sampling: many legal schedules (by shuffling the workers' order), each audited and shown next to its internal
   penalty, flagging where the two disagree

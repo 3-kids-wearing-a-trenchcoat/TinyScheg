@@ -1,5 +1,4 @@
 """Tests for tinyscheg.cli, including the end-to-end test."""
-import csv
 import pathlib
 import shutil
 import textwrap
@@ -7,6 +6,7 @@ import textwrap
 import pytest
 
 from schedule_checker import hard_constraint_violations
+from schedule_reader import read_schedule
 from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, describe_penalty, main
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.output.writers import UnsupportedFormatError, writer_for
@@ -50,25 +50,6 @@ def write(tmp_path: pathlib.Path, text: str, name: str = "input.yml") -> pathlib
     return path
 
 
-def read_assignment(csv_path: pathlib.Path, input_path: pathlib.Path) -> tuple:
-    """
-    Read a written schedule back into a worker index per slot: each shift's names, from the row where it starts in
-    its post's column, in slot order
-    """
-    schedule_input = read_input(input_path)
-    problem = build_problem(schedule_input)
-    with open(csv_path, encoding="utf-8-sig", newline="") as file:
-        header, *rows = list(csv.reader(file))
-    row_by_start = {row[0]: row for row in rows}
-    worker_index = {worker.name: index for index, worker in enumerate(schedule_input.workers)}
-    assignment: list[int | None] = [None] * len(problem.slots)
-    for shift in problem.shifts:
-        cell = row_by_start[shift.time.start.isoformat()][header.index(shift.post.name)]
-        for slot, name in zip(shift.slots, cell.split(" & "), strict=True):
-            assignment[slot.index] = worker_index[name]
-    return tuple(assignment)
-
-
 # --- end to end ---
 
 def test_example_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -78,7 +59,7 @@ def test_example_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixtur
     assert wrote.startswith(f"wrote {output}: ")
     schedule_input = read_input(EXAMPLE_INPUT)
     problem = build_problem(schedule_input)
-    assignment = read_assignment(output, EXAMPLE_INPUT)
+    assignment = read_schedule(output, schedule_input).assignment
     assert hard_constraint_violations(schedule_input, problem.slots, assignment) == []
     # the penalty shown is the written schedule's
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
