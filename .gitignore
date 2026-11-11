@@ -2,3 +2,5 @@
 /Algorithms/
 /site/
 __pycache__/
+# Schedules written by TinyScheg next to their input (python src/main.py <input>.yml)
+*_schedule.csv
