@@ -1,7 +1,7 @@
 # Scheduler settings
 settings:
   time: ["2025-01-01", "2025-01-04"] # time period to generate a schedule for
-  min_rest: 5 # minimum time between shifts (in hours)
+  min_rest: 6 # minimum time between shifts (in hours)
 
 
 # List of workers available for assignment.
@@ -37,6 +37,14 @@ workers:
   - name: "Enkidu"
     roles: ["security"]
     likes: ["Gilgamesh"]
+
+  - name: "Ninsun"
+    roles: ["security"]
+
+  - name: "Shamhat"
+    roles: ["supervisor"]
+
+  - name: "Siduri"
 
 
 # List of posts that need to be staffed by workers

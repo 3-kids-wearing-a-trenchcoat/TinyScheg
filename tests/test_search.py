@@ -1,5 +1,4 @@
 """Tests for tinyscheg.csp.search."""
-import dataclasses
 import datetime as dt
 import pathlib
 
@@ -24,29 +23,12 @@ def assert_legal(schedule_input: ScheduleInput) -> tuple[int, ...]:
     return result.assignment
 
 
-def example_with_min_rest(hours: int) -> ScheduleInput:
-    """exampleInput.yml with a different minimum rest."""
-    schedule_input = read_input(EXAMPLE_INPUT)
-    settings = dataclasses.replace(schedule_input.settings, min_rest=dt.timedelta(hours=hours))
-    return dataclasses.replace(schedule_input, settings=settings)
-
-
-def test_example_input_is_infeasible() -> None:
-    # The night front gate needs 2 workers per 3-hour shift. With 5 hours' rest, the shifts 00-03, 03-06 and 06-07
-    # need all 6 workers, leaving nobody rested for the 07-10 shift.
-    problem = build_problem(read_input(EXAMPLE_INPUT))
-    result = find_first_schedule(problem)
-    assert result.assignment is None
-    assert result.deepest == 5
-    assert result.stuck_slot is not None and result.stuck_slot.time.start == dt.datetime(2025, 1, 1, 6)
-
-
-def test_example_with_less_rest_has_a_legal_schedule() -> None:
-    assert_legal(example_with_min_rest(3))
+def test_example_input_has_a_legal_schedule() -> None:
+    assert_legal(read_input(EXAMPLE_INPUT))
 
 
 def test_search_is_deterministic() -> None:
-    schedule_input = example_with_min_rest(3)
+    schedule_input = read_input(EXAMPLE_INPUT)
     assert assert_legal(schedule_input) == assert_legal(schedule_input)
 
 

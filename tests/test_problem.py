@@ -99,13 +99,13 @@ def test_build_problem_from_the_example() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     problem = build_problem(schedule_input)
     assert problem.workers == schedule_input.workers
-    assert problem.min_rest == dt.timedelta(hours=5)
+    assert problem.min_rest == dt.timedelta(hours=6)
     assert len(problem.slots) == len(problem.domains) == len(problem.neighbours) == 47
     assert [slot.index for slot in problem.slots] == list(range(47))
     assert unfillable_slots(problem) == ()
-    # the desk needs a supervisor: Jack, Jill or Gilgamesh, when available
+    # the desk needs a supervisor: Jack, Jill, Gilgamesh or Shamhat, when available
     desk_domains = {problem.domains[slot.index] for slot in problem.slots if slot.post.name == "desk"}
-    assert desk_domains <= {(0, 1, 4), (1, 4), (0, 4)}
+    assert desk_domains <= {(0, 1, 4, 7), (1, 4, 7), (0, 4, 7)}
 
 
 def test_unfillable_slots() -> None:

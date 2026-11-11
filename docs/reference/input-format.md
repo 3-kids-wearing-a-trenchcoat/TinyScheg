@@ -29,7 +29,7 @@ General scheduler settings.
 ```yaml
 settings:
   time: ["2025-01-01", "2025-01-04"]
-  min_rest: 5
+  min_rest: 6
 ```
 
 ## `workers`

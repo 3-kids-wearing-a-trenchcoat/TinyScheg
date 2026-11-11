@@ -45,10 +45,10 @@ def test_example_input() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     settings = schedule_input.settings
     assert settings.period == DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 4))
-    assert settings.min_rest == dt.timedelta(hours=5)
+    assert settings.min_rest == dt.timedelta(hours=6)
 
     assert [worker.name for worker in schedule_input.workers] == ["Jack", "Jill", "Jeff", "Anne", "Gilgamesh",
-                                                                  "Enkidu"]
+                                                                  "Enkidu", "Ninsun", "Shamhat", "Siduri"]
     jack, jill, jeff, anne = schedule_input.workers[:4]
     assert jack.roles == frozenset({"supervisor", "other"})
     assert jack.unavailable[0] == DateTimeRange(dt.datetime(2025, 1, 1, 4), dt.datetime(2025, 1, 1, 6))
