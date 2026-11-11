@@ -34,12 +34,12 @@ def test_shuffled_schedules_are_legal_in_the_original_worker_order() -> None:
         assert hard_constraint_violations(schedule_input, slots, assignment) == []
 
 
-def test_disagreements_are_the_best_by_penalty_with_the_most_avoidable_severity() -> None:
-    def sample(seed: int, penalty: float, avoidable: float) -> Sample:
-        summary = AuditSummary(0, 0, avoidable, 0.0, 0, 0.0, ())
+def test_disagreements_are_the_best_by_penalty_with_the_most_severity_with_an_easy_fix() -> None:
+    def sample(seed: int, penalty: float, easy_fix_severity: float) -> Sample:
+        summary = AuditSummary(0, 0, easy_fix_severity, 0.0, 0, 0.0, ())
         return Sample(seed, (seed,), Penalty(penalty, 0, 0, 0), summary)
     samples = [sample(0, 1.0, 0.0), sample(1, 2.0, 5.0), sample(2, 3.0, 9.0), sample(3, 4.0, 9.0)]
-    # the best quarter of four is one sample, seed 0, with nothing avoidable
+    # the best quarter of four is one sample, seed 0, with nothing that has an easy fix
     assert disagreements(samples) == []
     samples[0] = dataclasses.replace(samples[0], summary=AuditSummary(0, 0, 2.0, 0.0, 0, 0.0, ()))
     assert [found.seed for found in disagreements(samples)] == [0]

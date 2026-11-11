@@ -4,7 +4,7 @@ import pathlib
 
 import pytest
 
-from audit import (EXIT_ILLEGAL, EXIT_SUCCESS, LOAD, SHORT_STRAWS, WHOLE_PERIOD, Audit, AuditContext, Complaint,
+from audit import (EXIT_ILLEGAL, EXIT_SUCCESS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD, Audit, AuditContext, Complaint,
                    available_hours, build_context, days, evaluate, find_fixes, is_harmless, main, summarize)
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
@@ -96,7 +96,7 @@ def test_short_straws_are_counted_by_kind() -> None:
     assert stats[1].total_straws == 0
 
 
-def test_a_disliked_pairing_fixed_by_swapping_posts_in_the_same_hour_is_avoidable() -> None:
+def test_a_disliked_pairing_has_an_easy_fix_by_swapping_posts_in_the_same_hour() -> None:
     # two posts of two, two 4-hour blocks; Anne is with Bob, whom she dislikes, both times
     workers = [Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob"), Worker("Cy"), Worker("Dan")]
     context = context_for(workers, {"gate": {"any": 2}, "desk": {"any": 2}}, 8)
@@ -109,18 +109,32 @@ def test_a_disliked_pairing_fixed_by_swapping_posts_in_the_same_hour_is_avoidabl
     assert all(fixes[c.key].description.startswith("swapping") for c in audit.complaints if c.kind == SHORT_STRAWS)
 
 
-# --- avoidability ---
+# --- easy fixes ---
 
-def test_extra_load_a_move_can_fix_is_avoidable() -> None:
+def test_extra_load_a_move_can_fix_has_an_easy_fix() -> None:
     context = context_for([Worker("Anne"), Worker("Bob")], {"gate": {"any": 1}}, 24)
     assignment = (0, 0, 0, 0, 1, 1)
     audit = evaluate(context, assignment)
     fixes = find_fixes(context, assignment, audit)
     assert {c.key for c in audit.complaints if c.kind == LOAD} <= fixes.keys()
-    assert summarize(audit, fixes).unavoidable_severity == 0
+    assert summarize(audit, fixes).no_fix_severity == 0
+    assert all(len(fix.changes) == 1 for fix in fixes.values())
 
 
-def test_extra_load_forced_by_roles_is_unavoidable() -> None:
+def test_a_wide_gap_is_fixed_by_a_chain_of_changes() -> None:
+    # Anne has all six shifts and Bob none: each move narrows the gap by two, so it takes three to remove it
+    assert MAX_CHANGES >= 3
+    context = context_for([Worker("Anne"), Worker("Bob")], {"gate": {"any": 1}}, 24)
+    assignment = (0, 0, 0, 0, 0, 0)
+    audit = evaluate(context, assignment)
+    overall = next(c for c in audit.complaints if c.kind == LOAD and c.window == WHOLE_PERIOD)
+    assert overall.severity == 5
+    fix = find_fixes(context, assignment, audit)[overall.key]
+    assert len(fix.changes) == 3 and all(change.description.startswith("giving Bob") for change in fix.changes)
+    assert ", then " in fix.description
+
+
+def test_extra_load_forced_by_roles_has_no_easy_fix() -> None:
     context = context_for([Worker("Anne", roles=frozenset({"medic"})), Worker("Bob")], {"aid": {"medic": 1}}, 16)
     assignment = (0, 0, 0, 0)
     audit = evaluate(context, assignment)

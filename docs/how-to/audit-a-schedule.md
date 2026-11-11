@@ -30,13 +30,16 @@ Jill: 4 shifts, 14 h; available 48 h
   short straws: 2 (short rest 2, heaviest day 0, disliked partner 0)
   partners: Jeff ×1, Gilgamesh ×1; with someone they like: 0, with someone they dislike: 0
   complaints:
-    - [3] load overall: 4 shifts (14 h), against Siduri's 0 (0 h); unavoidable
-    - [1] load on 2025-01-01: 2 shifts (7 h), against Siduri's 0 (0 h); avoidable: giving Siduri front gate 2025-01-01 07:00–10:00 instead of Jack
+    - [3] load overall: 4 shifts (14 h), against Siduri's 0 (0 h); no easy fix found
+    - [1] load on 2025-01-01: 2 shifts (7 h), against Siduri's 0 (0 h); easy fix: giving Siduri front gate 2025-01-01 07:00–10:00 instead of Jack
 ```
 
-Each complaint starts with its severity in brackets, and ends with whether a single harmless move or swap would fix
-it, and which. The summary gives the number of complaints, the avoidable and unavoidable severity, how many workers
-have complaints, and the concentration: the most aggrieved worker's share of all severity.
+Each complaint starts with its severity in brackets, and ends with its [easy fix](../explanation/schedule-audit.md#easy-fixes),
+a chain of up to three harmless moves and swaps, if one was found. The summary gives the number of complaints and
+how many have an easy fix, the severity with and without one, how many workers have complaints, and the
+concentration: the most aggrieved worker's share of all severity.
+
+An audit takes a few seconds, most of it spent checking candidate changes for legality.
 
 The audit exits with 1 if the schedule breaks a hard constraint (listing the violations), and with 2 if the files
 can't be read or don't match each other.
@@ -48,9 +51,10 @@ PYTHONPATH=src python tools/audit_sample.py exampleInput.yml -n 30
 ```
 
 This samples 30 schedules (20 by default) by shuffling the workers' order before the search, and lists each, best
-penalty first, with its audit summary. It ends with the rank correlation between the penalty and the avoidable
-severity, and the **disagreements**: schedules among the best quarter by penalty with the most avoidable severity,
-named by the seed of their shuffle.
+penalty first, with its audit summary. It ends with the rank correlations between the penalty and the severity with
+an easy fix, and between the penalty and the total severity, and the **disagreements**: schedules among the best
+quarter by penalty with the most severity with an easy fix, named by the seed of their shuffle. 30 samples take
+about a minute and a half.
 
 The audit's thresholds are named constants at the top of `tools/audit.py`, and the sampler's at the top of
 `tools/audit_sample.py`.

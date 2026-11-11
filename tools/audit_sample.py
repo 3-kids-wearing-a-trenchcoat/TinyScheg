@@ -104,19 +104,19 @@ def spearman(first: Sequence[float], second: Sequence[float]) -> float | None:
 
 
 def disagreements(samples: Sequence[Sample]) -> list[Sample]:
-    """Among the best samples by penalty (BEST_SHARE of them), those with the most avoidable severity."""
+    """Among the best samples by penalty (BEST_SHARE of them), those with the most severity that has an easy fix."""
     best = sorted(samples, key=lambda sample: (sample.penalty.total, sample.seed))
     best = best[:max(1, math.ceil(len(samples) * BEST_SHARE))]
-    worst_audits = sorted(best, key=lambda sample: (-sample.summary.avoidable_severity, sample.seed))
-    return [sample for sample in worst_audits[:DISAGREEMENTS_SHOWN] if sample.summary.avoidable_severity > 0]
+    worst_audits = sorted(best, key=lambda sample: (-sample.summary.easy_fix_severity, sample.seed))
+    return [sample for sample in worst_audits[:DISAGREEMENTS_SHOWN] if sample.summary.easy_fix_severity > 0]
 
 
 def describe_sample(sample: Sample) -> str:
     """One line per sample: its seed, penalty and audit summary."""
     summary = sample.summary
-    return (f"seed {sample.seed:>3}: penalty {shown(sample.penalty.total):>5}  avoidable severity "
-            f"{shown(summary.avoidable_severity):>5}  unavoidable {shown(summary.unavoidable_severity):>5}  "
-            f"complaints {summary.complaints:>3} ({summary.avoidable} avoidable)  concentration "
+    return (f"seed {sample.seed:>3}: penalty {shown(sample.penalty.total):>5}  severity: easy fix "
+            f"{shown(summary.easy_fix_severity):>5}, none found {shown(summary.no_fix_severity):>5}  "
+            f"complaints {summary.complaints:>3} ({summary.easy_fixes} with an easy fix)  concentration "
             f"{shown(summary.concentration)}")
 
 
@@ -125,13 +125,17 @@ def report(samples: Sequence[Sample]) -> str:
     by_penalty = sorted(samples, key=lambda sample: (sample.penalty.total, sample.seed))
     lines = [describe_sample(sample) for sample in by_penalty]
     distinct = len({sample.assignment for sample in samples})
-    correlation = spearman([sample.penalty.total for sample in samples],
-                           [sample.summary.avoidable_severity for sample in samples])
-    lines += ["", f"{len(samples)} samples, {distinct} distinct schedules",
-              "rank correlation of penalty and avoidable severity: "
-              + ("n/a (one of them is constant)" if correlation is None else shown(correlation))]
+    penalties = [sample.penalty.total for sample in samples]
+    lines += ["", f"{len(samples)} samples, {distinct} distinct schedules"]
+    summaries = [sample.summary for sample in samples]
+    for name, severities in (("severity with an easy fix", [summary.easy_fix_severity for summary in summaries]),
+                             ("total severity", [summary.easy_fix_severity + summary.no_fix_severity
+                                                 for summary in summaries])):
+        correlation = spearman(penalties, severities)
+        lines.append(f"rank correlation of penalty and {name}: "
+                     + ("n/a (one of them is constant)" if correlation is None else shown(correlation)))
     found = disagreements(samples)
-    lines.append(f"disagreements (best {shown(BEST_SHARE * 100)}% by penalty, most avoidable severity): "
+    lines.append(f"disagreements (best {shown(BEST_SHARE * 100)}% by penalty, most severity with an easy fix): "
                  + (", ".join(f"seed {sample.seed}" for sample in found) if found else "none"))
     return "\n".join(lines)
 

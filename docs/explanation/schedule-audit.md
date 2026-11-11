@@ -48,7 +48,7 @@ window of time:
   tolerated; two is a complaint.
 * **Severity** is how far the gap goes past the tolerance: a gap of 2 has severity 1, a gap of 3 severity 2.
 * **Roles aren't considered** when finding complaints. A worker carrying more because few others have a role still
-  complains; whether anything could have been done is the question of [avoidability](#avoidability).
+  complains; whether anything could have been done is the question of [easy fixes](#easy-fixes).
 
 A worker's availability during a window is the part of the window inside the period, minus their unavailability.
 
@@ -82,26 +82,39 @@ peers (available at least as long over the whole period) with the same tolerance
 * Among workers who like anyone, A complains about B if B shared shifts with someone they like more often than A did,
   by more than the tolerance (peers over the whole period, as above).
 
-## Avoidability
+## Easy fixes
 
-A complaint is **avoidable** if one simple, legal change to the schedule fixes it:
+Every complaint is checked for an **easy fix**: a short chain of simple, legal changes that removes it. A complaint
+with an easy fix is one workers would rightly hold against the schedule; for one without, **no easy fix was found**,
+which doesn't prove there's none, only that none was found quickly. The simple changes are:
 
 * **Move** — give one slot to a different worker.
 * **Swap** — two workers exchange slots, such as two posts in the same hour.
 
-The change must be legal (checked by the hard-constraint checker), remove the complaint, **create no new complaint
-and make no existing complaint more severe**, for anyone. Otherwise it only moves the problem around. The card names
-the change, e.g. "giving Bob front gate 2025-01-01 04:00–08:00 would fix this".
+A chain has at most `MAX_CHANGES` (3) changes. Each must be legal (checked by the hard-constraint checker) and
+**harmless**: compared with the audited schedule, it creates no new complaint and makes no existing complaint more
+severe, for anyone. Otherwise the fix only moves the problem around.
+
+Chains are found greedily, which keeps the search quick:
+
+1. First, every single change is tried, and each complaint a harmless one removes gets it as its fix.
+2. Then, for each complaint left, most severe first, the harmless change that lowers its severity most is taken, then
+   the next from there, until it's removed or `MAX_CHANGES` changes are made. A wide gap needs several moves:
+   six shifts against none narrows by two with each move, so it takes three. A chain found for one complaint is also
+   given to every other complaint left that it removes.
+
+The card names the changes, e.g. "easy fix: giving Siduri front gate 2025-01-01 07:00–10:00 instead of Jack, then
+giving Shamhat front gate 2025-01-02 07:00–10:00 instead of Jack".
 
 Each candidate change is audited in full, which is slow but straightforward.
 
 ## The report
 
 * A **card per worker**: their shifts and hours (per day and overall) against their availability, their shortest
-  rests, their short straws, who they shared shifts with, and their complaints, most severe first, each saying
-  whether and how it's avoidable.
-* A **group summary**: the number of complaints; the total severity of the avoidable ones and of the unavoidable
-  ones; how many workers have any complaint; and **concentration**, the share of all severity held by the worker
+  rests, their short straws, who they shared shifts with, and their complaints, most severe first, each with its
+  easy fix, if one was found.
+* A **group summary**: the number of complaints and how many have an easy fix; the total severity of those with an
+  easy fix and of those without; how many workers have any complaint; and **concentration**, the share of all severity held by the worker
   with the most, with the workers ranked by severity.
 
 ## Sampling
@@ -109,9 +122,10 @@ Each candidate change is audited in full, which is slow but straightforward.
 To compare the audit with the internal penalty, the sampler makes many legal schedules for one input by shuffling the
 workers' order before the search, then audits and scores each. It reports:
 
-* the **rank correlation** (Spearman) between the internal penalty and the total avoidable severity;
-* **disagreements**: the schedules among the best by internal penalty that have the most avoidable severity, with
-  their summaries.
+* the **rank correlation** (Spearman) between the internal penalty and the severity with an easy fix, and between
+  the penalty and the total severity;
+* **disagreements**: the schedules among the best by internal penalty that have the most severity with an easy fix,
+  with their summaries.
 
 Until [branch and bound](search-algorithm.md#branch-and-bound-the-pocket) exists, these are first legal schedules,
 not a random sample of all legal ones, which is enough to find blind spots.
@@ -119,4 +133,4 @@ not a random sample of all legal ones, which is enough to find blind spots.
 ## Parameters
 
 Named constants at the top of the audit's code: `TOLERANCE` (1), `DAY_BOUNDARY` (00:00), `SHORT_REST_MARGIN`
-(2 hours). They're the audit's own, and unrelated to the [scoring parameters](scoring.md#parameters).
+(2 hours), `MAX_CHANGES` (3). They're the audit's own, and unrelated to the [scoring parameters](scoring.md#parameters).

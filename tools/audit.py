@@ -25,6 +25,7 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 TOLERANCE = 1                               # a gap of one (shift, short straw, ...) is tolerated; more is a complaint
 DAY_BOUNDARY = dt.time(0, 0)                # days, the windows load is compared over, start at this time
 SHORT_REST_MARGIN = dt.timedelta(hours=2)   # a rest shorter than min_rest plus this is a short straw
+MAX_CHANGES = 3                             # an easy fix is a chain of at most this many moves and swaps
 SEVERITY_EPSILON = 1e-9                     # severities closer than this are equal (hours are divided as floats)
 SHOWN_DECIMALS = 2                          # decimals shown for hours and severities
 
@@ -305,7 +306,7 @@ def _liked_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> 
             and (gap := stats[other].liked_shared - stats[worker].liked_shared) > TOLERANCE]
 
 
-# --- avoidability ---
+# --- easy fixes ---
 
 @dataclass(frozen=True, slots=True)
 class Change:
@@ -353,30 +354,110 @@ def is_harmless(before: dict[tuple[str, int, int, str], float], after: Audit) ->
                for complaint in after.complaints)
 
 
-def find_fixes(context: AuditContext, assignment: tuple[int, ...], audit: Audit) -> dict[tuple[str, int, int, str],
-                                                                                         Change]:
+ComplaintKey = tuple[str, int, int, str]
+
+
+@dataclass(frozen=True, slots=True)
+class Fix:
+    """An easy fix: a chain of simple changes, each harmless, that together remove a complaint."""
+    changes: tuple[Change, ...]
+
+    @property
+    def description(self) -> str:
+        """The changes in order, e.g. 'giving Bob ... instead of Anne, then swapping ...'."""
+        return ", then ".join(change.description for change in self.changes)
+
+
+@dataclass(frozen=True, slots=True)
+class _Step:
+    """A harmless change from some schedule, with the audit of the schedule it leads to."""
+    change: Change
+    audit: Audit
+
+    def severity(self, key: ComplaintKey) -> float:
+        """The complaint's severity after the change: 0 if it's gone."""
+        return next((c.severity for c in self.audit.complaints if c.key == key), 0.0)
+
+    def removes(self, key: ComplaintKey) -> bool:
+        """True if the complaint is gone after the change."""
+        return all(c.key != key for c in self.audit.complaints)
+
+
+def harmless_steps(context: AuditContext, assignment: tuple[int, ...],
+                   before: dict[ComplaintKey, float]) -> list[_Step]:
     """
-    Find, for each complaint, the first simple change that fixes it (see the spec's Avoidability section)
+    Every legal move and swap from a schedule that is harmless compared with the audited schedule
     :param context: AuditContext
-    :param assignment: the audited schedule
-    :param audit: its Audit
-    :return: the fixing Change for each avoidable complaint, by key; unavoidable complaints are absent
+    :param assignment: the schedule to change
+    :param before: each complaint's severity in the audited schedule, by key
+    :return: the harmless steps, in candidate_changes' order
     """
-    before = {complaint.key: complaint.severity for complaint in audit.complaints}
-    fixes: dict[tuple[str, int, int, str], Change] = {}
-    if not before:
-        return fixes
+    steps = []
     for change in candidate_changes(context, assignment):
         if hard_constraint_violations(context.schedule_input, context.slots, change.assignment):
             continue
         after = evaluate(context, change.assignment)
-        if not is_harmless(before, after):
+        if is_harmless(before, after):
+            steps.append(_Step(change, after))
+    return steps
+
+
+def _fix_chain(context: AuditContext, before: dict[ComplaintKey, float], key: ComplaintKey,
+               first_steps: list[_Step]) -> tuple[_Step, ...] | None:
+    """
+    Look for an easy fix for one complaint, greedily: at each step, take the harmless change that lowers the
+    complaint's severity most (the first of equals), until it's gone or MAX_CHANGES changes are made
+    :param context: AuditContext
+    :param before: each complaint's severity in the audited schedule, by key
+    :param key: the complaint to fix
+    :param first_steps: the harmless steps from the audited schedule (shared between complaints)
+    :return: the chain of steps, or None if no easy fix was found
+    """
+    chain: list[_Step] = []
+    current, options = before[key], first_steps
+    for depth in range(MAX_CHANGES):
+        if depth:
+            options = harmless_steps(context, chain[-1].change.assignment, before)
+        better = [step for step in options if step.severity(key) < current - SEVERITY_EPSILON]
+        if not better:
+            return None
+        best = min(better, key=lambda step: step.severity(key))  # min keeps the first of equals
+        chain.append(best)
+        if best.removes(key):
+            return tuple(chain)
+        current = best.severity(key)
+    return None
+
+
+def find_fixes(context: AuditContext, assignment: tuple[int, ...], audit: Audit) -> dict[ComplaintKey, Fix]:
+    """
+    Find easy fixes (see the spec's Easy fixes section): first single changes, then, for the complaints left, chains
+    of up to MAX_CHANGES, most severe complaint first. A chain found for one complaint is also given to every other
+    complaint left that it removes.
+    :param context: AuditContext
+    :param assignment: the audited schedule
+    :param audit: its Audit
+    :return: the easy fix for each complaint one was found for, by key
+    """
+    before = {complaint.key: complaint.severity for complaint in audit.complaints}
+    if not before:
+        return {}
+    first_steps = harmless_steps(context, assignment, before)
+    fixes: dict[ComplaintKey, Fix] = {}
+    for step in first_steps:
+        for key in before.keys() - fixes.keys():
+            if step.removes(key):
+                fixes[key] = Fix((step.change,))
+    for complaint in audit.complaints:  # most severe first
+        if complaint.key in fixes:
             continue
-        remaining = {complaint.key for complaint in after.complaints}
-        for key in before.keys() - remaining - fixes.keys():
-            fixes[key] = change
-        if len(fixes) == len(before):
-            break
+        chain = _fix_chain(context, before, complaint.key, first_steps)
+        if chain is None:
+            continue
+        fix = Fix(tuple(step.change for step in chain))
+        for key in before.keys() - fixes.keys():
+            if chain[-1].removes(key):
+                fixes[key] = fix
     return fixes
 
 
@@ -384,17 +465,20 @@ def find_fixes(context: AuditContext, assignment: tuple[int, ...], audit: Audit)
 
 @dataclass(frozen=True, slots=True)
 class AuditSummary:
-    """The group summary; severity_by_worker is each worker's total, as (worker, severity), most first."""
+    """
+    The group summary: how many complaints there are and how many have an easy fix, the severity of those with and
+    without one, and severity_by_worker, each worker's total as (worker, severity), most first.
+    """
     complaints: int
-    avoidable: int
-    avoidable_severity: float
-    unavoidable_severity: float
+    easy_fixes: int
+    easy_fix_severity: float
+    no_fix_severity: float
     aggrieved: int
     concentration: float
     severity_by_worker: tuple[tuple[int, float], ...]
 
 
-def summarize(audit: Audit, fixes: dict[tuple[str, int, int, str], Change]) -> AuditSummary:
+def summarize(audit: Audit, fixes: dict[ComplaintKey, Fix]) -> AuditSummary:
     """
     Summarize an audit for the group
     :param audit: Audit
@@ -405,11 +489,11 @@ def summarize(audit: Audit, fixes: dict[tuple[str, int, int, str], Change]) -> A
     for complaint in audit.complaints:
         by_worker[complaint.worker] += complaint.severity
     total = sum(by_worker.values())
-    avoidable = [complaint for complaint in audit.complaints if complaint.key in fixes]
+    fixable = [complaint for complaint in audit.complaints if complaint.key in fixes]
     ranked = tuple(sorted(by_worker.items(), key=lambda item: (-item[1], item[0])))
-    return AuditSummary(complaints=len(audit.complaints), avoidable=len(avoidable),
-                        avoidable_severity=sum(complaint.severity for complaint in avoidable),
-                        unavoidable_severity=total - sum(complaint.severity for complaint in avoidable),
+    fixable_severity = sum(complaint.severity for complaint in fixable)
+    return AuditSummary(complaints=len(audit.complaints), easy_fixes=len(fixable), easy_fix_severity=fixable_severity,
+                        no_fix_severity=total - fixable_severity,
                         aggrieved=len(by_worker), concentration=ranked[0][1] / total if total else 0.0,
                         severity_by_worker=ranked)
 
@@ -433,7 +517,7 @@ def describe_complaint(context: AuditContext, audit: Audit, complaint: Complaint
     return f"shifts with someone they like: {mine.liked_shared}, against {other}'s {theirs.liked_shared}"
 
 
-def card(context: AuditContext, audit: Audit, fixes: dict[tuple[str, int, int, str], Change], worker: int) -> str:
+def card(context: AuditContext, audit: Audit, fixes: dict[ComplaintKey, Fix], worker: int) -> str:
     """
     One worker's feedback card
     :param context: AuditContext
@@ -462,7 +546,7 @@ def card(context: AuditContext, audit: Audit, fixes: dict[tuple[str, int, int, s
     lines.append("  complaints:" if own else "  complaints: none")
     for complaint in own:
         fix = fixes.get(complaint.key)
-        verdict = f"avoidable: {fix.description}" if fix else "unavoidable"
+        verdict = f"easy fix: {fix.description}" if fix else "no easy fix found"
         lines.append(f"    - [{shown(complaint.severity)}] {describe_complaint(context, audit, complaint)}; {verdict}")
     return "\n".join(lines)
 
@@ -472,8 +556,9 @@ def describe_summary(context: AuditContext, summary: AuditSummary) -> str:
     names = [worker.name for worker in context.schedule_input.workers]
     ranking = ", ".join(f"{names[worker]} {shown(severity)}" for worker, severity in summary.severity_by_worker)
     return "\n".join([
-        f"complaints: {summary.complaints} ({summary.avoidable} avoidable)",
-        f"severity: avoidable {shown(summary.avoidable_severity)}, unavoidable {shown(summary.unavoidable_severity)}",
+        f"complaints: {summary.complaints} ({summary.easy_fixes} with an easy fix)",
+        f"severity: with an easy fix {shown(summary.easy_fix_severity)}, no easy fix found "
+        f"{shown(summary.no_fix_severity)}",
         f"workers with complaints: {summary.aggrieved} of {len(names)}",
         f"concentration: {shown(summary.concentration)}" + (f" ({ranking})" if ranking else ""),
     ])
