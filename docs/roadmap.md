@@ -83,22 +83,40 @@ brought forward into step 5.)
   lower bound; see [Later](#later)) are needed before branch and bound
 - [ ] Tests: legal schedules (checked independently) on the same inputs, infeasibility still found, and determinism
 
-## Phase 4: Branch and bound
+## Phase 4: Schedule audit (development tool)
+
+An independent "audit" of a finished schedule from each worker's point of view, to check that the scoring and its
+tuning don't produce undesirable behaviour such as concentrated unfairness. For development and analysis only: it
+lives in `tools/`, outside the `tinyscheg` package, reads the written schedule file and the input, and shares no
+code with `csp/` or `scoring/`.
+
+- [ ] Spec: the criteria and their definitions, for approval before any code. Judged **relative to other workers**:
+  excess over the most even split possible (per day and overall), avoidability (could a simple legal swap or move
+  fix it?), how often each worker draws the short straw, and social pairings
+- [ ] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit
+- [ ] Per-worker feedback cards and a group summary of how concentrated the unfairness is
+- [ ] Sampling: many legal schedules (by shuffling the workers' order), each audited and shown next to its internal
+  penalty, flagging where the two disagree
+- [ ] Tests for the audit itself, and a how-to page
+
+## Phase 5: Branch and bound
 
 The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monotone-penalty.md)).
 
 - [ ] Search all solutions, keeping the best in the pocket
 - [ ] Prune branches whose score is already at least the pocket's (ties included)
 - [ ] Tests: same result as brute force on small inputs
+- [ ] Check with the audit that no simple legal swap lowers the chosen schedule's penalty
+- [ ] Tune the scoring parameters with the audit
 
-## Phase 5: Spreadsheet output
+## Phase 6: Spreadsheet output
 
 ([Output format](reference/output-format.md))
 
 - [ ] XLSX writer (openpyxl), multi-row shifts as merged cells
 - [ ] ODS writer (odfpy), multi-row shifts as merged cells
 
-## Phase 6: Schedule history
+## Phase 7: Schedule history
 
 Extending a previous schedule rather than starting fresh ([Future work](explanation/future-work.md#schedule-history)).
 
