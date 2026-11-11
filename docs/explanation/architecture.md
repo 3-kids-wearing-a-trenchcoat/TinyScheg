@@ -68,10 +68,12 @@ formats; each format has a writer that translates it.
 
 ## 5. Return output
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!NOTE]
+> **Implemented.** See [Command line](../reference/command-line.md).
 
-Write or return the output.
+Write the grid to the output file, in the format its extension names, and report what was written. If no legal
+schedule was found, nothing is written, and the problem is reported instead
+([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)).
 
 ## Code layout
 
@@ -80,7 +82,7 @@ entry point. Modules marked *planned* don't exist yet.
 
 | Module | Contents |
 |--------|----------|
-| `cli.py` | *Planned.* Command-line interface; runs the pipeline end to end. |
+| `cli.py` | [Command-line interface](../reference/command-line.md); runs the pipeline end to end. |
 | `timing/datetime_range.py` | [`DateTimeRange`](../reference/api/datetime-range.md) and `parse_range`. |
 | `timing/daily_window.py` | [`DailyWindow`](../reference/api/daily-window.md): recurring `"HH:MM-HH:MM"` windows, turned into concrete ranges over a period. |
 | `model/worker.py` | [`Worker`](../reference/api/worker.md). |
@@ -94,6 +96,7 @@ entry point. Modules marked *planned* don't exist yet.
 | `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module); MRV/degree ordering and branch and bound are planned. |
 | `output/grid.py` | [Assigned slots to the time-by-post grid](../reference/api/output.md#grid-module) ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
+| `output/writers.py` | [Choosing the format by extension](../reference/api/output.md#writers-module), and `write_schedule`. |
 | `output/csv_writer.py` | [The grid as CSV](../reference/api/output.md#csv_writer-module); XLSX and ODS writers will sit next to it. |
 
 Dependencies point one way: `timing` ← `model` ← (`parsing`, `csp`, `output`), with `cli` using all of them.

@@ -14,9 +14,9 @@ with a penalty score that is used to prune the search and pick the best schedule
 ## Status
 
 > [!WARNING]
-> **Work in progress.** TinyScheg does not run end-to-end yet. Parts of the core model are implemented, while input
-> parsing, the search itself, scoring and output are not. See [the docs](docs/index.md) for the status of each
-> component.
+> **Work in progress.** TinyScheg runs end to end and writes a schedule that meets every hard constraint, but not
+> yet the fairest one: scoring and branch and bound aren't implemented yet. See the
+> [roadmap](docs/roadmap.md) for what's next, and [the docs](docs/index.md) for the status of each component.
 
 ## Getting started
 
@@ -28,6 +28,15 @@ conda activate tinyscheg
 ```
 
 See [Development setup](docs/how-to/development-setup.md) for details.
+
+To create a schedule, run from the repository root:
+
+```bash
+python src/main.py exampleInput.yml -o schedule.csv
+```
+
+Without `-o`, the schedule is written next to the input as `<input name>_schedule.csv`. See
+[Command line](docs/reference/command-line.md) for details.
 
 Input is a YAML file describing the schedule settings, workers and posts. [`exampleInput.yml`](exampleInput.yml)
 is an annotated example, and the format is described in [Input format](docs/reference/input-format.md).

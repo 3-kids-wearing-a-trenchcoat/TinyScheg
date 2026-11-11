@@ -29,8 +29,11 @@
 With the environment activated, run scripts with plain `python` from the repository root:
 
 ```bash
-python src/main.py
+python src/main.py exampleInput.yml
 ```
+
+This writes `exampleInput_schedule.csv` next to the input; see [Command line](../reference/command-line.md) for the
+options.
 
 The code is the `tinyscheg` package in `src/tinyscheg/` (see
 [Architecture](../explanation/architecture.md#code-layout)), and modules import each other by full package path

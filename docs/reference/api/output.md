@@ -1,6 +1,7 @@
-# `output` package: `grid` and `csv_writer`
+# `output` package: `grid`, `writers` and `csv_writer`
 
-Sources: [`src/tinyscheg/output/grid.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/grid.py) and
+Sources: [`src/tinyscheg/output/grid.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/grid.py),
+[`src/tinyscheg/output/writers.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/writers.py) and
 [`src/tinyscheg/output/csv_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/csv_writer.py)
 
 See [Output format](../output-format.md) for the layout and formats, and
@@ -39,6 +40,26 @@ Lays a schedule out as a grid.
   [search](search.md#find_first_scheduleproblem-searchresult).
 
 Every shift's start and end is a row boundary, so each shift covers whole, consecutive rows.
+
+## `writers` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_cli.py`).
+
+Chooses the output format by file extension. Kept out of the command-line code so that any front end can use it.
+
+* `WRITERS` — `dict[str, Writer]`, the writer for each supported extension (lower case). Currently only `".csv"`;
+  `.xlsx` and `.ods` are planned.
+* `DEFAULT_EXTENSION` — `".csv"`, used when no output path is given.
+
+### `writer_for(path) -> Writer`
+
+The writer for `path`'s extension, in any case. **Raises** `UnsupportedFormatError` (a `ValueError`) naming the
+supported extensions if there's none, including for a path with no extension.
+
+### `write_schedule(grid, path) -> None`
+
+Writes `grid` to `path` in the format its extension names, replacing the file if it exists.
 
 ## `csv_writer` module
 

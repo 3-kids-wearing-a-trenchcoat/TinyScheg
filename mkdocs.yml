@@ -30,6 +30,7 @@ nav:
   - How-to guides:
       - Development setup: how-to/development-setup.md
   - Reference:
+      - Command line: reference/command-line.md
       - Input format: reference/input-format.md
       - Output format: reference/output-format.md
       - API:

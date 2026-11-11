@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phase 1 — 6 of 7 steps done.
+Progress: Phase 1 complete (7 of 7 steps). Next: Phase 2.
 
 ## Phase 1: Walking skeleton
 
@@ -41,13 +41,15 @@ confirms meets every hard constraint.
     - [x] Assigned slots → time-by-post grid (rows between shift boundaries, names joined with `" & "`), each cell
       holding its covering shift
     - [x] CSV writer (UTF-8 with BOM, ISO 8601 times)
-- [ ] **7. Command line and end-to-end test** — `cli.py`, `src/main.py`
-    - [ ] `python src/main.py input.yml -o schedule.csv`; output format chosen by file extension
-    - [ ] Reporting invalid input
-    - [ ] Reporting infeasible input on the command line, with no output file: the unfillable slots, or where the
+- [x] **7. Command line and end-to-end test** — `cli.py`, `src/main.py`, `output/writers.py`
+  ([Command line](reference/command-line.md))
+    - [x] `python src/main.py input.yml -o schedule.csv`; output format chosen by file extension; without `-o`,
+      `<input name>_schedule.csv` next to the input
+    - [x] Reporting invalid input
+    - [x] Reporting infeasible input on the command line, with no output file: the unfillable slots, or where the
       search got stuck ([ADR 0011](decisions/0011-no-output-for-infeasible-inputs.md),
       [ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
-    - [ ] End-to-end test on `exampleInput.yml`
+    - [x] End-to-end test on `exampleInput.yml`, checking the written file independently
 
 ## Phase 2: Efficient search
 

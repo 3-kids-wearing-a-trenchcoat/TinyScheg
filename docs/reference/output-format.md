@@ -1,8 +1,8 @@
 # Output format
 
 > [!IMPORTANT]
-> **Partially implemented.** The grid and CSV are implemented ([`output`](api/output.md)); XLSX and ODS, and
-> choosing the format by extension (in the command-line interface), aren't.
+> **Partially implemented.** The grid, CSV and choosing the format by extension are implemented
+> ([`output`](api/output.md)); XLSX and ODS aren't.
 
 TinyScheg writes the finished schedule as a grid of time against post
 ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)), in one of three formats chosen by the output file's

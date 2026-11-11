@@ -26,6 +26,7 @@ Architecture Decision Records (ADRs).
 * **Reference** — exact technical descriptions of formats and code.
   * [Input format](reference/input-format.md)
   * [Output format](reference/output-format.md)
+  * [Command line](reference/command-line.md)
   * API: [`DateTimeRange`](reference/api/datetime-range.md) · [`Worker`](reference/api/worker.md) ·
     [`DailyWindow`](reference/api/daily-window.md) · [`Post`, `Shift` and `Slot`](reference/api/post-and-slot.md) ·
     [`ScheduleInput`](reference/api/schedule-input.md) · [`parsing`](reference/api/parsing.md) ·
@@ -73,4 +74,4 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Scoring                             | Not yet implemented       |
 | Output (CSV grid)                   | Implemented and tested    |
 | Output (XLSX, ODS)                  | Not yet implemented       |
-| Command-line interface              | Not yet implemented       |
+| Command-line interface              | Implemented and tested    |

@@ -115,7 +115,8 @@ Code is run with the `tinyscheg` Conda environment (`environment.yml`). I work w
 (`conda activate tinyscheg`) and run scripts with plain `python`.
 Since your shell state does not persist between commands, activation won't carry over for you. Instead, always run
 code through the environment explicitly: `conda run --no-capture-output -n tinyscheg python <args>`
-(e.g. `conda run --no-capture-output -n tinyscheg python src/main.py`).
+(e.g. `conda run --no-capture-output -n tinyscheg python src/main.py exampleInput.yml -o schedule.csv`;
+see `docs/reference/command-line.md`).
 The code is the `tinyscheg` package in `src/tinyscheg/`, split into subpackages by domain (see
 `docs/explanation/architecture.md#code-layout`). Modules import each other by full package path
 (e.g. `from tinyscheg.timing.datetime_range import DateTimeRange`). Running `python src/main.py` puts `src/` on the
