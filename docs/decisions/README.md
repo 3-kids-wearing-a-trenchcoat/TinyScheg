@@ -43,7 +43,8 @@ ADR that supersedes the old one.
 | [0019](0019-output-as-a-time-by-post-grid.md) | Output the schedule as a time-by-post grid | Accepted |
 | [0020](0020-report-where-infeasibility-was-found.md) | Report where infeasibility was found | Accepted |
 | [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
-| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted |
+| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md) |
+| [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
 
 ## Template
 

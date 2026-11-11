@@ -87,11 +87,28 @@ $$
 l_i(x) = \begin{cases} 0 & x \in L_i \\ \alpha & x \notin L_i \cup H_i \\ \beta & x \in H_i \end{cases}
 $$
 
-such that $\alpha ,\beta \in \mathbb{R}$ and $0 < \alpha < \beta$.
+such that $\alpha ,\beta \in \mathbb{R}$ and $0 < \alpha < \beta / 2$.
 That is, liked workers produce no penalty, workers who are neither liked nor disliked produce a relatively small
 penalty, and disliked workers produce a bigger penalty. Since the like score is divided by $\beta$ to normalize it
 (below), only the ratio $\alpha / \beta$ matters; it's a [parameter](#parameters), 1/3 by default. Dislikes are soft:
 they're discouraged, never forbidden.
+
+**A dislike outweighs a like** ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)). Each worker rates their
+partners from their own lists, so a pair costs the sum of both sides' ratings. Measured from a neutral pairing, a
+like saves $\alpha$ and a dislike costs $\beta - \alpha$; keeping $\alpha / \beta$ below 1/2 makes the dislike
+count more. With the default 1/3, a dislike counts twice as much as a like:
+
+| Pair (each side's view of the other) | Cost, with $\beta = 1$ and $\alpha = 1/3$ |
+|---|---|
+| both like each other | 0 |
+| one likes, the other is neutral | 1/3 |
+| both neutral | 2/3 |
+| one dislikes, the other likes them | 1 — worse than a neutral pair, not cancelled out |
+| one dislikes, the other is neutral | 4/3 |
+| both dislike each other | 2 |
+
+At $\alpha / \beta = 1/2$, a dislike and a like would cancel out exactly (a dislike/like pair would cost the same
+as a neutral one), and above it a like would outweigh a dislike, so values from 1/2 up aren't allowed.
 
 At iteration $t \in \mathbb{N}$, the **local like function** $\mathcal{L}_t:W \times S \rightarrow \mathbb{R}$ is
 ($| \cdot |$ denoting the **size** of $\cdot$):
@@ -430,7 +447,7 @@ Every parameter has a default, defined once as a named constant in the code, and
 | Weights of likes, workload and rest | $a$, $b$, $c$ | 0.25, 0.5, 0.25 | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
 | Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
 | Rest factor | $\gamma$ | 3 | `rest_factor` | at least 1 |
-| Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1 |
+| Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
 
 What the defaults mean, on a 72-hour version of the example input (9 workers):
 

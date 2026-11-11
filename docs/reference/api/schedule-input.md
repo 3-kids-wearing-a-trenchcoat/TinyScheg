@@ -25,7 +25,8 @@ its constant above.
   **relative**: they're stored divided by their sum, so `ScoringParameters(1, 2, 1) == ScoringParameters()`.
 * `workload_power` — $p$ in $\varphi(x) = x^p$, a whole number of at least `MIN_WORKLOAD_POWER`.
 * `rest_factor` — $\gamma$, at least `MIN_REST_FACTOR`.
-* `neutral_partner` — $\alpha / \beta$, more than 0 and less than 1.
+* `neutral_partner` — $\alpha / \beta$, more than 0 and less than `MAX_NEUTRAL_PARTNER` (1/2), so that a dislike
+  outweighs a like ([ADR 0023](../../decisions/0023-dislikes-outweigh-likes.md)).
 
 **Raises** `TypeError` for a value that isn't a number (or, for `workload_power`, a whole number), and `ValueError`
 for one out of range; the message names the parameter.

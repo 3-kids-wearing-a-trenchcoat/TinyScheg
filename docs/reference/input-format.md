@@ -46,7 +46,7 @@ Every field is optional; an omitted field keeps its default.
 | `weights`         | mapping of `likes`, `workload`, `rest` to numbers | 0.25, 0.5, 0.25 | How much each part of the score counts. Each at least 0, not all 0. They're relative: each is divided by their sum, so `{likes: 1, workload: 2, rest: 1}` means the same as the default. An omitted key keeps its default weight, before dividing: `{likes: 0}` gives 0, 0.5 and 0.25, i.e. 0, ⅔ and ⅓. |
 | `workload_power`  | whole number                          | 2              | How harshly unequal workloads are penalized. At least 2; higher values lean harder on the most loaded workers. |
 | `rest_factor`     | number                                | 3              | The ideal rest after a shift, as a multiple of its length. At least 1. Only rest targets longer than `min_rest` have an effect. |
-| `neutral_partner` | number                                | 1/3 (0.333…)   | How bad sharing a shift with a neutral worker is, relative to a disliked one (a liked one costs nothing). More than 0, less than 1. |
+| `neutral_partner` | number                                | 1/3 (0.333…)   | How bad sharing a shift with a neutral worker is, relative to a disliked one (a liked one costs nothing). More than 0, less than 0.5, so that disliking a partner counts more than liking one ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)). |
 
 ```yaml
 settings:

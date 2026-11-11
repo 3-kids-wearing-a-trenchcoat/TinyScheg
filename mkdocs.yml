@@ -78,6 +78,7 @@ nav:
       - 0020 Report where infeasibility was found: decisions/0020-report-where-infeasibility-was-found.md
       - 0021 Whole-number power for workload: decisions/0021-power-function-for-workload-fairness.md
       - 0022 Scoring parameters: decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md
+      - 0023 Dislikes outweigh likes: decisions/0023-dislikes-outweigh-likes.md
 
 markdown_extensions:
   - admonition

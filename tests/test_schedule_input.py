@@ -5,7 +5,8 @@ import pytest
 
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_MIN_REST, DEFAULT_NEUTRAL_PARTNER,
                                             DEFAULT_REST_FACTOR, DEFAULT_REST_WEIGHT, DEFAULT_WORKLOAD_POWER,
-                                            DEFAULT_WORKLOAD_WEIGHT, ScoringParameters, Settings)
+                                            DEFAULT_WORKLOAD_WEIGHT, MAX_NEUTRAL_PARTNER, ScoringParameters,
+                                            Settings)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 
@@ -57,6 +58,7 @@ def test_a_zero_weight_is_allowed() -> None:
     {"workload_power": True},
     {"rest_factor": 0.5},
     {"neutral_partner": 0},
+    {"neutral_partner": 0.5},  # a dislike and a like would cancel out (ADR 0023)
     {"neutral_partner": 1},
     {"rest_factor": float("nan")},
     {"rest_weight": "high"},
@@ -64,3 +66,10 @@ def test_a_zero_weight_is_allowed() -> None:
 def test_invalid_scoring_parameters(overrides: dict) -> None:
     with pytest.raises((TypeError, ValueError)):
         ScoringParameters(**overrides)
+
+
+def test_a_dislike_must_outweigh_a_like() -> None:
+    # at 1/2, a pair where one dislikes the other and the other likes them would cost as much as a neutral pair
+    assert ScoringParameters(neutral_partner=0.49).neutral_partner == 0.49
+    with pytest.raises(ValueError, match="disliking a partner counts more than liking one"):
+        ScoringParameters(neutral_partner=MAX_NEUTRAL_PARTNER)

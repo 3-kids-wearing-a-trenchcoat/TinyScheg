@@ -22,6 +22,7 @@ DEFAULT_NEUTRAL_PARTNER = 1 / 3  # alpha / beta: a neutral shift partner's penal
 # Limits on the scoring parameters
 MIN_WORKLOAD_POWER = 2  # phi must be strictly convex
 MIN_REST_FACTOR = 1.0   # a rest target shorter than the shift itself isn't meaningful
+MAX_NEUTRAL_PARTNER = 0.5  # exclusive: below it, a dislike outweighs a like (ADR 0023); at it, they'd cancel out
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,8 +59,9 @@ class ScoringParameters:
         if self.rest_factor < MIN_REST_FACTOR:
             raise ValueError(f"rest_factor must be at least {MIN_REST_FACTOR:g}, got {self.rest_factor!r}")
         _check_number("neutral_partner", self.neutral_partner)
-        if not 0 < self.neutral_partner < 1:
-            raise ValueError(f"neutral_partner must be more than 0 and less than 1, got {self.neutral_partner!r}")
+        if not 0 < self.neutral_partner < MAX_NEUTRAL_PARTNER:
+            raise ValueError(f"neutral_partner must be more than 0 and less than {MAX_NEUTRAL_PARTNER:g}, so that "
+                             f"disliking a partner counts more than liking one; got {self.neutral_partner!r}")
 
 
 def _check_number(name: str, value: object) -> None:
