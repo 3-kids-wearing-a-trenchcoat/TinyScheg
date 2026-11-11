@@ -50,6 +50,7 @@ nav:
       - CSP formulation: explanation/csp-formulation.md
       - Search algorithm: explanation/search-algorithm.md
       - Scoring: explanation/scoring.md
+      - Schedule audit: explanation/schedule-audit.md
       - Glossary: explanation/glossary.md
       - Future work: explanation/future-work.md
   - Decisions:

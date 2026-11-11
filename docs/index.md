@@ -38,6 +38,7 @@ Architecture Decision Records (ADRs).
   * [CSP formulation](explanation/csp-formulation.md)
   * [Search algorithm](explanation/search-algorithm.md)
   * [Scoring](explanation/scoring.md)
+  * [Schedule audit](explanation/schedule-audit.md) (development tool)
   * [Glossary](explanation/glossary.md)
   * [Future work](explanation/future-work.md)
 * **[Decisions](decisions/README.md)** — the design decisions made so far and the reasoning behind them.
@@ -77,3 +78,4 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Output (CSV grid)                   | Implemented and tested    |
 | Output (XLSX, ODS)                  | Not yet implemented       |
 | Command-line interface              | Implemented and tested    |
+| Schedule audit (development tool)   | Not yet implemented       |

@@ -92,9 +92,10 @@ tuning don't produce undesirable behaviour such as concentrated unfairness. For 
 lives in `tools/`, outside the `tinyscheg` package, reads the written schedule file and the input, and shares no
 code with `csp/` or `scoring/`.
 
-- [ ] Spec: the criteria and their definitions, for approval before any code. Judged **relative to other workers**:
-  excess over the most even split possible (per day and overall), avoidability (could a simple legal swap or move
-  fix it?), how often each worker draws the short straw, and social pairings
+- [x] Spec: the criteria and their definitions, for approval before any code
+  ([Schedule audit](explanation/schedule-audit.md)). Judged **relative to other workers**: excess over the most
+  even split possible (per day and overall), avoidability (could a simple legal swap or move fix it?), how often each
+  worker draws the short straw, and social pairings
 - [x] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit,
   with a reader for written CSV schedules (`tools/schedule_reader.py`)
 - [ ] Per-worker feedback cards and a group summary of how concentrated the unfairness is
