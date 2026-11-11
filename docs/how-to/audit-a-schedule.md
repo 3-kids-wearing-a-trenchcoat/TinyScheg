@@ -39,7 +39,7 @@ a chain of up to three harmless moves and swaps, if one was found. The summary g
 how many have an easy fix, the severity with and without one, how many workers have complaints, and the
 concentration: the most aggrieved worker's share of all severity.
 
-An audit takes a few seconds, most of it spent checking candidate changes for legality.
+An audit of the example takes about a second.
 
 The audit exits with 1 if the schedule breaks a hard constraint (listing the violations), and with 2 if the files
 can't be read or don't match each other.
@@ -54,7 +54,7 @@ This samples 30 schedules (20 by default) by shuffling the workers' order before
 penalty first, with its audit summary. It ends with the rank correlations between the penalty and the severity with
 an easy fix, and between the penalty and the total severity, and the **disagreements**: schedules among the best
 quarter by penalty with the most severity with an easy fix, named by the seed of their shuffle. 30 samples take
-about a minute and a half.
+about 25 seconds.
 
 The audit's thresholds are named constants at the top of `tools/audit.py`, and the sampler's at the top of
 `tools/audit_sample.py`.

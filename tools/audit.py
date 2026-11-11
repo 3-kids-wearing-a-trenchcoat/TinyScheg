@@ -310,9 +310,11 @@ def _liked_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> 
 
 @dataclass(frozen=True, slots=True)
 class Change:
-    """A simple change to a schedule (a move or a swap), described for the report."""
+    """A simple change to a schedule (a move or a swap), described for the report; changed_slots are the slots it
+    gives to a different worker."""
     description: str
     assignment: tuple[int, ...]
+    changed_slots: tuple[int, ...]
 
 
 def describe_shift(shift: Shift) -> str:
@@ -334,14 +336,51 @@ def candidate_changes(context: AuditContext, assignment: tuple[int, ...]) -> Ite
                 changed = list(assignment)
                 changed[slot.index] = worker
                 yield Change(f"giving {names[worker]} {describe_shift(context.shifts[slot.shift_index])} instead of "
-                             f"{names[assignment[slot.index]]}", tuple(changed))
+                             f"{names[assignment[slot.index]]}", tuple(changed), (slot.index,))
     for first, second in itertools.combinations(context.slots, 2):
         a, b = assignment[first.index], assignment[second.index]
         if a != b and first.shift_index != second.shift_index:
             changed = list(assignment)
             changed[first.index], changed[second.index] = b, a
             yield Change(f"swapping {names[a]}'s {describe_shift(context.shifts[first.shift_index])} with "
-                         f"{names[b]}'s {describe_shift(context.shifts[second.shift_index])}", tuple(changed))
+                         f"{names[b]}'s {describe_shift(context.shifts[second.shift_index])}", tuple(changed),
+                         (first.index, second.index))
+
+
+def slots_by_worker(assignment: Sequence[int], worker_count: int) -> list[list[int]]:
+    """Each worker's slots, in stable order."""
+    result: list[list[int]] = [[] for _ in range(worker_count)]
+    for slot_index, worker in enumerate(assignment):
+        result[worker].append(slot_index)
+    return result
+
+
+def is_legal_change(context: AuditContext, own_slots: list[list[int]], change: Change) -> bool:
+    """
+    Check a change to a legal schedule for legality, looking only at what it changes: every other worker's shifts
+    are as they were, and were legal. Agrees with the full hard-constraint checker (tested), much faster.
+    :param context: AuditContext
+    :param own_slots: each worker's slots before the change, as slots_by_worker gives them
+    :param change: Change
+    :return: True if the changed schedule is legal
+    """
+    workers = context.schedule_input.workers
+    receivers = set()
+    for slot_index in change.changed_slots:
+        slot, worker = context.slots[slot_index], change.assignment[slot_index]
+        if not workers[worker].has_role(slot.role) or not workers[worker].is_available(slot.time):
+            return False
+        receivers.add(worker)
+    # giving shifts away can't shorten a rest, so only the workers receiving a slot need their rests checked;
+    # a negative rest is an overlap, which includes two slots of the same shift
+    min_rest = context.schedule_input.settings.min_rest
+    for worker in receivers:
+        slot_indexes = [index for index in own_slots[worker] if change.assignment[index] == worker]
+        slot_indexes += [index for index in change.changed_slots if change.assignment[index] == worker]
+        times = sorted(context.slots[index].time for index in slot_indexes)
+        if any(later.start - earlier.end < min_rest for earlier, later in zip(times, times[1:])):
+            return False
+    return True
 
 
 def is_harmless(before: dict[tuple[str, int, int, str], float], after: Audit) -> bool:
@@ -388,13 +427,14 @@ def harmless_steps(context: AuditContext, assignment: tuple[int, ...],
     """
     Every legal move and swap from a schedule that is harmless compared with the audited schedule
     :param context: AuditContext
-    :param assignment: the schedule to change
+    :param assignment: the schedule to change, which must be legal
     :param before: each complaint's severity in the audited schedule, by key
     :return: the harmless steps, in candidate_changes' order
     """
     steps = []
+    own_slots = slots_by_worker(assignment, len(context.schedule_input.workers))
     for change in candidate_changes(context, assignment):
-        if hard_constraint_violations(context.schedule_input, context.slots, change.assignment):
+        if not is_legal_change(context, own_slots, change):
             continue
         after = evaluate(context, change.assignment)
         if is_harmless(before, after):

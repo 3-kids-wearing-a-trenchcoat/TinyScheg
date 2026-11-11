@@ -91,8 +91,11 @@ which doesn't prove there's none, only that none was found quickly. The simple c
 * **Move** — give one slot to a different worker.
 * **Swap** — two workers exchange slots, such as two posts in the same hour.
 
-A chain has at most `MAX_CHANGES` (3) changes. Each must be legal (checked by the hard-constraint checker) and
-**harmless**: compared with the audited schedule, it creates no new complaint and makes no existing complaint more
+A chain has at most `MAX_CHANGES` (3) changes. Each must be **legal** and **harmless**. The audited schedule itself
+is checked once by the independent hard-constraint checker; after that, a change can only break a rule through what
+it changes, so only that is checked: the roles and availability of the slots it gives away, and the rests of the
+workers receiving them (a rest below zero is an overlap). A test confirms this always agrees with the full checker.
+Harmless means: compared with the audited schedule, it creates no new complaint and makes no existing complaint more
 severe, for anyone. Otherwise the fix only moves the problem around.
 
 Chains are found greedily, which keeps the search quick:

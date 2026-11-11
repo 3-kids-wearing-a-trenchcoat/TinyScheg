@@ -5,7 +5,9 @@ import pathlib
 import pytest
 
 from audit import (EXIT_ILLEGAL, EXIT_SUCCESS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD, Audit, AuditContext, Complaint,
-                   available_hours, build_context, days, evaluate, find_fixes, is_harmless, main, summarize)
+                   available_hours, build_context, candidate_changes, days, evaluate, find_fixes, is_harmless,
+                   is_legal_change, main, slots_by_worker, summarize)
+from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.model.post import Post, ShiftRules
@@ -149,6 +151,31 @@ def test_a_change_that_creates_or_worsens_a_complaint_is_not_harmless() -> None:
     assert is_harmless(before, Audit((), (complaint,)))
     assert not is_harmless(before, Audit((), (Complaint(LOAD, 0, 1, WHOLE_PERIOD, 3),)))      # more severe
     assert not is_harmless(before, Audit((), (Complaint(LOAD, 1, 0, WHOLE_PERIOD, 2),)))      # new
+
+
+def test_the_quick_legality_check_agrees_with_the_full_checker() -> None:
+    # every move and swap from the example's schedule, and from a legal schedule one change away from it
+    schedule_input = read_input(EXAMPLE_INPUT)
+    problem = build_problem(schedule_input)
+    assignment = find_first_schedule(problem).assignment
+    assert assignment is not None
+    context = build_context(schedule_input, problem.shifts, problem.slots)
+
+    def legal_changes(start: tuple[int, ...]) -> list[tuple[int, ...]]:
+        """Check every change from a legal schedule both ways, and return the legal ones."""
+        own_slots = slots_by_worker(start, len(schedule_input.workers))
+        legal, illegal = [], 0
+        for change in candidate_changes(context, start):
+            expected = not hard_constraint_violations(schedule_input, problem.slots, change.assignment)
+            assert is_legal_change(context, own_slots, change) == expected, change.description
+            if expected:
+                legal.append(change.assignment)
+            else:
+                illegal += 1
+        assert legal and illegal
+        return legal
+
+    legal_changes(legal_changes(assignment)[0])
 
 
 # --- the summary and the command line ---
