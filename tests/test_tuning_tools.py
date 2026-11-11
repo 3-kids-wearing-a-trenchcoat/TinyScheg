@@ -58,6 +58,23 @@ def test_written_inputs_read_back_the_same(tmp_path: pathlib.Path) -> None:
     assert read_input(path) == parse_input(generated[0])
 
 
+def test_a_tier_keeps_the_same_inputs_for_any_number_of_jobs(tmp_path: pathlib.Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    # solving is faked (an odd number of workers is "over the limit"), so the test is fast and doesn't depend on timing
+    def fake_solve(document: dict, limit: float) -> tuple[float, float, int, int] | None:
+        return None if len(document["workers"]) % 2 else (1.0, 0.5, 10, 2)
+    monkeypatch.setattr(generate, "solve_within", fake_solve)
+    tier = generate.Tier("test", (HOURS,), 3, 0, 1.0, generate.STAFFED)
+    results = {}
+    for jobs in (1, 3):
+        monkeypatch.setattr(generate, "INPUTS", tmp_path / str(jobs))
+        (tmp_path / str(jobs)).mkdir()
+        results[jobs] = generate.build_tier(tier, jobs)
+    assert results[1] == results[3]
+    assert sum(1 for row in results[1] if row["name"]) == tier.count
+    assert sorted(path.name for path in (tmp_path / "3").iterdir()) == ["test_01.yml", "test_02.yml", "test_03.yml"]
+
+
 # --- the tuning runner ---
 
 def test_a_weight_share_keeps_the_other_weights_ratio() -> None:

@@ -36,21 +36,25 @@ workers who like or dislike others; everything else varies. Most are **loose**: 
 the ones with many legitimate choices, where every choice invites "why didn't you do this instead?", not the
 constrained ones that decide themselves.
 
-`tools/benchmarks/generate.py` draws each input from a seed (the knobs are named constants at its top):
+`tools/benchmarks/generate.py` draws each input from a seed (the knobs are named constants at its top). The sweep
+tier, which the parameters are chosen on, gives each worker several shifts, so that the audit has unevenness to see;
+the longer tiers are staffed more generously:
 
-| Knob | Values |
-|---|---|
-| Length | 12 or 16 hours (sweep tier), 24 (confirm tier), 48 (multiday tier) |
-| Start time | 00:00, 08:00 or 16:00 |
-| Posts | a gate that always has a shared shift (a 19:00–07:00 variation needing a role and one more worker, or 2 workers throughout); a desk needing one role, sometimes only 08:00–20:00; sometimes a patrol of 2 |
-| Roles (`medic`, `driver`) | each common (half the first workers) three times in four, otherwise scarce (3 holders) |
-| Unavailability | one worker in five has one block of 2, 4 or 8 hours |
-| Preferences | sparse, medium or dense likes and dislikes; at least 2 workers have some |
-| Staffing | start at 6 workers and add workers until a legal schedule exists (at most 12), then add 2–5 more (loose), or none for one input in five (tight) |
-| Minimum rest | 6 hours |
+| Knob | Sweep tier | Confirm and multiday tiers |
+|---|---|---|
+| Length | 16, 20 or 24 hours | 24 hours (confirm), 48 (multiday) |
+| Start time | 00:00, 08:00 or 16:00 | same |
+| Posts | a gate that always has a shared shift (a 19:00–07:00 variation needing a role and one more worker, or 2 workers throughout); a desk needing one role, sometimes only 08:00–20:00; sometimes a patrol of 2 | same |
+| Gate shift length | 2 hours | 3 or 4 hours |
+| Roles (`medic`, `driver`) | common (half the first workers) | each common three times in four, otherwise scarce (3 holders) |
+| Unavailability | one worker in ten has one block of 2, 4 or 8 hours | one in five |
+| Preferences | sparse, medium or dense likes and dislikes; at least 2 workers have some | same |
+| Staffing | start at 6 workers and add workers until a legal schedule exists (at most 12), then add 1 or 2 more | the same, then add 2–5 more (loose), or none for one input in five (tight) |
+| Minimum rest | 6 hours | same |
 
-An input is kept only if branch and bound finds its best schedule within the tier's time limit (30 s for the sweep
-tier, 10 minutes for the others). This quietly drops the loosest inputs, which take longest to search; the manifest
+An input is kept only if branch and bound finds its best schedule within the tier's time limit (5 minutes for the
+sweep tier, 10 minutes for the others). Candidates are tried in parallel but taken in seed order, so the inputs kept
+don't depend on how many are tried at once; a solve may run slightly slower when the machine is busy, though. This quietly drops the loosest inputs, which take longest to search; the manifest
 (`tools/benchmarks/manifest.csv`) lists every skipped candidate and why, so the bias stays visible. Every third input
 of a tier is **held back**: never used to choose values, only to check the chosen ones at the end. The inputs are
 committed, so changing the generator never silently changes what was tuned on.
@@ -76,5 +80,5 @@ stopped and resumed, and `python tools/tune.py status` shows how far along it is
 
 * Tuning to the audit's quirks: reading cards by hand at the last stage guards against it.
 * The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
-* Benchmarks are small (12–16 hours) so that branch and bound finishes; the longer tiers check that results carry
+* Benchmarks are small (16–24 hours) so that branch and bound finishes; the longer tiers check that results carry
   over. Fairness across days can only be studied on 48-hour inputs, if any finish.

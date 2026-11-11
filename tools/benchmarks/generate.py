@@ -1,15 +1,18 @@
 """
 Generate the benchmark inputs used to tune the scoring (docs/explanation/tuning.md): varied, mostly loose schedules
 that branch and bound can solve. Deterministic: the same seeds always give the same inputs.
-Usage: PYTHONPATH=src python tools/benchmarks/generate.py [--tier NAME ...]
+Usage: PYTHONPATH=src python tools/benchmarks/generate.py [--tier NAME ...] [--jobs N]
+Candidates are tried in parallel, but taken in seed order, so the result doesn't depend on the number of jobs.
 Writes tools/benchmarks/inputs/<name>.yml and tools/benchmarks/manifest.csv; existing inputs of a tier are replaced.
 """
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
 import datetime as dt
 import multiprocessing
+import os
 import pathlib
 import random
 import signal
@@ -48,6 +51,8 @@ PATROL_CHANCE = 0.3             # a third post
 PATROL_TIMES = ("06:00-18:00", "18:00-06:00")
 FEASIBILITY_TIME_LIMIT = 5.0    # seconds to look for a legal schedule; proving there's none can take very long
 HOLDOUT_EVERY = 3               # every third input of a tier is held back from tuning, to check the result
+DEFAULT_JOBS = max(1, (os.cpu_count() or 2) - 2)  # candidates tried at once, leaving a little of the machine free
+QUEUED_PER_JOB = 2              # candidates queued per job, so that jobs keep busy while an earlier seed is awaited
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,12 +212,23 @@ def _has_legal_schedule(document: dict[str, Any]) -> bool:
     problem = build_problem(parse_input(document))
     if unfillable_slots(problem):
         return False
+    return _within(lambda: find_first_schedule(problem).assignment is not None, FEASIBILITY_TIME_LIMIT) is True
+
+
+def _within(task: Any, limit: float) -> Any:
+    """
+    Run task, stopping it after limit seconds; a signal timer rather than a child process, since the candidates
+    already run in pool workers, which can't start processes of their own
+    :param task: a function taking no arguments
+    :param limit: float, the time limit in seconds
+    :return: what task returns, or None if it ran out of time
+    """
     signal.signal(signal.SIGALRM, _on_alarm)
-    signal.setitimer(signal.ITIMER_REAL, FEASIBILITY_TIME_LIMIT)
+    signal.setitimer(signal.ITIMER_REAL, limit)
     try:
-        return find_first_schedule(problem).assignment is not None
+        return task()
     except _TimedOut:
-        return False
+        return None
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
 
@@ -245,22 +261,34 @@ def solve_time(document: dict[str, Any]) -> tuple[float, float, int, int]:
     return time.perf_counter() - started, result.penalty.total, len(problem.slots), constants.shared_slots
 
 
-def _solve_in_child(document: dict[str, Any], results: Any) -> None:
-    """Solve in a child process, so that a search over the time limit can be stopped."""
-    results.put(solve_time(document))
-
-
 def solve_within(document: dict[str, Any], limit: float) -> tuple[float, float, int, int] | None:
     """solve_time, or None if branch and bound takes longer than limit seconds."""
-    results: Any = multiprocessing.Queue()
-    child = multiprocessing.Process(target=_solve_in_child, args=(document, results))
-    child.start()
-    child.join(limit)
-    if child.is_alive():
-        child.terminate()
-        child.join()
-        return None
-    return results.get()
+    return _within(lambda: solve_time(document), limit)
+
+
+@dataclass(frozen=True, slots=True)
+class Candidate:
+    """One seed's outcome: the input generated (None if none has a legal schedule) and its solve (None if over the
+    time limit, or not tried)."""
+    seed: int
+    hours: int
+    generated: tuple[dict[str, Any], dict[str, Any]] | None
+    solved: tuple[float, float, int, int] | None
+
+
+def try_candidate(tier: Tier, seed: int) -> Candidate:
+    """
+    Generate one seed's input and solve it within the tier's time limit
+    :param tier: Tier
+    :param seed: int
+    :return: Candidate
+    """
+    hours = tier.hours[seed % len(tier.hours)]
+    generated = generate(seed, hours, tier.profile)
+    if generated is None:
+        return Candidate(seed, hours, None, None)
+    check_requirements(generated[0])
+    return Candidate(seed, hours, generated, solve_within(generated[0], tier.time_limit))
 
 
 def write_input(path: pathlib.Path, document: dict[str, Any], knobs: dict[str, Any]) -> None:
@@ -270,39 +298,56 @@ def write_input(path: pathlib.Path, document: dict[str, Any], knobs: dict[str, A
     path.write_text(header + yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
-def build_tier(tier: Tier) -> list[dict[str, Any]]:
+def build_tier(tier: Tier, jobs: int = DEFAULT_JOBS) -> list[dict[str, Any]]:
     """
-    Generate a tier's inputs, keeping only those branch and bound solves within the tier's time limit
+    Generate a tier's inputs, keeping only those branch and bound solves within the tier's time limit. Seeds are
+    tried several at a time, but taken strictly in order, so the inputs kept are the same for any number of jobs.
+    :param tier: Tier
+    :param jobs: int, how many candidates are tried at once
     :return: a manifest row per input kept, and one per input skipped (with the reason)
     """
     rows: list[dict[str, Any]] = []
-    seed, kept = tier.first_seed, 0
-    while kept < tier.count:
-        hours = tier.hours[seed % len(tier.hours)]
-        generated = generate(seed, hours, tier.profile)
-        seed += 1
-        if generated is None:
-            rows.append({"name": "", "tier": tier.name, "seed": seed - 1, "hours": hours,
-                         "skipped": "no legal schedule even with the most workers"})
-            continue
-        document, knobs = generated
-        check_requirements(document)
-        solved = solve_within(document, tier.time_limit)
-        if solved is None:
-            rows.append({"name": "", "tier": tier.name, **knobs, "skipped": f"over {tier.time_limit:g} s"})
-            print(f"{tier.name}: seed {knobs['seed']} skipped, over {tier.time_limit:g} s", flush=True)
-            continue
-        seconds, penalty, slots, shared = solved
-        name = f"{tier.name}_{kept + 1:02d}"
-        write_input(INPUTS / f"{name}.yml", document, knobs)
-        rows.append({"name": name, "tier": tier.name, **knobs, "holdout": (kept + 1) % HOLDOUT_EVERY == 0,
-                     "slots": slots, "shared_slots": shared,
-                     "slots_per_worker": round(slots / knobs["workers"], 2), "seconds": round(seconds, 2),
-                     "default_penalty": round(penalty, 4), "skipped": ""})
-        print(f"{tier.name}: {name} (seed {knobs['seed']}), {knobs['workers']} workers, {slots} slots, "
-              f"{seconds:.1f} s", flush=True)
-        kept += 1
+    kept = 0
+    seeds = iter(range(tier.first_seed, tier.first_seed + 2 ** 31))
+    with multiprocessing.Pool(jobs) as pool:  # leaving the block stops the candidates still running
+        queued: collections.deque[Any] = collections.deque(
+            pool.apply_async(try_candidate, (tier, next(seeds))) for _ in range(jobs * QUEUED_PER_JOB))
+        while kept < tier.count:
+            candidate: Candidate = queued.popleft().get()
+            queued.append(pool.apply_async(try_candidate, (tier, next(seeds))))
+            kept += _record(tier, candidate, kept, rows)
     return rows
+
+
+def _record(tier: Tier, candidate: Candidate, kept: int, rows: list[dict[str, Any]]) -> int:
+    """
+    Add a candidate's manifest row, writing its input if it's kept
+    :param tier: Tier
+    :param candidate: Candidate
+    :param kept: int, how many of the tier's inputs were kept before this one
+    :param rows: the manifest rows so far, appended to
+    :return: 1 if the candidate was kept, otherwise 0
+    """
+    if candidate.generated is None:
+        rows.append({"name": "", "tier": tier.name, "seed": candidate.seed, "hours": candidate.hours,
+                     "skipped": "no legal schedule even with the most workers"})
+        return 0
+    document, knobs = candidate.generated
+    solved = candidate.solved
+    if solved is None:
+        rows.append({"name": "", "tier": tier.name, **knobs, "skipped": f"over {tier.time_limit:g} s"})
+        print(f"{tier.name}: seed {knobs['seed']} skipped, over {tier.time_limit:g} s", flush=True)
+        return 0
+    seconds, penalty, slots, shared = solved
+    name = f"{tier.name}_{kept + 1:02d}"
+    write_input(INPUTS / f"{name}.yml", document, knobs)
+    rows.append({"name": name, "tier": tier.name, **knobs, "holdout": (kept + 1) % HOLDOUT_EVERY == 0,
+                 "slots": slots, "shared_slots": shared,
+                 "slots_per_worker": round(slots / knobs["workers"], 2), "seconds": round(seconds, 2),
+                 "default_penalty": round(penalty, 4), "skipped": ""})
+    print(f"{tier.name}: {name} (seed {knobs['seed']}), {knobs['workers']} workers, {slots} slots, "
+          f"{seconds:.1f} s", flush=True)
+    return 1
 
 
 MANIFEST_FIELDS = ("name", "tier", "holdout", "seed", "hours", "start", "workers", "minimum_staff", "slack", "posts",
@@ -314,13 +359,18 @@ def main() -> None:
     """Generate the tiers asked for (all by default), replacing their inputs and manifest rows."""
     parser = argparse.ArgumentParser(description="Generate the benchmark inputs.")
     parser.add_argument("--tier", action="append", choices=list(TIERS), help="a tier to generate (default: all)")
-    names = parser.parse_args().tier or list(TIERS)
+    parser.add_argument("--jobs", type=int, default=DEFAULT_JOBS,
+                        help=f"candidates tried at once (default {DEFAULT_JOBS})")
+    arguments = parser.parse_args()
+    if arguments.jobs < 1:
+        parser.error("the number of jobs must be at least 1")
+    names = arguments.tier or list(TIERS)
     INPUTS.mkdir(exist_ok=True)
     new_rows: list[dict[str, Any]] = []
     for name in names:
         for old in INPUTS.glob(f"{name}_*.yml"):
             old.unlink()
-        new_rows += build_tier(TIERS[name])
+        new_rows += build_tier(TIERS[name], arguments.jobs)
     # read the other tiers' rows only now, so that tiers generated at the same time don't overwrite each other
     kept_rows: list[dict[str, Any]] = []
     if MANIFEST.exists():
