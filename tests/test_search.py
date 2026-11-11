@@ -143,11 +143,13 @@ def test_legal_schedules_for_shuffled_worker_orders(seed: int) -> None:
 
 
 def test_infeasibility_is_found_quickly_on_a_hard_input() -> None:
-    # the example's first six workers plus one, with five hours' rest: no legal schedule, which filling slots in
-    # stable order took minutes to establish
+    # the example's first six workers plus one, over three days with five hours' rest: no legal schedule, which
+    # filling slots in stable order took minutes to establish
     schedule_input = read_input(EXAMPLE_INPUT)
+    three_days = DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 4))
     hard = dataclasses.replace(schedule_input, workers=schedule_input.workers[:6] + (Worker("Ninsun"),),
-                               settings=dataclasses.replace(schedule_input.settings, min_rest=dt.timedelta(hours=5)))
+                               settings=dataclasses.replace(schedule_input.settings, period=three_days,
+                                                            min_rest=dt.timedelta(hours=5)))
     started = time.perf_counter()
     result = find_first_schedule(build_problem(hard))
     assert time.perf_counter() - started < SLOW_CASE_SECONDS

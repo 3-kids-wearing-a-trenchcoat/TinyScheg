@@ -1,6 +1,6 @@
 # Scheduler settings
 settings:
-  time: ["2025-01-01", "2025-01-04"] # time period to generate a schedule for
+  time: ["2025-01-01", "2025-01-02"] # time period to generate a schedule for
   min_rest: 6 # minimum time between shifts (in hours)
 
 

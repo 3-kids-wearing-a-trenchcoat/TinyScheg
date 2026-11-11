@@ -7,17 +7,18 @@ from __future__ import annotations
 import argparse
 import pathlib
 import sys
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 
 from tinyscheg.csp.problem import Problem, build_problem, unfillable_slots
-from tinyscheg.csp.search import SearchResult, find_first_schedule
+from tinyscheg.csp.search import SearchResult, find_best_schedule
 from tinyscheg.model.shift import Slot
 from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import DEFAULT_EXTENSION, UnsupportedFormatError, write_schedule, writer_for
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.parsing.validation import InputError
 from tinyscheg.scoring.constants import build_constants
-from tinyscheg.scoring.penalty import Penalty, score
+from tinyscheg.scoring.penalty import Penalty
 
 EXIT_SUCCESS = 0
 EXIT_NO_SCHEDULE = 1   # the input is valid, but no legal schedule exists
@@ -26,6 +27,7 @@ EXIT_INTERRUPTED = 130  # the conventional code for a program stopped with Ctrl+
 
 PROGRAM = "tinyscheg"
 PENALTY_DECIMALS = 2  # how many decimals of the penalty are shown
+ELAPSED_DECIMALS = 0  # how many decimals of the seconds elapsed are shown in progress lines
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -83,8 +85,10 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
         _error("no legal schedule exists:\n" + "\n".join(f"  - no worker can fill {describe_slot(slot)}"
                                                           for slot in unfillable))
         return EXIT_NO_SCHEDULE
-    result = find_first_schedule(problem)
-    if result.assignment is None:
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.domains)
+    result = find_best_schedule(problem, constants, on_improvement=_progress_reporter())
+    if result.assignment is None or result.penalty is None:
         _error(_describe_failure(problem, result))
         return EXIT_NO_SCHEDULE
 
@@ -96,10 +100,18 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
         return EXIT_USAGE
     print(f"wrote {output_path}: {len(problem.shifts)} shifts, {len(problem.slots)} slots, "
           f"{len(problem.workers)} workers")
-    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
-    print(describe_penalty(score(constants, result.assignment)))
+    print(f"{describe_penalty(result.penalty)}, the best possible")
     return EXIT_SUCCESS
+
+
+def _progress_reporter() -> Callable[[Penalty], None]:
+    """A function that reports each better schedule the search finds on standard error, with the time it took."""
+    started = time.perf_counter()
+
+    def report(penalty: Penalty) -> None:
+        elapsed = time.perf_counter() - started
+        _error(f"found penalty {penalty.total:.{PENALTY_DECIMALS}f} after {elapsed:.{ELAPSED_DECIMALS}f} s")
+    return report
 
 
 def describe_penalty(penalty: Penalty) -> str:

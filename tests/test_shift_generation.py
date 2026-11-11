@@ -133,7 +133,8 @@ def test_generation_is_deterministic() -> None:
 def test_example_input_counts() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
-    # front gate: 13 night shifts (2 workers each) and 12 day shifts (1 each) over 3 days; desk: 3 shifts a day
-    assert len(hours(shifts, "front gate")) == 25
-    assert len(hours(shifts, "desk")) == 9
-    assert len(all_slots(shifts)) == 13 * 2 + 12 + 9
+    # front gate: 5 night shifts (2 workers each: 0-3, 3-6, 6-7, 19-22, 22-24) and 4 day shifts (1 each);
+    # desk: 3 shifts
+    assert len(hours(shifts, "front gate")) == 9
+    assert len(hours(shifts, "desk")) == 3
+    assert len(all_slots(shifts)) == 5 * 2 + 4 + 3

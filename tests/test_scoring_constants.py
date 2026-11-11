@@ -100,11 +100,11 @@ def test_example_constants() -> None:
                                 problem.domains)
     assert constants.parameters == ScoringParameters()
     assert constants.min_rest == 6
-    assert constants.shared_slots == 26          # 13 night shifts of the front gate, 2 workers each
-    assert len(constants.slot_hours) == 47 and sum(constants.slot_hours) == 144
+    assert constants.shared_slots == 10          # 5 night shifts of the front gate, 2 workers each
+    assert len(constants.slot_hours) == 17 and sum(constants.slot_hours) == 7 * 2 + 12 + 5 * 2 + 12
     jack, jill = constants.workers[:2]
-    assert jack.availability == 72 - 4           # 04:00-06:00 on two days
-    assert jill.availability == 72 - 24          # all of the 3rd
+    assert jack.availability == 24 - 2           # 04:00-06:00
+    assert jill.availability == 24               # away only on the 3rd, after the period
     assert jack.likes == frozenset({1}) and constants.workers[2].dislikes == frozenset({0, 1})
     assert all(worker.packable_hours <= worker.availability for worker in constants.workers)
     assert constants.workload_scale == pytest.approx(workload_scale(constants.workers, 2))

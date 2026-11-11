@@ -1,6 +1,5 @@
 """Tests for tinyscheg.cli, including the end-to-end test."""
 import pathlib
-import shutil
 import textwrap
 
 import pytest
@@ -9,12 +8,35 @@ from schedule_checker import hard_constraint_violations
 from schedule_reader import read_schedule
 from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, describe_penalty, main
 from tinyscheg.csp.problem import build_problem
+from tinyscheg.csp.search import find_best_schedule
 from tinyscheg.output.writers import UnsupportedFormatError, writer_for
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import build_constants
 from tinyscheg.scoring.penalty import Penalty, score
 
-EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
+# small enough for branch and bound to finish at once: 8 slots, 5 workers
+SMALL = """
+settings:
+  time: ["2025-01-01T00:00", "2025-01-01T12:00"]
+  min_rest: 2
+workers:
+  - name: "Anne"
+    likes: ["Bob"]
+  - name: "Bob"
+  - name: "Cy"
+    roles: ["supervisor"]
+    dislikes: ["Anne"]
+  - name: "Dan"
+    roles: ["supervisor"]
+  - name: "Eve"
+posts:
+  - name: "front gate"
+    roles: {any: 2}
+    length: 4
+  - name: "desk"
+    roles: {supervisor: 1}
+    length: 6
+"""
 
 # three workers for two back-to-back shifts of two, with an hour's rest: every slot needs a different worker
 STUCK = """
@@ -52,19 +74,27 @@ def write(tmp_path: pathlib.Path, text: str, name: str = "input.yml") -> pathlib
 
 # --- end to end ---
 
-def test_example_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    input_path = write(tmp_path, SMALL)
     output = tmp_path / "schedule.csv"
-    assert main([str(EXAMPLE_INPUT), "-o", str(output)]) == EXIT_SUCCESS
-    wrote, penalty = capsys.readouterr().out.splitlines()
-    assert wrote.startswith(f"wrote {output}: ")
-    schedule_input = read_input(EXAMPLE_INPUT)
+    assert main([str(input_path), "-o", str(output)]) == EXIT_SUCCESS
+    captured = capsys.readouterr()
+    wrote, penalty = captured.out.splitlines()
+    assert wrote == f"wrote {output}: 5 shifts, 8 slots, 5 workers"
+    schedule_input = read_input(input_path)
     problem = build_problem(schedule_input)
     assignment = read_schedule(output, schedule_input).assignment
     assert hard_constraint_violations(schedule_input, problem.slots, assignment) == []
-    # the penalty shown is the written schedule's
+    # the schedule written is the best one, and the penalty shown is its own
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
                                 problem.domains)
-    assert penalty == describe_penalty(score(constants, assignment))
+    best = find_best_schedule(problem, constants)
+    assert assignment == best.assignment
+    assert penalty == f"{describe_penalty(score(constants, assignment))}, the best possible"
+    # each better schedule found is reported on standard error, the last being the one written
+    progress = captured.err.splitlines()
+    assert progress and all(line.startswith("tinyscheg: found penalty ") for line in progress)
+    assert progress[-1].startswith(f"tinyscheg: found penalty {score(constants, assignment).total:.2f} after ")
 
 
 def test_describe_penalty() -> None:
@@ -73,8 +103,7 @@ def test_describe_penalty() -> None:
 
 
 def test_default_output_is_next_to_the_input(tmp_path: pathlib.Path) -> None:
-    input_path = tmp_path / "week1.yml"
-    shutil.copy(EXAMPLE_INPUT, input_path)
+    input_path = write(tmp_path, SMALL, "week1.yml")
     assert default_output_path(input_path) == tmp_path / "week1_schedule.csv"
     assert main([str(input_path)]) == EXIT_SUCCESS
     assert (tmp_path / "week1_schedule.csv").exists()
@@ -83,7 +112,7 @@ def test_default_output_is_next_to_the_input(tmp_path: pathlib.Path) -> None:
 def test_existing_output_is_overwritten(tmp_path: pathlib.Path) -> None:
     output = tmp_path / "schedule.csv"
     output.write_text("old", encoding="utf-8")
-    assert main([str(EXAMPLE_INPUT), "-o", str(output)]) == EXIT_SUCCESS
+    assert main([str(write(tmp_path, SMALL)), "-o", str(output)]) == EXIT_SUCCESS
     assert output.read_text(encoding="utf-8-sig").startswith("start,end,front gate,desk")
 
 

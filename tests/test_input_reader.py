@@ -45,7 +45,7 @@ def problems_of(tmp_path: pathlib.Path, text: str) -> tuple[str, ...]:
 def test_example_input() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     settings = schedule_input.settings
-    assert settings.period == DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 4))
+    assert settings.period == DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 2))
     assert settings.min_rest == dt.timedelta(hours=6)
 
     assert [worker.name for worker in schedule_input.workers] == ["Jack", "Jill", "Jeff", "Anne", "Gilgamesh",

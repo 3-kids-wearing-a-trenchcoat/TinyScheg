@@ -1,6 +1,7 @@
 """Backtracking search with forward checking: for the first legal schedule, or the best one by branch and bound."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from tinyscheg.csp.problem import Problem
@@ -56,11 +57,13 @@ class _Search:
     pocket (the best complete schedule found so far, ADR 0004)
     """
 
-    def __init__(self, problem: Problem, constants: ScoringConstants | None = None, prune: bool = True) -> None:
+    def __init__(self, problem: Problem, constants: ScoringConstants | None = None, prune: bool = True,
+                 on_improvement: Callable[[Penalty], None] | None = None) -> None:
         """
         :param problem: Problem
         :param constants: ScoringConstants to look for the best schedule with; None to stop at the first legal one
         :param prune: False to visit every branch even when it can't beat the pocket (for testing the pruning)
+        :param on_improvement: called with the new pocket's penalty whenever a better schedule is found, or None
         """
         self.problem = problem
         self.state = SearchState(problem)
@@ -73,6 +76,7 @@ class _Search:
         self.pocket_penalty: Penalty | None = None
         self.nodes = 0
         self.pruned = 0
+        self.on_improvement = on_improvement
 
     def search(self) -> bool:
         """
@@ -120,6 +124,8 @@ class _Search:
         penalty = score(self.constants, self.state.assigned)
         if self.pocket_penalty is None or penalty.total < self.pocket_penalty.total:
             self.pocket, self.pocket_penalty = tuple(self.state.assigned), penalty
+            if self.on_improvement is not None:
+                self.on_improvement(penalty)
         return False
 
 
@@ -136,17 +142,20 @@ def find_first_schedule(problem: Problem) -> SearchResult:
     return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes)
 
 
-def find_best_schedule(problem: Problem, constants: ScoringConstants, prune: bool = True) -> SearchResult:
+def find_best_schedule(problem: Problem, constants: ScoringConstants, prune: bool = True,
+                       on_improvement: Callable[[Penalty], None] | None = None) -> SearchResult:
     """
     Search for the best legal schedule by branch and bound: every branch is searched unless its penalty is already
-    at least the pocket's
+    at least the pocket's. The search runs to the end, however long that takes.
     :param problem: Problem
     :param constants: ScoringConstants, built for the same input
     :param prune: False only for testing: search every branch, to check that pruning loses nothing
+    :param on_improvement: called with the penalty of each better schedule as it's found (e.g. to show progress);
+    None for no calls
     :return: the legal schedule with the lowest penalty and its penalty (deterministically: of equally good
     schedules, the first found), or the point at which the search got stuck if there is none
     """
-    run = _Search(problem, constants, prune)
+    run = _Search(problem, constants, prune, on_improvement)
     run.search()
     if run.pocket is None:
         return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes, pruned=run.pruned)
