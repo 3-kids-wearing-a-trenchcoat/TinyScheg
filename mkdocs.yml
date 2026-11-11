@@ -40,6 +40,7 @@ nav:
           - ScheduleInput: reference/api/schedule-input.md
           - parsing: reference/api/parsing.md
           - Problem: reference/api/problem.md
+          - Search: reference/api/search.md
   - Explanation:
       - Architecture: explanation/architecture.md
       - Domain model: explanation/domain-model.md

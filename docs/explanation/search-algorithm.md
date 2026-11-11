@@ -4,8 +4,10 @@ TinyScheg looks for the **best** legal schedule, not just any legal one. It does
 over the [CSP](csp-formulation.md), combined with branch and bound: a [penalty score](scoring.md) is kept for every
 partial schedule, and branches that can't beat the best complete schedule found so far are pruned.
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!IMPORTANT]
+> **Partially implemented.** Backtracking with forward checking and undo finds the **first** legal schedule
+> ([`csp/search.py`](../reference/api/search.md)), filling slots in stable order. Scoring, MRV/degree ordering and
+> branch and bound aren't implemented yet.
 
 ## Overview
 
@@ -32,6 +34,10 @@ deepest point the search reached and the slot it couldn't fill there
 
 ## Backtracking search
 
+> [!IMPORTANT]
+> **Partially implemented.** Steps 2–5 are implemented, stopping at the first complete schedule. Scoring and pruning
+> (step 1) and the pocket aren't.
+
 The search is recursive, much like a depth-first search
 ([ADR 0002](../decisions/0002-backtracking-with-forward-checking.md)):
 
@@ -46,6 +52,9 @@ The search is recursive, much like a depth-first search
 
 ## Constraint propagation
 
+> [!NOTE]
+> **Implemented.** See [`SearchState.assign`](../reference/api/search.md#assignslot_index-worker-changes).
+
 TinyScheg uses plain **forward checking** ([ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)):
 after a worker is assigned to a slot, that worker is removed from the domain of every unassigned slot that has a
 difference constraint with it. This avoids ever trying combinations that violate a constraint.
@@ -55,6 +64,10 @@ difference constraint with it. This avoids ever trying combinations that violate
   domain, it's the next slot chosen anyway.
 
 ## Variable ordering
+
+> [!IMPORTANT]
+> **Partially implemented.** Only the final tie-breaker is: slots are filled in stable order. MRV and the degree
+> heuristic aren't implemented yet.
 
 See [ADR 0003](../decisions/0003-variable-ordering-mrv-degree.md) and
 [ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md).
@@ -88,6 +101,9 @@ Value order can still affect how *quickly* branch and bound finds the best sched
 
 ## Branch and bound: the pocket
 
+> [!WARNING]
+> **Not yet implemented.**
+
 See [ADR 0004](../decisions/0004-branch-and-bound-with-monotone-penalty.md) and
 [ADR 0017](../decisions/0017-plain-forward-checking-and-pruning-on-ties.md).
 
@@ -105,6 +121,9 @@ When the search ends, the pocket holds the best schedule.
 
 ## Undo
 
+> [!NOTE]
+> **Implemented.** See [`Changes` and `SearchState.undo`](../reference/api/search.md#state-module).
+
 See [ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md).
 
 Backtracking requires undoing an assignment *and everything it caused*. Each step of the search records the changes
@@ -118,6 +137,9 @@ those changes before trying its next worker.
 * The loop over a slot's domain is itself the record of which branch is being explored, so nothing else is needed.
 
 ## Search state
+
+> [!NOTE]
+> **Implemented.** See [`SearchState`](../reference/api/search.md#class-searchstateproblem).
 
 The search operates on an explicit state object — the domains and assignments of all slots — that is passed to the
 search, rather than on class-level globals.

@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phase 1 — 4 of 7 steps done.
+Progress: Phase 1 — 5 of 7 steps done.
 
 ## Phase 1: Walking skeleton
 
@@ -27,13 +27,15 @@ confirms meets every hard constraint.
     - [x] Initial domains (availability, role), with workers by index
     - [x] Difference constraints (overlap, minimum rest)
     - [x] Detecting slots no worker can fill
-- [ ] **5. Search state and plain backtracking** — `csp/state.py`, `csp/search.py`
-  ([ADR 0016](decisions/0016-undo-through-change-records-on-the-call-stack.md))
-    - [ ] Explicit search state: domains and assignments
-    - [ ] Change records, undone on backtracking
-    - [ ] Backtracking to the first legal schedule, slots in stable order
-    - [ ] Tracking the deepest point reached, for reporting infeasibility
+- [x] **5. Search state and backtracking with forward checking** — `csp/state.py`, `csp/search.py`
+  ([ADR 0016](decisions/0016-undo-through-change-records-on-the-call-stack.md),
+  [ADR 0017](decisions/0017-plain-forward-checking-and-pruning-on-ties.md))
+    - [x] Explicit search state: domains and assignments
+    - [x] Forward checking, recorded in change records, undone on backtracking
+    - [x] Backtracking to the first legal schedule, slots in stable order
+    - [x] Tracking the deepest point reached, for reporting infeasibility
       ([ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
+    - [x] Independent hard-constraint checker for tests (`tests/schedule_checker.py`)
 - [ ] **6. Grid output, CSV** — `output/grid.py`, `output/csv_writer.py`
   ([ADR 0019](decisions/0019-output-as-a-time-by-post-grid.md))
     - [ ] Assigned slots → time-by-post grid (rows between shift boundaries, names joined with `" & "`)
@@ -44,18 +46,15 @@ confirms meets every hard constraint.
     - [ ] Reporting infeasible input on the command line, with no output file: the unfillable slots, or where the
       search got stuck ([ADR 0011](decisions/0011-no-output-for-infeasible-inputs.md),
       [ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
-    - [ ] Independent hard-constraint checker for tests (`tests/schedule_checker.py`)
     - [ ] End-to-end test on `exampleInput.yml`
 
 ## Phase 2: Efficient search
 
-Same result as phase 1, found with far less work.
+Same result as phase 1, found with far less work. (Forward checking was brought forward into step 5.)
 
-- [ ] Forward checking, recorded in change records
-  ([ADR 0017](decisions/0017-plain-forward-checking-and-pruning-on-ties.md))
 - [ ] Variable ordering: MRV, then degree, then stable order
   ([ADR 0003](decisions/0003-variable-ordering-mrv-degree.md))
-- [ ] Tests: the same schedules as plain backtracking, and determinism
+- [ ] Tests: legal schedules (checked independently) on the same inputs, infeasibility still found, and determinism
 
 ## Phase 3: Scoring
 

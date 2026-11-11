@@ -47,8 +47,10 @@ See [Domain model](domain-model.md) and [CSP formulation](csp-formulation.md).
 
 ## 3. Run CSP search
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!IMPORTANT]
+> **Partially implemented.** Backtracking with forward checking finds the first legal schedule, or where the search
+> got stuck ([`csp/search.py`](../reference/api/search.md)); MRV/degree ordering and pruning by penalty aren't
+> implemented yet.
 
 Search for the best schedule: a backtracking search with constraint propagation, ordered by MRV and the degree
 heuristic, pruned by comparing each partial schedule's penalty against the best complete schedule found so far.
@@ -87,8 +89,8 @@ entry point. Modules marked *planned* don't exist yet.
 | `parsing/input_reader.py` | [`read_input`](../reference/api/parsing.md#input_reader-module): YAML input to model objects. |
 | `parsing/validation.py` | [`InputError` and the validation rules](../reference/api/parsing.md#validation-module). |
 | `csp/problem.py` | [`Problem`](../reference/api/problem.md): domains and difference constraints, by slot and worker index. |
-| `csp/state.py` | *Planned.* The explicit search state and change records ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
-| `csp/search.py` | *Planned.* Backtracking search with forward checking and MRV/degree ordering. |
+| `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
+| `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module); MRV/degree ordering and branch and bound are planned. |
 | `output/grid.py` | *Planned.* Assigned slots to the time-by-post grid ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
 | `output/csv_writer.py` | *Planned.* The grid as CSV; XLSX and ODS writers will sit next to it. |
 
