@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phase 1 complete (7 of 7 steps). Next: Phase 2.
+Progress: Phase 1 complete (7 of 7 steps). Next: Phase 2 (scoring), starting with the open design questions.
 
 ## Phase 1: Walking skeleton
 
@@ -51,19 +51,13 @@ confirms meets every hard constraint.
       [ADR 0020](decisions/0020-report-where-infeasibility-was-found.md))
     - [x] End-to-end test on `exampleInput.yml`, checking the written file independently
 
-## Phase 2: Efficient search
+## Phase 2: Scoring
 
-Same result as phase 1, found with far less work. (Forward checking was brought forward into step 5.)
+A penalty score for any (partial) schedule, computed from scratch ([Scoring](explanation/scoring.md)). Scoring is a
+pure function of a (partial) assignment, so it's built and tested on fixed assignments, independently of the search.
 
-- [ ] Variable ordering: MRV, then degree, then stable order
-  ([ADR 0003](decisions/0003-variable-ordering-mrv-degree.md))
-- [ ] Tests: legal schedules (checked independently) on the same inputs, infeasibility still found, and determinism
-
-## Phase 3: Scoring
-
-A penalty score for any (partial) schedule, computed from scratch ([Scoring](explanation/scoring.md)).
-
-- [ ] Decide the open points: φ ($x^p$ or $e^{ax}-1$), parameter and weight values, whether they're set in the input
+- [ ] Confirm the formulas as corrected in the 2026-11-10 review, and decide the open points: φ ($x^p$ or
+  $e^{ax}-1$), parameter and weight values, whether they're set in the input
 - [ ] Constants: each worker's availability, the number of shared slots, worst rest deficit, packable maximum
 - [ ] Workload penalty ([ADR 0013](decisions/0013-availability-weighted-workload.md),
   [ADR 0015](decisions/0015-normalize-workload-by-packable-maximum.md))
@@ -72,6 +66,17 @@ A penalty score for any (partial) schedule, computed from scratch ([Scoring](exp
 - [ ] Weighted sum of normalized penalties ([ADR 0005](decisions/0005-weighted-sum-of-normalized-penalties.md))
 - [ ] Property tests: monotone along the search, path-independent and deterministic
   ([ADR 0012](decisions/0012-deterministic-path-independent-scoring.md))
+
+## Phase 3: Efficient search
+
+Legal schedules found with far less work, before branch and bound multiplies the search. (Forward checking was
+brought forward into step 5.)
+
+- [ ] Variable ordering: MRV, then degree, then stable order
+  ([ADR 0003](decisions/0003-variable-ordering-mrv-degree.md))
+- [ ] With scoring in place, decide whether any scoring-based speedups (cheapest-first value order, a stronger
+  lower bound; see [Later](#later)) are needed before branch and bound
+- [ ] Tests: legal schedules (checked independently) on the same inputs, infeasibility still found, and determinism
 
 ## Phase 4: Branch and bound
 
