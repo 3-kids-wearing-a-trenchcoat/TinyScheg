@@ -108,3 +108,15 @@ be additional, monotone penalty components.
 * **Tutorials**, once TinyScheg runs end to end.
 * **A generated API reference** (e.g. mkdocstrings), replacing the hand-written pages in `docs/reference/api/`.
 * **Publishing the docs site**, e.g. to GitHub Pages.
+
+## Accessibility for non-technical users
+
+> [!WARNING]
+> **Not yet implemented.** Lowest priority: these are for once TinyScheg is finished and working, to make it usable
+> by people who don't work with the command line.
+
+* **An optional graphical interface.** A GUI for people put off by the command line, alongside the command-line
+  interface rather than replacing it.
+* **Simple distribution.** A single executable file per platform that needs no installation of Python or other
+  dependencies, and can be used either from the command line or through the GUI. Windows and Linux versions, and
+  possibly a macOS version.
