@@ -126,15 +126,14 @@ class _Search:
 
     def _cannot_beat_pocket(self) -> bool:
         """
-        True if no completion of the current (partial) schedule can beat the pocket: its lower bound (the penalty so
-        far, with the lowest workload the remaining hours could give, ADR 0024) is already at least the pocket's.
+        True if no completion of the current (partial) schedule can beat the pocket: its lower bound (ADR 0024: the
+        rest penalty so far, with the lowest likes and workload penalties the current domains could still give) is
+        already at least the pocket's.
         Ties keep the pocket, so a branch that can at best tie is pruned too (ADR 0017).
         """
         if self.constants is None or self.pocket_penalty is None or not self.prune:
             return False
-        eligible = {worker for slot_index, assigned in enumerate(self.state.assigned) if assigned is None
-                    for worker in self.state.domains[slot_index]}
-        return lower_bound(self.constants, self.state.assigned, eligible) >= self.pocket_penalty.total
+        return lower_bound(self.constants, self.state.assigned, self.state.domains) >= self.pocket_penalty.total
 
     def _complete(self) -> bool:
         """

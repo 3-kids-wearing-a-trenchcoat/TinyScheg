@@ -24,7 +24,7 @@ file is written and an existing one is left as it was.
 
 The schedule written is the **best** legal one: the one with the lowest
 [penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
-The search runs to the end, with no limit, which takes a while: about 1½ minutes for the 24-hour
+The search runs to the end, with no limit, which can take a while: about 10 seconds for the 24-hour
 `exampleInput.yml`, and much longer for longer schedules. Ctrl+C stops it (see [Errors](#errors)).
 
 While it runs, each better schedule found is reported on standard error, with the time since the search started, so

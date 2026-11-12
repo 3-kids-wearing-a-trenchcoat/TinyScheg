@@ -44,8 +44,9 @@ minimal set of conflicting requirements.
 > [!IMPORTANT]
 > **Partially implemented.** Cheapest-first value ordering and a lower bound on workload were implemented on
 > 2026-11-11 ([ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md)), when search speed
-> blocked [tuning](tuning.md), and symmetry breaking within shifts on 2026-11-12
-> ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)). The rest below is deferred. Branch and bound runs
+> blocked [tuning](tuning.md), and on 2026-11-12, symmetry breaking within shifts
+> ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)) and look-ahead bounds for likes and workload. The rest
+> below is deferred. Branch and bound runs
 > to the end with no limit and can be interrupted with Ctrl+C.
 
 Measured on the example on 2026-11-11, with prototypes in which each idea was checked against brute force on small
@@ -69,8 +70,21 @@ schedule. Still deferred:
   workers identical in every respect (roles, availability, their likes and dislikes, and everyone else's of them)
   could be ordered too, but that's rare and easy to get subtly wrong. Shifts are never interchangeable: in asymmetric
   schedules they differ in length, rest targets and availability.
-* **Tighter bounds.** Lower bounds for the rest and likes penalties, which now count only what's assigned, and a
-  workload bound that respects which worker can take which slot. Likely the way to finish 48-hour schedules.
+* **Tighter bounds.** Done on 2026-11-12 for likes (each pair of slots in a shared shift adds at least the cheapest
+  pairing its domains allow) and workload (each worker gains at most the hours of the slots they could take). Measured
+  on the example and the 15 benchmark inputs, with the best penalty unchanged on every one:
+
+  | | Total time | Nodes | 24-hour example |
+  |---|---|---|---|
+  | ADR 0024 only | 1172 s | 27.3 M | 168 s |
+  | + symmetry within shifts (ADR 0025) | 1027 s | 24.3 M | 172 s |
+  | + workload caps only | 1240 s | 24.3 M | 161 s |
+  | + likes look-ahead only | 540 s | 9.8 M | 10.5 s |
+  | + both (as implemented) | 117 s | 2.8 M | 7.1 s |
+
+  (Run 12 at a time, so times are noisy; node counts aren't. Alone, the caps cost more than they save; with the
+  likes look-ahead, they cut the nodes by another 3½ times.) Still open: a rest look-ahead (none is valid that's
+  cheap, since a worker can always get no further shifts), and caps that account for overlapping slots.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long

@@ -15,7 +15,7 @@ from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Set
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import ScoringConstants, build_constants
-from tinyscheg.scoring.penalty import likes_penalty, rest_penalty, score, workload_penalty
+from tinyscheg.scoring.penalty import _water_level, likes_penalty, rest_penalty, score, workload_penalty
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -220,3 +220,12 @@ def test_workload_penalty_ranks_schedules_by_the_spread_of_workloads() -> None:
     by_spread = sorted(schedules, key=weighted_variance)
     penalties = [workload_penalty(constants, assignment) for assignment in by_spread]
     assert all(earlier <= later + 1e-12 for earlier, later in zip(penalties, penalties[1:]))
+
+
+def test_the_water_level_respects_each_workers_cap() -> None:
+    # two workers with 1 hour available each, 4 hours to spread: evenly, 2 each; if one can take only 1, the other 3
+    assert _water_level([(0.0, 1.0, 10.0), (0.0, 1.0, 10.0)], 4.0) == pytest.approx(2.0)
+    assert _water_level([(0.0, 1.0, 1.0), (0.0, 1.0, 10.0)], 4.0) == pytest.approx(3.0)
+    # a worker already above the level keeps their own
+    assert _water_level([(0.0, 1.0, 10.0), (5.0, 1.0, 10.0)], 2.0) == pytest.approx(2.0)
+    assert _water_level([], 3.0) == 0.0

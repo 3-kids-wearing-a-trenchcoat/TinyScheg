@@ -62,7 +62,7 @@ the result is deterministic. Stops at the first complete, legal schedule.
 
 [Branch and bound](../../explanation/search-algorithm.md#branch-and-bound-the-pocket): the same search, run to the
 end, keeping the best complete schedule found so far in the pocket. At every partial schedule a
-[lower bound](scoring.md#lower_boundconstants-assignment-eligible_workers-float) on the penalty of its completions
+[lower bound](scoring.md#lower_boundconstants-assignment-domains-float) on the penalty of its completions
 is computed from scratch; if it's already at least the pocket's penalty, the branch is pruned, since ties keep the
 pocket ([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)). A slot's workers are tried
 cheapest first: by the penalty with them assigned, ties in input order

@@ -13,12 +13,13 @@ from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import _Search, choose_slot, find_best_schedule, find_first_schedule
 from tinyscheg.csp.state import SearchState
-from tinyscheg.model.post import Post, ShiftRules
+from tinyscheg.model.post import Post, ShiftRules, Variation
 from tinyscheg.model.schedule_input import ScheduleInput, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import ScoringConstants, build_constants
 from tinyscheg.scoring.penalty import lower_bound, score
+from tinyscheg.timing.daily_window import DailyWindow
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -26,6 +27,7 @@ BRUTE_FORCE_LIMIT = 20000  # the most schedules (combinations of domains) a brut
 BRUTE_FORCE_MINIMUM = 50   # the fewest, so that every input takes some searching
 BOUND_PARTIALS = 20         # partial schedules checked per small input in the lower-bound test
 BRUTE_FORCE_INPUTS = 25    # how many random small inputs are compared with brute force
+ASYMMETRIC_SHARE = 0.6     # the share of posts made asymmetric: a dangling shift, a daily window or a variation
 LOCAL_CHECK_HOURS = (12, 14)  # lengths of the example that branch and bound finishes in well under a second
 SLOW_CASE_SECONDS = 5      # filling slots in stable order took minutes on this case; MRV takes a fraction of a second
 
@@ -180,7 +182,24 @@ def random_small_input(seed: int) -> ScheduleInput:
     if rng.random() < 0.5:
         posts.append(Post("aid", ShiftRules(dt.timedelta(hours=4), (("medic", 1),))))
     settings = Settings(period, dt.timedelta(hours=rng.choice([0, 1, 2, 4])))
-    return ScheduleInput(settings, tuple(workers), tuple(posts))
+    return ScheduleInput(settings, tuple(workers), tuple(asymmetric(rng, post) for post in posts))
+
+
+def asymmetric(rng: random.Random, post: Post) -> Post:
+    """
+    Sometimes make a post asymmetric, since real schedules often are: shifts that don't divide the time (leaving a
+    shorter dangling shift), a daily window outside which the post is closed, or a variation with other roles
+    """
+    choice = rng.random()
+    if choice < ASYMMETRIC_SHARE / 3:
+        return dataclasses.replace(post, rules=dataclasses.replace(post.rules, length=dt.timedelta(hours=3)))
+    if choice < 2 * ASYMMETRIC_SHARE / 3:
+        return dataclasses.replace(post, window=DailyWindow(dt.time(1), dt.time(7)))
+    if choice < ASYMMETRIC_SHARE:
+        variation = Variation(DailyWindow(dt.time(4), dt.time(6)),
+                              ShiftRules(dt.timedelta(hours=2), (("medic", 1), ("any", 1))))
+        return dataclasses.replace(post, variations=(variation,))
+    return post
 
 
 def small_inputs() -> list[ScheduleInput]:
@@ -314,10 +333,14 @@ def test_the_lower_bound_is_never_above_a_completion_nor_below_the_partial(sched
         # a partial schedule: some slots of a legal schedule left unfilled
         source = rng.choice(legal)
         partial = [worker if rng.random() < 0.5 else None for worker in source]
-        eligible = {worker for slot, assigned in enumerate(partial) if assigned is None
-                    for worker in problem.domains[slot]}
-        bound = lower_bound(constants, partial, eligible)
+        # the domains as forward checking leaves them: no worker of a filled slot in the slots constrained with it
+        checked = [tuple(worker for worker in domain
+                         if all(partial[neighbour] != worker for neighbour in problem.neighbours[slot]))
+                   for slot, domain in enumerate(problem.domains)]
         completions = [assignment for assignment in legal
                        if all(filled is None or filled == worker for filled, worker in zip(partial, assignment))]
-        assert bound <= min(score(constants, assignment).total for assignment in completions) + 1e-12
-        assert bound >= score(constants, partial).total - 1e-12
+        best = min(score(constants, assignment).total for assignment in completions)
+        for domains in (problem.domains, checked):
+            bound = lower_bound(constants, partial, domains)
+            assert bound <= best + 1e-12
+            assert bound >= score(constants, partial).total - 1e-12

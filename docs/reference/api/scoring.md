@@ -94,21 +94,33 @@ The penalty of a (partial) schedule.
 Immutable. `likes`, `workload` and `rest` are the normalized parts, each in $[0, k]$ for $k$ workers; `total` is
 their weighted sum, $a \cdot$ `likes` $+ \; b \cdot$ `workload` $+ \; c \cdot$ `rest`, also in $[0, k]$.
 
-### `lower_bound(constants, assignment, eligible_workers) -> float`
+### `lower_bound(constants, assignment, domains) -> float`
 
 A lower bound on the total penalty of every complete schedule extending a partial one, for pruning
-([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)): the weighted likes and rest
-penalties so far, plus the weighted `workload_lower_bound`. At most the total penalty of every completion, and at
-least the partial schedule's own.
+([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)): the weighted
+`likes_lower_bound` and `workload_lower_bound`, plus the weighted rest penalty so far. At most the total penalty of
+every completion, and at least the partial schedule's own. Neither look-ahead assumes anything about shift lengths,
+so it holds for asymmetric schedules.
 
-* `eligible_workers` — every worker who can still fill some unfilled slot (in the search, the union of the unfilled
-  slots' domains).
+* `domains` — for each slot, the workers who can still fill it (in the search, the current domains); only the
+  unfilled slots' are used.
 
-### `workload_lower_bound(constants, assignment, eligible_workers) -> float`
+There's no look-ahead for rest: a worker can always be given no further shifts, so no future rest deficit is certain.
 
-The lowest normalized workload penalty any completion could have: the unfilled slots' hours spread over the eligible
-workers so that the least loaded are topped up to a common level of hours per available hour ("water-filling"),
-which minimizes the sum of convex terms. Ignores which worker can take which slot, so it may be lower than anything
+### `likes_lower_bound(constants, assignment, domains) -> float`
+
+The lowest normalized likes penalty any completion could have. In a complete schedule, each pair of slots in a shared
+shift adds both workers' like values of each other, over the shift's other slots; a pair with an unfilled slot adds at
+least the lowest such value any workers still in the slots' domains could give. Each pair's best is chosen
+independently (even the same worker for both), which can only lower the bound. In
+$[\mathcal{L}^{**}(\text{partial}), k]$.
+
+### `workload_lower_bound(constants, assignment, domains) -> float`
+
+The lowest normalized workload penalty any completion could have: the unfilled slots' hours spread so that the least
+loaded workers are topped up to a common level of hours per available hour ("water-filling"), which minimizes the
+sum of convex terms. Each worker can gain at most the hours of the unfilled slots whose domain they're in, so a worker
+who could take few hours stops rising early. Which slots overlap is ignored, so it may be lower than anything
 reachable. In $[\mathcal{W}^*(\text{partial}), k]$.
 
 ### `likes_penalty(constants, assignment) -> float`

@@ -136,12 +136,21 @@ decreases as more slots are assigned: each state's penalty is greater than or eq
 
 What's compared is a **lower bound** on the penalty of every schedule in the branch
 ([ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md)). The penalty so far would do, since
-it never decreases, but it's weak: the workload penalty barely grows until the last slots are filled. So the bound
-takes the likes and rest penalties so far, and for workload, the lowest penalty the remaining hours could give.
-Every unfilled slot's hours must go to some worker who can still fill one; since each worker's workload term is
-convex, the total is lowest when those hours top up the least-loaded of them to a common level of hours per
-available hour, like water filling a vessel. Ignoring which worker can take which slot makes this a bound that may
-be lower than anything reachable, but never higher.
+it never decreases, but it's weak: the workload penalty barely grows until the last slots are filled, and the likes
+penalty counts only the pairs already filled. So the bound looks ahead, using the current domains:
+
+* **Workload:** every unfilled slot's hours must go to a worker in its domain. Since each worker's workload term is
+  convex, the total is lowest when those hours top up the least-loaded workers to a common level of hours per
+  available hour, like water filling vessels; each worker only up to the hours of the unfilled slots they could
+  take, like vessels of different heights.
+* **Likes:** each pair of slots in a shared shift will add both workers' like values of each other; a pair with an
+  unfilled slot adds at least the lowest value the workers still in its domains could give.
+* **Rest:** the penalty so far. A worker can always be given no further shifts, so no future deficit is certain.
+
+Both look-aheads relax the problem (ignoring which slots overlap, and choosing each pair's best independently), so
+the bound may be lower than anything reachable, but never higher. Neither assumes anything about shift lengths: in
+asymmetric schedules, with shifts of different lengths, dangling shifts or variations, it holds all the same, and the
+brute-force tests include such inputs.
 
 When the search ends, the pocket holds the best schedule.
 

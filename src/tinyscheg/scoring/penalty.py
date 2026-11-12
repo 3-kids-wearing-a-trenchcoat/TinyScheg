@@ -9,7 +9,7 @@ order), so the same assignment always gets exactly the same penalty, however it 
 """
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tinyscheg.scoring.constants import ScoringConstants, hours
@@ -97,70 +97,108 @@ def workload_penalty(constants: ScoringConstants, assignment: Sequence[int | Non
 
 
 def lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
-                eligible_workers: Collection[int]) -> float:
+                domains: Sequence[Sequence[int]]) -> float:
     """
-    A lower bound on the total penalty of every complete schedule that extends a partial one (ADR 0024): the likes
-    and rest penalties so far, which filling slots never lowers, and the lowest workload penalty the remaining hours
-    could give (workload_lower_bound)
+    A lower bound on the total penalty of every complete schedule that extends a partial one (ADR 0024): the lowest
+    likes penalty the shifts' pairings could still give (likes_lower_bound), the lowest workload penalty the remaining
+    hours could give (workload_lower_bound), and the rest penalty so far, which filling slots never lowers. Neither
+    look-ahead assumes anything about shift lengths, so the bound holds for asymmetric schedules too.
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None for an unfilled slot
-    :param eligible_workers: every worker who can still fill some unfilled slot
+    :param domains: for each slot, the workers who can still fill it (only the unfilled slots' are used)
     :return: a number at most the total penalty of every completion, and at least the partial schedule's own
     """
     parameters = constants.parameters
-    return (parameters.likes_weight * likes_penalty(constants, assignment)
-            + parameters.workload_weight * workload_lower_bound(constants, assignment, eligible_workers)
+    return (parameters.likes_weight * likes_lower_bound(constants, assignment, domains)
+            + parameters.workload_weight * workload_lower_bound(constants, assignment, domains)
             + parameters.rest_weight * rest_penalty(constants, assignment))
 
 
-def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
-                         eligible_workers: Collection[int]) -> float:
+def likes_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
+                      domains: Sequence[Sequence[int]]) -> float:
     """
-    The lowest normalized workload penalty any completion of a partial schedule could have. The hours of the unfilled
-    slots must go to eligible workers; since each worker's term av * (hours / av) ** p is convex, the total is lowest
-    when they top up the least-loaded eligible workers to a common level of hours / av, as water fills a vessel
-    (Jensen's inequality). Which worker can take which slot is ignored, so the bound may be lower than reachable.
+    The lowest normalized likes penalty any completion of a partial schedule could have. In a complete schedule, each
+    pair of slots in a shared shift adds both workers' like values of each other, over the shift's other slots; a
+    pair with an unfilled slot adds at least the lowest value any workers still in their domains could give
+    (choosing each pair's best independently, and even the same worker twice, only lowers the bound)
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
-    :param eligible_workers: every worker who can still fill some unfilled slot
+    :param domains: for each slot, the workers who can still fill it
+    :return: in [likes_penalty(assignment), k]; 0 if no shift has more than one slot
+    """
+    if constants.shared_slots == 0:
+        return 0.0
+    total = 0.0
+    for shift in constants.shifts:
+        others = len(shift.slots) - 1
+        if others == 0:
+            continue
+        candidates = [(assignment[slot.index],) if assignment[slot.index] is not None else domains[slot.index]
+                      for slot in shift.slots]
+        for first in range(len(candidates)):
+            for second in range(first + 1, len(candidates)):
+                total += min(_like_value(constants, worker, partner) + _like_value(constants, partner, worker)
+                             for worker in candidates[first] for partner in candidates[second]) / others
+    return len(constants.workers) * total / (DISLIKED_PARTNER * constants.shared_slots)
+
+
+def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
+                         domains: Sequence[Sequence[int]]) -> float:
+    """
+    The lowest normalized workload penalty any completion of a partial schedule could have. The hours of the unfilled
+    slots must go to workers in their domains, each worker gaining at most the hours of the unfilled slots they're in
+    the domain of. Since each worker's term av * (hours / av) ** p is convex, the total is lowest when the hours top
+    up the least-loaded workers to a common level of hours / av, each only up to their cap, as water fills vessels of
+    different heights (Jensen's inequality). Which slots overlap is ignored, so the bound may be lower than reachable.
+    :param constants: ScoringConstants
+    :param assignment: a worker index per slot, or None
+    :param domains: for each slot, the workers who can still fill it
     :return: in [workload_penalty(assignment), k]
     """
     if constants.workload_scale == 0:
         return 0.0
     power = constants.parameters.workload_power
     assigned_hours = _assigned_hours(constants, assignment)
-    remaining = sum(constants.slot_hours[slot] for slot, worker in enumerate(assignment) if worker is None)
-    fixed = 0.0  # the terms of workers who get no more hours
-    pool: list[tuple[float, float, float]] = []  # (hours / av, av, hours) of the workers who may
+    caps = [0.0] * len(constants.workers)
+    remaining = 0.0
+    for slot, worker in enumerate(assignment):
+        if worker is None:
+            remaining += constants.slot_hours[slot]
+            for candidate in domains[slot]:
+                caps[candidate] += constants.slot_hours[slot]
+    pool: list[tuple[float, float, float]] = []  # (hours / av, av, highest hours / av) per worker
     for index, worker in enumerate(constants.workers):
-        if worker.availability <= 0:
-            continue
-        if index in eligible_workers:
-            pool.append((assigned_hours[index] / worker.availability, worker.availability, assigned_hours[index]))
-        else:
-            fixed += worker.availability * (assigned_hours[index] / worker.availability) ** power
-    pool.sort()
+        if worker.availability > 0:
+            pool.append((assigned_hours[index] / worker.availability, worker.availability,
+                         (assigned_hours[index] + caps[index]) / worker.availability))
     level = _water_level(pool, remaining)
-    filled = sum(availability * max(ratio, level) ** power for ratio, availability, _ in pool)
-    return len(constants.workers) * (fixed + filled) / constants.workload_scale
+    filled = sum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
+    return len(constants.workers) * filled / constants.workload_scale
 
 
 def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> float:
     """
-    The common level of hours / av that the remaining hours raise the least-loaded workers of the pool to
-    :param pool: (hours / av, av, hours) per worker, sorted by hours / av
+    The common level of hours / av that the remaining hours raise the workers of the pool to, each worker only up to
+    their highest; workers already above it keep their own
+    :param pool: (hours / av, av, highest hours / av) per worker
     :param remaining: the hours to spread
-    :return: the level; workers already above it keep their own
+    :return: the level; 0 if there's nothing to spread
     """
-    total_availability = total_hours = 0.0
-    for position, (ratio, availability, worker_hours) in enumerate(pool):
-        total_availability += availability
-        total_hours += worker_hours
-        level = (remaining + total_hours) / total_availability
-        next_ratio = pool[position + 1][0] if position + 1 < len(pool) else float("inf")
-        if level <= next_ratio:
-            return level
-    return 0.0  # an empty pool: nothing to raise
+    def spread(level: float) -> float:
+        """The hours it takes to raise every worker to the level, within their highest."""
+        return sum(availability * (min(max(ratio, level), highest) - ratio) for ratio, availability, highest in pool)
+
+    if remaining <= 0 or not pool:
+        return 0.0
+    # spread() is piecewise linear and rises between consecutive breakpoints (where a worker starts or stops rising)
+    breakpoints = sorted({ratio for ratio, _, _ in pool} | {highest for _, _, highest in pool})
+    lower, lower_spread = breakpoints[0], 0.0
+    for upper in breakpoints[1:]:
+        upper_spread = spread(upper)
+        if upper_spread >= remaining:
+            return lower + (remaining - lower_spread) * (upper - lower) / (upper_spread - lower_spread)
+        lower, lower_spread = upper, upper_spread
+    return breakpoints[-1]  # every worker is at their highest: the caps can't take all the hours
 
 
 def _assigned_hours(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[float]:
