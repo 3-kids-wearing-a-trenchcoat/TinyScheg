@@ -50,6 +50,8 @@ ADR that supersedes the old one.
 | [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
 | [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Accepted |
 | [0028](0028-rest-factor-default-2-5.md) | Default rest factor 2.5 | Accepted |
+| [0029](0029-schedule-history-input.md) | Schedule history: previous inputs and their schedules, read back as fixed history | Accepted |
+| [0030](0030-history-in-scoring.md) | History in scoring: the history and the new schedule scored as one | Accepted |
 
 ## Template
 

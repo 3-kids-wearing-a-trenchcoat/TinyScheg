@@ -85,6 +85,8 @@ nav:
       - 0026 Workload counts shifts too: decisions/0026-workload-counts-shifts-and-hours.md
       - 0027 Incremental scoring: decisions/0027-incremental-scoring-for-steering.md
       - 0028 Rest factor 2.5: decisions/0028-rest-factor-default-2-5.md
+      - 0029 Schedule history input: decisions/0029-schedule-history-input.md
+      - 0030 History in scoring: decisions/0030-history-in-scoring.md
 
 markdown_extensions:
   - admonition

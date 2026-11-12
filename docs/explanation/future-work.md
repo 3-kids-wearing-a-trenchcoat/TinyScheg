@@ -9,7 +9,8 @@ in its "Later" section.
 ## Schedule history
 
 > [!WARNING]
-> **Not yet implemented.** Highest priority.
+> **Not yet implemented.** Designed on 2026-11-12 ([ADR 0029](../decisions/0029-schedule-history-input.md),
+> [ADR 0030](../decisions/0030-history-in-scoring.md)), and being built as Phase 7 of the [roadmap](../roadmap.md).
 
 Currently every run creates a **new** schedule, in which every worker is "fresh". When schedules are created for
 consecutive periods (typically 24–48 hours), this causes two problems at the boundary between periods:
@@ -19,10 +20,18 @@ consecutive periods (typically 24–48 hours), this causes two problems at the b
 * **Fairness:** workload and rest fairness start over every period, so small imbalances can accumulate across
   schedules.
 
-The planned solution is to accept a **previously generated schedule** as additional input. Its assignments are
-treated as **fixed** and included in scoring, so the algorithm effectively *extends* the existing schedule rather
-than starting from scratch. The previous schedule is read from TinyScheg's own
-[output](../reference/output-format.md#reading-the-output-back), which is designed for this.
+The solution: the input lists **previous schedules**, each as its input and its schedule file
+([output](../reference/output-format.md#reading-the-output-back), which is designed to be read back). Their
+assignments are **fixed** history, and the history and the new schedule are scored as one, so the algorithm
+effectively *extends* the earlier schedules rather than starting from scratch:
+
+* the minimum rest holds across the boundary, as a hard constraint;
+* workload is counted over the history and the new period together, relative to each worker's availability in
+  each, so a worker who carried more before is given less now, and being away is never a debt;
+* the rest after each worker's last history shift counts like any other.
+
+Past short straws (disliked pairings, short rests) aren't compensated by this; whether they need to be is for the
+audit across schedules to show (ADR 0030).
 
 ## Explaining infeasibility
 

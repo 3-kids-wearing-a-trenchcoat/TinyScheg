@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–6 complete. Next: Phase 7, schedule history.
+Progress: Phases 1–6 complete; Phase 7 under way. Next: the schedule reader in the package.
 
 ## Phase 1: Walking skeleton
 
@@ -145,12 +145,22 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
 
 ## Phase 7: Schedule history
 
-Extending a previous schedule rather than starting fresh ([Future work](explanation/future-work.md#schedule-history)).
+Extending previous schedules rather than starting fresh ([Future work](explanation/future-work.md#schedule-history)).
 
-- [ ] Read a previous output grid (CSV, XLSX or ODS) back as fixed assignments
-- [ ] Minimum rest across the boundary between schedules
-- [ ] Fairness carried over between consecutive schedules
-- [ ] Resolve the CSV read-back limitation with a minimum rest of 0
+- [x] Design: previous inputs and their schedule files, read back as fixed history
+  ([ADR 0029](decisions/0029-schedule-history-input.md)), scored together with the new schedule
+  ([ADR 0030](decisions/0030-history-in-scoring.md))
+- [ ] Schedule reader in the package (`parsing/schedule_reader.py`): CSV, XLSX and ODS, each shift read where it
+  starts, which also resolves the CSV read-back limitation with a minimum rest of 0; the development tools use it
+- [ ] The `history` input section: parsing, validation (periods before the current one and not overlapping), a
+  warning for workers who have left
+- [ ] Minimum rest across the boundary between schedules, as unavailability in the search
+- [ ] History in scoring: workload over the history and the new period, rest at the boundary, the look-ahead bound
+  and incremental scoring
+- [ ] Command line: report the history used
+- [ ] Audit across schedules: the audit reads the history too, to check that fairness carries over, including
+  whether past short straws need compensating (ADR 0030)
+- [ ] End-to-end test: two consecutive schedules, the second making up for the first
 
 ## Later
 
