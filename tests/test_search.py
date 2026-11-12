@@ -357,3 +357,12 @@ def test_the_lower_bound_is_never_above_a_completion_nor_below_the_partial(sched
             bound = lower_bound(constants, partial, domains)
             assert bound <= best + 1e-12
             assert bound >= score(constants, partial).total - 1e-12
+
+
+def test_branch_and_bound_on_a_slot_no_one_can_fill() -> None:
+    # two slots of one shift needing a medic, whom no worker is: the search finds nothing, without failing
+    post = Post("aid", ShiftRules(dt.timedelta(hours=4), (("medic", 1), ("any", 1))))
+    schedule_input = ScheduleInput(Settings(DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 1, 8))),
+                                   (Worker("Anne"), Worker("Bob")), (post,))
+    result = find_best_schedule(build_problem(schedule_input), constants_of(schedule_input))
+    assert result.assignment is None and result.penalty is None

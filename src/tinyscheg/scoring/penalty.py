@@ -163,6 +163,8 @@ def shift_likes_lower_bound(constants: ScoringConstants, shift: Shift, assignmen
     total = 0.0
     for first in range(len(candidates)):
         for second in range(first + 1, len(candidates)):
+            if not candidates[first] or not candidates[second]:
+                continue  # an empty domain: there's no completion at all, so any value bounds it; 0 is the lowest
             total += min(pair_like_value(constants, worker, partner)
                          for worker in candidates[first] for partner in candidates[second]) / others
     return total
