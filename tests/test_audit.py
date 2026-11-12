@@ -7,12 +7,12 @@ import pytest
 from audit import (ANY_DAY, EXIT_ILLEGAL, EXIT_SUCCESS, LIKED_PARTNERS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD,
                    Audit, AuditContext, Complaint,
                    available_hours, build_context, candidate_changes, day_windows, evaluate, find_fixes, is_harmless,
-                   is_legal_change, main, slots_by_worker, summarize)
+                   is_legal_change, is_peer, main, slots_by_worker, summarize, with_history)
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.model.post import Post, ShiftRules
-from tinyscheg.model.schedule_input import ScheduleInput, Settings
+from tinyscheg.model.schedule_input import PreviousSchedule, ScheduleInput, Settings
 from tinyscheg.model.shift_generation import all_slots, generate_shifts
 from tinyscheg.model.worker import Worker
 from tinyscheg.output.csv_writer import write_csv
@@ -257,3 +257,42 @@ def test_command_line(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
         assert "breaks hard constraints" in captured.err
     else:
         assert captured.out.startswith(f"{schedule_input.workers[0].name}: ") and "concentration:" in captured.out
+
+
+# --- with a history (ADR 0031) ---
+
+def history_input(new_workers: tuple[str, ...] = ("Anne", "Bob", "Cy")) -> ScheduleInput:
+    """
+    4-hour gate shifts with no minimum rest: a history over hours 0-24 in which Anne took four shifts, Bob two and
+    Cy none, then a new period over hours 24-48
+    """
+    no_rest = dt.timedelta(0)
+    post = Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 1),)))
+    then = ScheduleInput(Settings(DateTimeRange(at(0), at(24)), no_rest),
+                         (Worker("Anne"), Worker("Bob"), Worker("Cy")), (post,))
+    previous = PreviousSchedule("day1.yml", then, (0, 1, 0, 1, 0, 0))
+    return ScheduleInput(Settings(DateTimeRange(at(24), at(48)), no_rest), tuple(Worker(name) for name in new_workers),
+                         (post,), (previous,))
+
+
+def test_a_schedule_is_audited_together_with_its_history() -> None:
+    schedule_input = history_input()
+    shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
+    new = (0, 1, 2, 0, 1, 2)  # even on its own
+    context, assignment = with_history(schedule_input, shifts, new)
+    assert context.fixed_slots == 6 and assignment == (0, 1, 0, 1, 0, 0) + new
+    assert context.availability[2][WHOLE_PERIOD] == 48
+    audit = evaluate(context, assignment)
+    # Anne's 6 shifts against Cy's 2 overall: the history's imbalance, which the new period could have made up for
+    assert (0, 2, WHOLE_PERIOD, 3) in complaints_of(audit, LOAD)
+    fixes = find_fixes(context, assignment, audit)
+    assert fixes and all(slot >= context.fixed_slots for fix in fixes.values() for change in fix.changes
+                         for slot in change.changed_slots)  # no fix changes the history
+
+
+def test_a_worker_who_joined_was_unavailable_during_the_history() -> None:
+    schedule_input = history_input(("Anne", "Bob", "Cy", "Dana"))
+    shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
+    context, _ = with_history(schedule_input, shifts, (0, 1, 2, 3, 0, 1))
+    assert context.availability[3][WHOLE_PERIOD] == 24
+    assert not is_peer(context, 0, 3, WHOLE_PERIOD)  # Dana was around half as long, so Anne has no complaint

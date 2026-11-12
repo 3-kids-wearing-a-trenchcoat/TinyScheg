@@ -4,6 +4,7 @@ import textwrap
 
 import pytest
 
+from audit import main as audit_main
 from schedule_checker import hard_constraint_violations
 from tinyscheg.cli import EXIT_SUCCESS, main
 from tinyscheg.csp.problem import build_problem
@@ -143,3 +144,17 @@ def test_the_command_line_writes_only_the_new_period(tmp_path: pathlib.Path,
     schedule_input = read_input(tmp_path / "day2.yml")
     read = read_schedule(output, schedule_input)  # the new period, read with this input alone
     assert hard_constraint_violations(schedule_input, read.slots, read.assignment) == []  # including the boundary
+
+
+def test_the_audit_judges_a_schedule_together_with_its_history(tmp_path: pathlib.Path,
+                                                               capsys: pytest.CaptureFixture[str]) -> None:
+    write_previous(tmp_path, "day1", input_text("2025-01-01T00:00", "2025-01-01T12:00"))
+    (tmp_path / "day2.yml").write_text(input_text("2025-01-01T12:00", "2025-01-02T00:00", history=history_of("day1")),
+                                       encoding="utf-8")
+    output = tmp_path / "day2_schedule.ods"
+    assert main([str(tmp_path / "day2.yml"), "-o", str(output)]) == EXIT_SUCCESS
+    capsys.readouterr()
+    assert audit_main([str(tmp_path / "day2.yml"), str(output)]) == EXIT_SUCCESS
+    report = capsys.readouterr().out
+    assert report.startswith("together with its history: 1 previous schedule(s), 3 slots that no fix may change")
+    assert "Anne: " in report

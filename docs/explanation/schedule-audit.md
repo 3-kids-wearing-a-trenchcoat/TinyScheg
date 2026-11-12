@@ -162,6 +162,24 @@ reported on a line of their own.
   liked-partner severity (shown by `tools/tune.py report`) grows as settings get better on the main measures; or
   cards read by hand where the liked-partner complaints look like the ones that matter most.
 
+## With a history
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_audit.py`, `tests/test_history_input.py`).
+
+A schedule with a [history](../reference/input-format.md#history) is audited **together with it, as one schedule**,
+as the scoring sees it ([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): workers judge
+the new schedule by everything they've done, so load, short straws and pairings are compared over the history and
+the new period together. The audit builds the whole schedule itself, from the model alone, independently of
+`tinyscheg.csp`:
+
+* each previous schedule's shifts, from its own input, with its workers matched by name (slots of workers who have
+  left dropped), then the new period's;
+* each worker's availability in each window from each period's input, none during a period whose input they weren't
+  in (they joined later) and none between periods;
+* **easy fixes may change only the new period**: the history is what happened. A complaint about the history with
+  an easy fix is one the new schedule could have made up for and didn't.
+
 ## Sampling
 
 To compare the audit with the internal penalty, the sampler makes many legal schedules for one input by shuffling the

@@ -13,11 +13,13 @@ import statistics
 import sys
 from collections import Counter
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from schedule_checker import hard_constraint_violations
 from tinyscheg.model.schedule_input import ScheduleInput
 from tinyscheg.model.shift import Shift, Slot
+from tinyscheg.model.shift_generation import all_slots, generate_shifts
+from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.parsing.schedule_reader import ScheduleReadError, read_schedule
 from tinyscheg.parsing.validation import InputError
@@ -67,7 +69,8 @@ class AuditContext:
     Everything about an input that doesn't depend on the assignment, computed once.
     windows are the day windows, then the whole period; shift_windows[s] the labels of the windows shift s starts in.
     availability[w][label] is worker w's available hours in that window; longest[label] the length in hours of the
-    longest shift starting in it (windows without shifts are left out).
+    longest shift starting in it (windows without shifts are left out). With a history, the shifts and slots are
+    the whole schedule's, the history's first: fixed_slots is how many slots it has, which no easy fix may change.
     """
     schedule_input: ScheduleInput
     shifts: tuple[Shift, ...]
@@ -78,6 +81,7 @@ class AuditContext:
     longest: dict[str, float]
     likes: tuple[frozenset[int], ...]
     dislikes: tuple[frozenset[int], ...]
+    fixed_slots: int = 0
 
 
 def hours(length: dt.timedelta) -> float:
@@ -122,15 +126,22 @@ def available_hours(unavailable: Sequence[DateTimeRange], window: DateTimeRange,
     return hours(inside.duration - away)
 
 
-def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots: Sequence[Slot]) -> AuditContext:
+def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots: Sequence[Slot],
+                  periods: Sequence[tuple[DateTimeRange, Sequence[Worker | None]]] = (),
+                  fixed_slots: int = 0) -> AuditContext:
     """
     Compute what the audit needs about an input, whatever the assignment
     :param schedule_input: ScheduleInput
     :param shifts: the shifts in stable order
     :param slots: the slots in stable order
+    :param periods: with a history, every period of the whole schedule in time order, each with each worker as they
+    were in that period's input (None if they weren't in it), for availability; empty for the input's period alone
+    :param fixed_slots: with a history, how many of the slots (the first ones) are the history's
     :return: the AuditContext
     """
-    period = schedule_input.settings.period
+    if not periods:
+        periods = [(schedule_input.settings.period, schedule_input.workers)]
+    period = DateTimeRange(periods[0][0].start, periods[-1][0].end)
     windows = tuple(day_windows(period, shifts)) + (Window(WHOLE_PERIOD, period),)
     shift_windows = tuple(tuple(window.label for window in windows
                                 if window.time.start <= shift.time.start < window.time.end) for shift in shifts)
@@ -142,11 +153,52 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
     return AuditContext(
         schedule_input=schedule_input, shifts=tuple(shifts), slots=tuple(slots), windows=windows,
         shift_windows=shift_windows,
-        availability=tuple({window.label: available_hours(worker.unavailable, window.time, period)
-                            for window in windows} for worker in schedule_input.workers),
+        availability=tuple({window.label: sum(available_hours(then[index].unavailable, window.time, part)
+                                              for part, then in periods if then[index] is not None)
+                            for window in windows} for index in range(len(schedule_input.workers))),
         longest=longest,
         likes=tuple(frozenset(index_of[name] for name in worker.likes) for worker in schedule_input.workers),
-        dislikes=tuple(frozenset(index_of[name] for name in worker.dislikes) for worker in schedule_input.workers))
+        dislikes=tuple(frozenset(index_of[name] for name in worker.dislikes) for worker in schedule_input.workers),
+        fixed_slots=fixed_slots)
+
+
+def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
+                 assignment: Sequence[int]) -> tuple[AuditContext, tuple[int, ...]]:
+    """
+    The context and assignment of a schedule together with its history, as one schedule (ADR 0031), built here from
+    the model alone, independently of tinyscheg.csp: each previous schedule's shifts from its own input, with its
+    workers matched by name (slots of workers who have left dropped), then the new period's
+    :param schedule_input: ScheduleInput with a history
+    :param shifts: the new period's shifts, in stable order
+    :param assignment: a worker index per new slot
+    :return: (the AuditContext, the whole schedule's assignment)
+    """
+    index_of = {worker.name: index for index, worker in enumerate(schedule_input.workers)}
+    history = sorted(schedule_input.history, key=lambda previous: previous.schedule_input.settings.period.start)
+    parts: list[tuple[Shift, list[int]]] = []
+    periods: list[tuple[DateTimeRange, list[Worker | None]]] = []
+    for previous in history:
+        names = [worker.name for worker in previous.schedule_input.workers]
+        then = {worker.name: worker for worker in previous.schedule_input.workers}
+        periods.append((previous.schedule_input.settings.period,
+                        [then.get(worker.name) for worker in schedule_input.workers]))
+        for shift in generate_shifts(previous.schedule_input.posts, previous.schedule_input.settings.period):
+            kept = [slot for slot in shift.slots if names[previous.assignment[slot.index]] in index_of]
+            if kept:
+                parts.append((replace(shift, slots=tuple(kept)),
+                              [index_of[names[previous.assignment[slot.index]]] for slot in kept]))
+    fixed_slots = sum(len(workers) for _, workers in parts)
+    parts += [(shift, [assignment[slot.index] for slot in shift.slots]) for shift in shifts]
+    periods.append((schedule_input.settings.period, list(schedule_input.workers)))
+    whole: list[Shift] = []
+    next_slot = 0
+    for shift_index, (shift, _) in enumerate(parts):
+        slots = tuple(replace(slot, index=next_slot + offset, shift_index=shift_index)
+                      for offset, slot in enumerate(shift.slots))
+        next_slot += len(slots)
+        whole.append(replace(shift, index=shift_index, slots=slots))
+    whole_assignment = tuple(worker for _, workers in parts for worker in workers)
+    return build_context(schedule_input, whole, all_slots(whole), periods, fixed_slots), whole_assignment
 
 
 # --- each worker's statistics ---
@@ -370,14 +422,15 @@ def candidate_changes(context: AuditContext, assignment: tuple[int, ...]) -> Ite
     stable slot and worker order; legal or not
     """
     names = [worker.name for worker in context.schedule_input.workers]
-    for slot in context.slots:
+    changeable = context.slots[context.fixed_slots:]  # the history is what happened: no fix can change it
+    for slot in changeable:
         for worker in range(len(names)):
             if worker != assignment[slot.index]:
                 changed = list(assignment)
                 changed[slot.index] = worker
                 yield Change(f"giving {names[worker]} {describe_shift(context.shifts[slot.shift_index])} instead of "
                              f"{names[assignment[slot.index]]}", tuple(changed), (slot.index,))
-    for first, second in itertools.combinations(context.slots, 2):
+    for first, second in itertools.combinations(changeable, 2):
         a, b = assignment[first.index], assignment[second.index]
         if a != b and first.shift_index != second.shift_index:
             changed = list(assignment)
@@ -662,7 +715,7 @@ def describe_summary(context: AuditContext, summary: AuditSummary) -> str:
 
 def audit_schedule(schedule_input: ScheduleInput, schedule_path: pathlib.Path) -> str:
     """
-    Audit a written schedule
+    Audit a written schedule; with a history, together with it, as one schedule whose history no fix may change
     :param schedule_input: ScheduleInput the schedule was made for
     :param schedule_path: pathlib.Path of the schedule file (CSV, XLSX or ODS)
     :return: the report: a card per worker, then the group summary
@@ -673,11 +726,18 @@ def audit_schedule(schedule_input: ScheduleInput, schedule_path: pathlib.Path) -
     violations = hard_constraint_violations(schedule_input, read.slots, read.assignment)
     if violations:
         raise ValueError("the schedule breaks hard constraints:\n" + "\n".join(f"  - {v}" for v in violations))
-    context = build_context(schedule_input, read.shifts, read.slots)
-    audit = evaluate(context, read.assignment)
-    fixes = find_fixes(context, read.assignment, audit)
+    if schedule_input.history:
+        context, assignment = with_history(schedule_input, read.shifts, read.assignment)
+    else:
+        context, assignment = build_context(schedule_input, read.shifts, read.slots), read.assignment
+    audit = evaluate(context, assignment)
+    fixes = find_fixes(context, assignment, audit)
     cards = [card(context, audit, fixes, worker) for worker in range(len(schedule_input.workers))]
-    return "\n\n".join(cards + [describe_summary(context, summarize(audit, fixes))])
+    report = cards + [describe_summary(context, summarize(audit, fixes))]
+    if schedule_input.history:
+        report.insert(0, f"together with its history: {len(schedule_input.history)} previous schedule(s), "
+                         f"{context.fixed_slots} slots that no fix may change")
+    return "\n\n".join(report)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
