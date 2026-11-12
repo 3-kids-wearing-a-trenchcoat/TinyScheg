@@ -113,7 +113,8 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
 - [x] Measure the search on the example, and decide on the scoring-based speedups in [Later](#later) (and a time
   limit) that it needs. **None for now:** get it working first. The search runs to the end with no limit (about
   3–4 minutes for 24 hours; 48 hours and more much longer) and can be interrupted with Ctrl+C; the measurements are
-  in [Future work](explanation/future-work.md#search-performance)
+  in [Future work](explanation/future-work.md#search-performance). (Revisited during tuning, below: the 24-hour
+  example now takes about 10 seconds; 48 hours is still out of reach.)
 - [x] Use branch and bound on the command line, reporting each better schedule found as it goes; the example is
   now 24 hours long, so that it finishes
 - [x] Check that no simple legal swap lowers the chosen schedule's penalty: no single legal move or swap beats branch
@@ -122,8 +123,14 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
     - [x] Plan, priorities and benchmark requirements
     - [x] Benchmark generator and tuning runner (`tools/benchmarks/generate.py`, `tools/tune.py`)
     - [x] Speed up branch and bound enough for informative benchmarks: cheapest-first value order and a lower bound
-      on workload ([ADR 0024](decisions/0024-cheapest-first-value-order-and-workload-bound.md))
+      on workload ([ADR 0024](decisions/0024-cheapest-first-value-order-and-workload-bound.md)), interchangeable
+      slots in order ([ADR 0025](decisions/0025-order-interchangeable-slots.md)), look-ahead bounds for likes and
+      workload, and incremental scoring ([ADR 0027](decisions/0027-incremental-scoring-for-steering.md))
     - [x] Baseline at the defaults, and diagnosis of each complaint with an easy fix
+    - [x] Corrections the baseline showed were needed: in the audit, heaviest day dropped, liked partners counted
+      apart, short rest relative to the schedule's own norm, and a day as any 24 hours rather than a calendar day
+      ([Schedule audit](explanation/schedule-audit.md)); in the scoring, workload counting shifts as well as hours
+      ([ADR 0026](decisions/0026-workload-counts-shifts-and-hours.md))
     - [x] Sensitivity, one parameter at a time
     - [x] Rounds by hand: a few candidate settings at a time (`tools/tune.py round`)
     - [x] Choose and check the defaults (held-back inputs, the confirm tier, cards read by hand): rest factor 2.5
@@ -149,7 +156,6 @@ Extending a previous schedule rather than starting fresh ([Future work](explanat
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
-- [ ] Incremental scoring, exactly path-independent
 - [ ] Faster search: symmetry between identical workers, a rest look-ahead, workload caps that account for overlaps
 - [ ] Faster search by non-heuristic means: libraries, parallelization, rewriting hot modules in another language
 - [ ] Explaining more fully why an input is infeasible
