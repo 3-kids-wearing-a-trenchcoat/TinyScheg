@@ -88,6 +88,7 @@ nav:
       - 0029 Schedule history input: decisions/0029-schedule-history-input.md
       - 0030 History in scoring: decisions/0030-history-in-scoring.md
       - 0031 History as a filled part: decisions/0031-history-as-the-filled-part-of-one-schedule.md
+      - 0032 Flat penalty parts: decisions/0032-flat-penalty-parts.md
 
 markdown_extensions:
   - admonition

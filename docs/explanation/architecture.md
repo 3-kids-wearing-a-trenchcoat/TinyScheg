@@ -38,7 +38,7 @@ Set up the CSP:
 2. Build each slot's domain: the workers who satisfy its unary constraints (availability, role).
 3. Generate the binary difference constraints between slots, using the minimum rest period from the settings.
 4. Calculate the constants used by scoring: each worker's availability, the number of shared slots, and each
-   worker's worst rest deficit and packable maximum (see [Scoring](scoring.md)).
+   worker's worst rest deficit, and the units the penalty's parts are measured in (see [Scoring](scoring.md)).
 5. If any slot's domain is already empty, no legal schedule exists: report every such slot and stop, writing no
    output ([ADR 0020](../decisions/0020-report-where-infeasibility-was-found.md)).
 

@@ -7,10 +7,10 @@
 > [ADR 0006](../decisions/0006-convex-function-for-workload-fairness.md),
 > [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md),
 > [ADR 0013](../decisions/0013-availability-weighted-workload.md),
-> [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md) and
-> [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md),
-> [ADR 0021](../decisions/0021-power-function-for-workload-fairness.md) and
-> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
+> [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md),
+> [ADR 0021](../decisions/0021-power-function-for-workload-fairness.md),
+> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md) and
+> [ADR 0032](../decisions/0032-flat-penalty-parts.md).
 > This page was corrected on 2026-11-10 and the corrections confirmed on 2026-11-11; see [Corrections](#corrections).
 > Parameter defaults are listed under [Parameters](#parameters).
 
@@ -36,8 +36,11 @@ is deterministic (e.g. sums are always taken in the same order).
 
 ## Calculations
 
-Each *criterion* (likes/dislikes, workload, rest) has its own penalty function. Each function is **normalized** so
-that its value lies between $0$ and $k$ (the number of workers), and their **weighted sum** is the total penalty.
+Each *criterion* (likes/dislikes, workload, rest) has its own penalty function, each measured in **fixed units**, so
+that one event (a disliked pairing, a shift of imbalance, an hour of short rest) costs the same whatever the
+schedule's length ([ADR 0032](../decisions/0032-flat-penalty-parts.md)). Their **weighted sum** is the total penalty.
+Only differences between schedules matter: a penalty that every schedule carries changes no comparison, so the total
+growing with the schedule's size doesn't matter.
 
 The search keeps the scores it steers by incrementally, derived from their previous values, and scores what
 decides its result from scratch ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)).
@@ -142,19 +145,18 @@ $$
 adds $\frac{l_i(w_j)}{|\mathcal{S}(s)| - 1} \geq 0$ to the term of every worker $w_i$ already assigned to another slot
 of the same shift. Nothing decreases.
 
-#### Normalizing the like score
+#### The like score's units
 
-Each local like term is an average of values that are at most $\beta$, so it's at most $\beta$. There is at most one
-local term per shared slot (single-slot shifts contribute 0), so $\mathcal{L}^*(t) \leq \beta \cdot n_\text{shared}$.
-**The normalized global like score** is therefore:
+**The global like score** is measured in units of $\beta$, a disliked partner, as in the original design
+([ADR 0032](../decisions/0032-flat-penalty-parts.md)):
 
 $$
-\mathcal{L}^{**}(t) = k \cdot \frac{\mathcal{L}^*(t)}{\beta \cdot n_\text{shared}}
+\mathcal{L}^{**}(t) = \frac{\mathcal{L}^*(t)}{\beta}
 $$
 
-which lies in $[0, k]$. If $n_\text{shared} = 0$ (every shift has a single slot), $\mathcal{L}^{**}(t) = 0$.
+so one disliked pairing costs the same in any schedule. It's 0 if every shift has a single slot.
 
-The denominator must be a constant. Normalizing each worker by their *own* number of shifts (an average) would break
+The divisor must be a constant. Normalizing each worker by their *own* number of shifts (an average) would break
 monotonicity, since an average can decrease when a liked shift is added.
 
 ### Workload
@@ -249,36 +251,35 @@ Generally speaking, $x^p$ and $e^{ax} -1$ penalize harder as $p$ and $a$ increas
 **Monotonicity:** assigning a slot only increases the assigned worker's $h_t$, and $\varphi$ is increasing, so
 $\mathcal{W}$ never decreases.
 
-#### Normalizing the workload
+#### The workload's units
 
-$h_t(w_i) \leq 1$, but a workload of 1 — working every available hour — is never reachable, since the minimum rest
-period forces gaps between shifts. Normalizing by it would compress the workload penalty far below the other
-components. Instead, the penalty is normalized by how much each worker could **actually** be packed with work within
-the hard constraints (see [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md)).
-
-For every worker $w_i$ with $\mathrm{av}_i > 0$, let $H^{\max}_i$ be the **packable maximum**: the largest total
-load $w_i$ could be assigned over any legal set of slots in their domain (calculated in
-[the same way as $M_w$](#calculating-the-worst-possible-deficit-m_w), with each slot weighted by its load). Let
-$h^{\max}_i = H^{\max}_i / \mathrm{av}_i$ be the corresponding **packable maximum workload**. Since
-$h_t(w_i) \leq h^{\max}_i$ and $\varphi$ is increasing,
-$\mathcal{W}(t) \leq \sum_i \mathrm{av}_i \, \varphi(h^{\max}_i)$.
-**The normalized global workload function** is therefore:
+The workload penalty is measured in **workload units** ([ADR 0032](../decisions/0032-flat-penalty-parts.md)): the
+term $\mathrm{av} \cdot \varphi(h)$ of an average worker given one average slot,
 
 $$
-\mathcal{W}^*(t) = k \cdot \frac{\sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h_t(w_i) \big)}{\sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h^{\max}_i \big)}
+u_W = \frac{\bar{\ell}^{\,p}}{\overline{\mathrm{av}}^{\,p-1}}
 $$
 
-which lies in $[0, k]$ for either choice of $\varphi$. If the denominator is 0 (no worker can be assigned anything),
-$\mathcal{W}^*(t) = 0$.
+where $\bar{\ell}$ is the mean slot load and $\overline{\mathrm{av}}$ the mean availability of the workers with any.
+**The global workload function** is
 
-The denominator is a constant, calculated once before the search, so this only rescales the workload penalty: it
-remains monotone, and it's still minimal exactly when every worker's workload is the same.
+$$
+\mathcal{W}^*(t) = \frac{1}{u_W} \sum_{i=1}^k \mathrm{av}_i \, \varphi \big( h_t(w_i) \big)
+$$
 
-The normalized workload never gets near 0 for a complete schedule: the hours that must be worked have a minimum cost,
-reached when workloads are equal (by Jensen's inequality, $\left(\sum_i \mathrm{av}_i\right) \varphi(\overline{x})$
-before scaling). On the example input, a perfectly fair schedule scores about 4.1 of 9 with $p = 2$. Only differences
-between schedules matter to the search, but this is why the workload weight is the largest by default (see
-[Parameters](#parameters)).
+and 0 if no worker has any availability. With $p = 2$, moving one average slot between two average workers with
+the same load costs 2 units, whatever the schedule's length: a fixed number of extra shifts, which is how workers
+count, always costs the same. ($u_W$ is a constant, so the penalty remains monotone, and it's still minimal exactly
+when every worker's workload is the same.)
+
+Earlier, the workload was divided by its largest possible value, each worker packed with as much load as the hard
+constraints allow ([ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md), superseded). That value
+grows with availability, as does the share one shift is of it, so a shift of imbalance cost about 1/length², and
+long schedules all but stopped weighing fairness.
+
+The workload never gets near 0 for a complete schedule: the hours that must be worked have a minimum cost, reached
+when workloads are equal (by Jensen's inequality, $\left(\sum_i \mathrm{av}_i\right) \varphi(\overline{x})$ before
+dividing). That cost is the same for every schedule, so it changes no comparison.
 
 ### Rest
 
@@ -358,7 +359,7 @@ $$
 \mathcal{R}^*_t = \sum _{w \in W} \mathcal{R}_t(w) = \sum _{w \in W} \Bigg( \sum _{s \in A_t(w)} d_t(w,s) \Bigg)
 $$
 
-#### Normalizing the rest deficit
+#### Scaling the rest deficit
 
 The minimum possible deficit for any worker at any slot is 0. Since any two slots assigned to the same worker are at
 least $m$ hours apart, $\Delta s \geq m$, so the maximum possible deficit after a slot $s$ is reached when the next
@@ -380,13 +381,15 @@ $\mathcal{R}_t(w)$ could take over any legal set of slots $w$ could be assigned 
 the next section). **The normalized worker rest deficit function** is
 $\frac{1}{M_w} \sum _{s \in A_t(w)} d_t(w,s) = \sum _{s \in A_t(w)} \frac{d_t(w,s)}{M_w}$, which lies between 0
 (best case) and 1 (worst case). If $M_w = 0$, $w$ can never have a deficit and the term is defined to be 0.
-Therefore, **the normalized global rest deficit function** is:
+To keep the average hour short costing the same at any schedule length, the sum is multiplied by $\bar{M}$, the mean
+$M_w$ of the workers who could have a deficit ([ADR 0032](../decisions/0032-flat-penalty-parts.md)), so it's measured
+in hours. Therefore, **the global rest deficit function** is:
 
 $$
-\mathcal{R}^{**}(t) = \sum _{w \in W} \frac{1}{M_w} \mathcal{R}_t(w) = \sum _{w \in W} \Bigg( \sum_{s \in A_t(w)} \frac{d_t(w,s)}{M_w} \Bigg)
+\mathcal{R}^{**}(t) = \bar{M} \sum _{w \in W} \frac{1}{M_w} \mathcal{R}_t(w) = \bar{M} \sum _{w \in W} \Bigg( \sum_{s \in A_t(w)} \frac{d_t(w,s)}{M_w} \Bigg)
 $$
 
-which lies in $[0, k]$.
+Without $\bar{M}$, every $M_w$ grows with the schedule, and an hour short cost about 1/length.
 
 Normalizing **per worker** is deliberate. Each worker's rest is judged relative to their *own* worst case, just as
 their workload is judged relative to their *own* availability. As a result, an hour of deficit weighs more for a
@@ -413,17 +416,14 @@ takes $O(n^2)$ time for $n$ slots, which is cheap at the intended schedule sizes
 The search space can be reduced by looking at **time ranges** rather than distinct slots: in terms of rest deficit,
 a shift from $t_1$ to $t_2$ is the same no matter which slot it's spent in.
 
-The packable maximum $H^{\max}_w$ used to normalize the workload is calculated on the same graph, with each slot
-weighted by its load $\ell(s)$ instead of each edge by its deficit.
-
 If these calculations ever become too slow, they can be sped up by limiting the possible first shifts: if a worker's
 first shift starts at time $t$ and some shift ends before $t - m$, another shift could be added before it, so the
-worst-case (or fullest) sequence **must start with a shift within $m$ hours of the schedule start**.
+worst-case sequence **must start with a shift within $m$ hours of the schedule start**.
 
 ## Total score for each state
 
-For an iteration $t \in \mathbb{N}$ and three weights $a,b,c \in [0,1]$ such that $a + b + c = 1$ (by default
-0.25, 0.5 and 0.25; see [Parameters](#parameters)), the penalty function $\mathcal{P}(t)$ is the weighted sum:
+For an iteration $t \in \mathbb{N}$ and three weights $a,b,c \geq 0$ such that $a + b + c = 1$ (by default
+0.57, 0.215 and 0.215; see [Parameters](#parameters)), the penalty function $\mathcal{P}(t)$ is the weighted sum:
 
 $$
 \mathcal{P}(t) = a \cdot \mathcal{L}^{**}(t) + b \cdot \mathcal{W}^*(t) + c \cdot \mathcal{R}^{**}(t)
@@ -431,16 +431,9 @@ $$
 
 (The weight $a$ here is unrelated to the parameter $a$ of $\varphi(x) = e^{ax} - 1$.)
 
-Each sub-function is normalized to $[0, k]$, where $k \in \mathbb{N}$ is the number of workers:
-$0 \leq g(t) \leq k$ for every $g\in \lbrace \mathcal{L}^{**}, \mathcal{W}^*, \mathcal{R}^{**} \rbrace$.
-This means that for every $t \in \mathbb{N}$:
-
-$$
-0 \leq \mathcal{P}(t) = a \cdot \mathcal{L}^{**}(t) + b \cdot \mathcal{W}^*(t) + c \cdot \mathcal{R}^{**}(t) \leq ak + bk + ck = (a+b+c)k \underset{a+b+c=1}{=} k  \Rightarrow \underline{0 \leq \mathcal{P}(t) \leq k}
-$$
-
-This is fine, as $k$ (the number of workers) stays constant within each run. If normalizing into the range $[0,1]$
-is ever needed, it's as simple as $\frac{\mathcal{P}(t)}{k}$.
+The weights are what each part is multiplied by. Since each part is in fixed units, they set how one event of each
+kind trades against the others, the same at any schedule length. $\mathcal{P}(t) \geq 0$; it has no fixed upper
+bound, and only differences between schedules mean anything.
 
 Each sub-function is monotonically non-decreasing, and the weights are non-negative, so $\mathcal{P}$ is too.
 
@@ -456,32 +449,31 @@ Every parameter has a default, defined once as a named constant in the code, and
 
 | Parameter | Symbol | Default | Input field | Allowed values |
 |-----------|--------|---------|-------------|----------------|
-| Weights of likes, workload and rest | $a$, $b$, $c$ | 0.25, 0.5, 0.25 | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
+| Weights of likes, workload and rest | $a$, $b$, $c$ | 0.57, 0.215, 0.215 ([ADR 0032](../decisions/0032-flat-penalty-parts.md)) | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
 | Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
 | Rest factor | $\gamma$ | 2.5 | `rest_factor` | at least 1 ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)) |
 | Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
 | Shift share of a slot's load | $\sigma$ | 0.5 | `shift_share` | from 0 to 1 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)) |
 
-What the defaults mean on the example input (`exampleInput.yml`: 9 workers, 24 hours, 17 slots), as changes to the
-best schedule branch and bound finds for it, with every parameter at its default (recomputed on 2026-11-12, after
-[ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md) and
-[ADR 0028](../decisions/0028-rest-factor-default-2-5.md)):
+What the defaults mean on the example input (`exampleInput.yml`: 9 workers, 17 slots), as changes to a schedule
+with every parameter at its default: at 24 hours, the best schedule branch and bound finds; made 48 hours long, the
+first legal one (recomputed on 2026-11-12, after [ADR 0032](../decisions/0032-flat-penalty-parts.md)):
 
-| Change to the schedule | Penalty change, before weights | After default weights |
-|------------------------|-------------------------------|-----------------------|
-| Moving a 3-hour shift from one worker to another with the same load (a gap of two shifts) | +0.22 | +0.11 |
-| The same with a 4-hour shift | +0.30 | +0.15 |
-| One worker paired with someone they dislike instead of a neutral partner | +0.60 | +0.15 |
-| One hour of rest below target | +0.18 to +0.50 (+0.50 for most workers) | +0.05 to +0.13 |
+| Change to the schedule | 24 h, before weights | 24 h, weighted | 48 h, weighted |
+|------------------------|----------------------|----------------|----------------|
+| Moving a 3-hour shift from one worker to another with the same load (a gap of two shifts) | +2.1 | +0.45 | +0.43 |
+| The same with a 4-hour shift | +2.9 | +0.62 | |
+| One worker paired with someone they dislike instead of a neutral partner | +0.67 | +0.38 | +0.38 |
+| One hour of rest below target | +0.62 to +1.69 | +0.13 to +0.36 | +0.17 to +0.25 |
 
+* **The same at any length:** a two-shift gap and a disliked pairing cost the same at 48 hours as at 24. An hour of
+  rest costs the same *on average*; for any one worker it depends on how short their rests could be compared with
+  the others', so the range shifts a little with the schedule.
 * **Workload:** a gap in 4-hour shifts costs about 1.4 times a gap in 3-hour ones. With hours alone it would be
   about 1.8 times ($(4/3)^2$); with the shift share at 0.5, part of each shift's load is the same whatever its length.
-* **Likes and rest are normalized per schedule**, by the number of shared slots and by each worker's worst possible
-  deficit, so on a short schedule a single pairing or hour weighs more than on a long one. Here, most workers could
-  be at most 2 hours below their rest targets over the whole day, so one hour is half of their worst.
-* So on this input, one disliked pairing costs about as much as a two-shift gap in 4-hour shifts, and an hour of rest
-  below target slightly more than a two-shift gap in 3-hour shifts. These balances shift with the input's length and
-  shape; [tuning](tuning.md) checks the outcome against the audit rather than these figures.
+* On this input, a two-shift gap costs a little more than a disliked pairing, and an hour of short rest a little
+  less. The weights were set on the tuning inputs, so these ratios differ somewhat from input to input;
+  [tuning](tuning.md) checks the outcome against the audit rather than these figures.
 
 Scores are floating-point numbers. Computed from scratch, with sums always taken in the same order, the same state
 always gets exactly the same score, and since every operation involved is monotone under rounding, a state never
@@ -504,8 +496,10 @@ the corrections were confirmed on 2026-11-11:
 3. **Workload normalization.** The two choices of $\varphi$ were normalized inconsistently ($[0,1]$ for $x^p$,
    $[0,k]$ for $e^{ax} - 1$). Both are now normalized to $[0, k]$.
 4. **Likes normalization.** $\mathcal{L}^*/\beta$ grew with the number of shifts rather than being bounded by $k$,
-   so the weights' meaning depended on the schedule's size. It's now divided by its maximum,
-   $\beta \cdot n_\text{shared}$, and scaled to $[0,k]$.
+   so the weights' meaning depended on the schedule's size. It was then divided by its maximum,
+   $\beta \cdot n_\text{shared}$, and scaled to $[0,k]$. *Undone on 2026-11-12*
+   ([ADR 0032](../decisions/0032-flat-penalty-parts.md)): that made a disliked pairing cost less the longer the
+   schedule, and the original $\mathcal{L}^*/\beta$ is back.
 5. **Likes self-inclusion.** The local like function summed over the whole shift, including the worker's own slot,
    so every worker rated themselves as neutral. It now sums over the *other* slots of the shift only.
 6. **Worst rest deficit.** $M_w$ was to be found with a greedy algorithm, described as an upper bound. A greedy
@@ -520,4 +514,6 @@ the corrections were confirmed on 2026-11-11:
 9. **Workload scale.** The workload penalty was normalized by a workload of 1 (every available hour worked), which
    the minimum rest period makes unreachable; typical schedules used only a small fraction of that range. It's now
    normalized by each worker's packable maximum; see
-   [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md).
+   [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md). *Replaced on 2026-11-12* by fixed workload
+   units ([ADR 0032](../decisions/0032-flat-penalty-parts.md)), since the packable maximum made a shift of imbalance
+   cost about 1/length².

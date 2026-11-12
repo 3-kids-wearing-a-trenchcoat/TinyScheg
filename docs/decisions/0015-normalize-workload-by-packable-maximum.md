@@ -1,6 +1,7 @@
 # 0015. Normalize workload by each worker's packable maximum
 
-**Status:** Accepted. Amends the normalization of [0013](0013-availability-weighted-workload.md).
+**Status:** Superseded by [0032](0032-flat-penalty-parts.md). Amended the normalization of
+[0013](0013-availability-weighted-workload.md).
 
 ## Context
 
@@ -26,7 +27,7 @@ $$
 \mathcal{W}^* = k \cdot \frac{\sum_i \mathrm{av}_i \, \varphi(h_i)}{\sum_i \mathrm{av}_i \, \varphi(h^{\max}_i)}
 $$
 
-See [Scoring](../explanation/scoring.md#normalizing-the-workload).
+See [Scoring](../explanation/scoring.md#the-workloads-units).
 
 ## Consequences
 

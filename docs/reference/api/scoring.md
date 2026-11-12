@@ -34,8 +34,10 @@ Immutable.
   ([ADR 0026](../../decisions/0026-workload-counts-shifts-and-hours.md)).
 * `workers` — a `WorkerConstants` per worker, in input order.
 * `shared_slots` — $n_\text{shared}$, the number of slots in shifts of more than one slot.
-* `workload_scale` — the largest possible workload penalty,
-  $\sum_i \mathrm{av}_i \, (H^{\max}_i / \mathrm{av}_i)^p$ over workers with some availability.
+* `workload_unit` — $u_W$, the unit the workload penalty is measured in
+  ([ADR 0032](../../decisions/0032-flat-penalty-parts.md)): (mean slot load)$^p$ / (mean availability)$^{p-1}$, over
+  the workers with some availability; 0 if there are none.
+* `rest_unit` — $\bar{M}$, the mean `worst_deficit` of the workers who could have one; 0 if none can.
 
 ### `class WorkerConstants`
 
@@ -43,7 +45,6 @@ Immutable.
 
 * `availability` — $\mathrm{av}$, the hours within the period during which the worker is available. Overlapping
   unavailability is counted once.
-* `packable_load` — $H^{\max}$, the most load the worker could be given.
 * `worst_deficit` — $M_w$, the largest total rest deficit the worker could have.
 * `likes`, `dislikes` — `frozenset[int]`, the indexes of the workers they like and dislike.
 
@@ -57,23 +58,23 @@ A slot's load: $(1 - \sigma) \cdot$ `slot_hours` $+ \; \sigma \cdot$ `mean_hours
 of the schedule's slots. With $\sigma = 0$ the load is the slot's hours; with $\sigma = 1$ every slot has the same load.
 The total load of all slots equals their total hours.
 
-### `packable_load(ranges, min_rest, load) -> float` and `worst_deficit(ranges, min_rest, rest_factor) -> float`
+### `worst_deficit(ranges, min_rest, rest_factor) -> float`
 
-$H^{\max}$ and $M_w$, each as the heaviest path through a worker's possible shifts
-([ADR 0014](../../decisions/0014-exact-worst-rest-deficit.md),
-[ADR 0015](../../decisions/0015-normalize-workload-by-packable-maximum.md)):
+$M_w$, as the heaviest path through a worker's possible shifts
+([ADR 0014](../../decisions/0014-exact-worst-rest-deficit.md)):
 
 * `ranges` — the distinct time ranges of the slots in the worker's domain, sorted. Slots at the same time count once,
   since a worker can only work one of them.
 * There's a step from one range to a later one when it starts at least `min_rest` after the first ends.
-* For `packable_load`, each range weighs its `load` (a function of the range); for `worst_deficit`, each step weighs the deficit it causes,
-  $\max(0, \gamma \cdot |s| - \text{rest})$. A sequence's last shift has no rest after it, so no deficit.
+* Each step weighs the deficit it causes, $\max(0, \gamma \cdot |s| - \text{rest})$. A sequence's last shift has no
+  rest after it, so no deficit.
 
-Both take $O(n^2)$ time for $n$ ranges. Tests check them against trying every legal sequence.
+It takes $O(n^2)$ time for $n$ ranges. Tests check it against trying every legal sequence.
 
-### `workload_scale(workers, power) -> float`
+### `workload_unit(workers, loads, power) -> float` and `rest_unit(workers) -> float`
 
-The workload penalty's largest possible value, as above.
+The two units above ([ADR 0032](../../decisions/0032-flat-penalty-parts.md)). Measured in them, one shift of imbalance
+and the average hour short cost the same at any schedule length.
 
 ### `hours(length) -> float`
 
@@ -99,8 +100,9 @@ The penalty of a (partial) schedule.
 
 ### `class Penalty(total, likes, workload, rest)`
 
-Immutable. `likes`, `workload` and `rest` are the normalized parts, each in $[0, k]$ for $k$ workers; `total` is
-their weighted sum, $a \cdot$ `likes` $+ \; b \cdot$ `workload` $+ \; c \cdot$ `rest`, also in $[0, k]$.
+Immutable. `likes`, `workload` and `rest` are the parts before weighting, each in its own units
+([ADR 0032](../../decisions/0032-flat-penalty-parts.md)) and at least 0; `total` is their weighted sum,
+$a \cdot$ `likes` $+ \; b \cdot$ `workload` $+ \; c \cdot$ `rest`. Only differences between schedules mean anything.
 
 ### `lower_bound(constants, assignment, domains) -> float`
 
@@ -117,43 +119,43 @@ There's no look-ahead for rest: a worker can always be given no further shifts, 
 
 ### `likes_lower_bound(constants, assignment, domains) -> float`
 
-The lowest normalized likes penalty any completion could have. In a complete schedule, each pair of slots in a shared
+The lowest likes penalty any completion could have. In a complete schedule, each pair of slots in a shared
 shift adds both workers' like values of each other, over the shift's other slots; a pair with an unfilled slot adds at
 least the lowest such value any workers still in the slots' domains could give. Each pair's best is chosen
-independently (even the same worker for both), which can only lower the bound. In
-$[\mathcal{L}^{**}(\text{partial}), k]$.
+independently (even the same worker for both), which can only lower the bound. At least
+$\mathcal{L}^{**}(\text{partial})$.
 
 ### `workload_lower_bound(constants, assignment, domains) -> float`
 
-The lowest normalized workload penalty any completion could have: the unfilled slots' load spread so that the least
+The lowest workload penalty any completion could have: the unfilled slots' load spread so that the least
 loaded workers are topped up to a common level of load per available hour ("water-filling"), which minimizes the
 sum of convex terms. Each worker can gain at most the load of the unfilled slots whose domain they're in, so a worker
 who could take little stops rising early. Which slots overlap is ignored, so it may be lower than anything
-reachable. In $[\mathcal{W}^*(\text{partial}), k]$.
+reachable. At least $\mathcal{W}^*(\text{partial})$.
 
 ### `likes_penalty(constants, assignment) -> float`
 
 $\mathcal{L}^{**}$: for each filled slot in a shift of more than one slot, its worker's like value of the workers in
-the shift's other slots, averaged over those other slots; normalized by $\beta \cdot n_\text{shared}$ and scaled to
-$[0, k]$. The like values are named constants with $\beta$ as the unit: `LIKED_PARTNER = 0.0`,
+the shift's other slots, averaged over those other slots; in units of $\beta$, a disliked partner. The like values are named constants with $\beta$ as the unit: `LIKED_PARTNER = 0.0`,
 `DISLIKED_PARTNER = 1.0`, and a neutral partner is `neutral_partner` times `DISLIKED_PARTNER`. 0 if every shift has
 one slot.
 
 ### `workload_penalty(constants, assignment) -> float`
 
 $\mathcal{W}^*$: the sum of $\mathrm{av} \cdot (\text{assigned load} / \mathrm{av})^p$ over workers with some
-availability, divided by `workload_scale` and scaled to $[0, k]$. 0 if no worker can be assigned anything.
+availability, divided by `workload_unit`. 0 if no worker can be assigned anything.
 
 ### `rest_penalty(constants, assignment) -> float`
 
 $\mathcal{R}^{**}$: for each worker, the sum over their consecutive shifts of
-$\max(0, \gamma \cdot |s| - \text{rest after } s)$, divided by their `worst_deficit`. Workers whose worst deficit is
-0 can never have one, and count 0.
+$\max(0, \gamma \cdot |s| - \text{rest after } s)$, divided by their `worst_deficit` and multiplied by `rest_unit`:
+in hours, an hour weighing more for a worker who could rarely be short. Workers whose worst deficit is 0 can never
+have one, and count 0.
 
 ### Helpers shared with the `incremental` module
 
 `likes_total(constants, assignment)` and `workload_total(constants, assignment)` (the likes and workload penalties
-before normalizing), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
+before dividing by their units), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
 look-ahead),
 `pair_like_value(constants, worker, partner)` (both workers' like values of each other), `normalized_likes(constants,
 total)` and `rest_deficit(constants, earlier, later)` (one rest's deficit). Both modules use them, so that they do the

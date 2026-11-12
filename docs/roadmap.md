@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–7 complete. Open: how the penalty's parts scale with schedule length (found in Phase 7).
+Progress: Phases 1–7 complete; the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)).
 
 ## Phase 1: Walking skeleton
 

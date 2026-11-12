@@ -1,6 +1,7 @@
 # 0005. Score as a weighted sum of normalized per-worker penalties
 
-**Status:** Accepted
+**Status:** Accepted. Amended by [0032](0032-flat-penalty-parts.md) (the parts are measured in fixed units, not
+normalized to $[0, k]$).
 
 ## Context
 

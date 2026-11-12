@@ -34,11 +34,11 @@ While it runs, each better schedule found is reported on standard error, with th
 that a long run can be seen to be working:
 
 ```
-tinyscheg: found penalty 3.48 after 0 s
-tinyscheg: found penalty 2.25 after 0 s
-tinyscheg: found penalty 2.22 after 2 s
-tinyscheg: found penalty 2.18 after 12 s
-tinyscheg: found penalty 2.16 after 14 s
+tinyscheg: found penalty 8.79 after 0 s
+tinyscheg: found penalty 8.61 after 0 s
+tinyscheg: found penalty 8.53 after 1 s
+tinyscheg: found penalty 8.45 after 2 s
+tinyscheg: found penalty 8.38 after 4 s
 ```
 
 The best schedule is often found long before the search ends: the rest of the time goes into making sure nothing
@@ -47,10 +47,11 @@ lower is better — with its three parts before weighting, e.g.:
 
 ```
 wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
-penalty 2.16 (likes 1.80, workload 3.32, rest 0.22), the best possible
+penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), the best possible
 ```
 
-The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals; the
+The penalty and each part are at least 0, each part in its own units ([Scoring](../explanation/scoring.md)); only
+differences between schedules mean anything. They're shown to `PENALTY_DECIMALS` (2) decimals; the
 seconds in progress lines to `ELAPSED_DECIMALS` (0).
 
 With a [history](input-format.md#history), the schedule is searched as the continuation of the previous ones
