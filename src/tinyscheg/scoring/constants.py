@@ -20,12 +20,10 @@ _ONE_HOUR = dt.timedelta(hours=1)
 class WorkerConstants:
     """
     The constants of one worker's penalty.
-    availability is av, the hours within the period the worker is available; packable_load is H_max, the most load
-    they could be given over any legal set of slots in their domain (ADR 0026); worst_deficit is M_w, the largest
+    availability is av, the hours within the period the worker is available; worst_deficit is M_w, the largest
     total rest deficit they could have. likes and dislikes hold worker indexes.
     """
     availability: float
-    packable_load: float
     worst_deficit: float
     likes: frozenset[int]
     dislikes: frozenset[int]
@@ -37,7 +35,10 @@ class ScoringConstants:
     Everything the penalty of any (partial) assignment is computed from, besides the assignment itself.
     slot_hours[i] is the length of slot i in hours, and slot_load[i] its load for the workload penalty: a blend of its
     hours and of one average slot (ADR 0026); shared_slots is the number of slots in shifts of more than one slot
-    (n_shared); workload_scale is the workload penalty's largest possible value, sum(av * phi(H_max / av)).
+    (n_shared). The penalty's parts are flat (ADR 0032): workload_unit is what the workload penalty is measured in,
+    mean slot load ** p / mean availability ** (p - 1), so that one shift of imbalance costs the same at any length;
+    rest_unit is the mean M_w of the workers who could have a deficit, which keeps the average hour short costing the
+    same at any length.
     """
     parameters: ScoringParameters
     min_rest: float
@@ -47,7 +48,8 @@ class ScoringConstants:
     slot_load: tuple[float, ...]
     workers: tuple[WorkerConstants, ...]
     shared_slots: int
-    workload_scale: float
+    workload_unit: float
+    rest_unit: float
 
 
 def hours(length: dt.timedelta) -> float:
@@ -81,7 +83,6 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         ranges = sorted({slot.time for slot, domain in zip(slots, domains) if index in domain})
         worker_constants.append(WorkerConstants(
             availability=availability(worker, settings.period),
-            packable_load=packable_load(ranges, min_rest, load),
             worst_deficit=worst_deficit(ranges, min_rest, parameters.rest_factor),
             likes=frozenset(index_of[name] for name in worker.likes),
             dislikes=frozenset(index_of[name] for name in worker.dislikes)))
@@ -94,7 +95,8 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         slot_load=tuple(load(slot.time) for slot in slots),
         workers=tuple(worker_constants),
         shared_slots=sum(len(shift.slots) for shift in shifts if len(shift.slots) > 1),
-        workload_scale=workload_scale(worker_constants, parameters.workload_power))
+        workload_unit=workload_unit(worker_constants, [load(slot.time) for slot in slots], parameters.workload_power),
+        rest_unit=rest_unit(worker_constants))
 
 
 def availability(worker: Worker, period: DateTimeRange) -> float:
@@ -127,22 +129,6 @@ def slot_load(slot_hours: float, mean_hours: float, shift_share: float) -> float
     return (1 - shift_share) * slot_hours + shift_share * mean_hours
 
 
-def packable_load(ranges: Sequence[DateTimeRange], min_rest: float,
-                  load: Callable[[DateTimeRange], float]) -> float:
-    """
-    The most load a worker could be given, over any legal sequence of the given time ranges
-    :param ranges: the distinct time ranges of the slots in the worker's domain, sorted
-    :param min_rest: the minimum rest between two shifts, in hours
-    :param load: a time range's load (ADR 0026)
-    :return: H_max: the heaviest path through the ranges, each weighted by its load (ADR 0015)
-    """
-    best = [0.0] * len(ranges)  # best[i]: the most load of a legal sequence starting with ranges[i]
-    for first in reversed(range(len(ranges))):
-        best[first] = load(ranges[first]) + max(
-            (best[later] for later in _followers(ranges, first, min_rest)), default=0.0)
-    return max(best, default=0.0)
-
-
 def worst_deficit(ranges: Sequence[DateTimeRange], min_rest: float, rest_factor: float) -> float:
     """
     The largest total rest deficit a worker could have, over any legal sequence of the given time ranges
@@ -165,12 +151,29 @@ def _followers(ranges: Sequence[DateTimeRange], first: int, min_rest: float) -> 
             if hours(ranges[later].start - ranges[first].end) >= min_rest]
 
 
-def workload_scale(workers: Sequence[WorkerConstants], power: int) -> float:
+def workload_unit(workers: Sequence[WorkerConstants], loads: Sequence[float], power: int) -> float:
     """
-    The largest possible workload penalty, used to normalize it
+    The unit the workload penalty is measured in (ADR 0032): the term av * (load / av) ** p of an average worker
+    given one average slot, (mean load) ** p / (mean av) ** (p - 1). Measured in it, moving one average slot between
+    two average workers with the same load costs about the same at any schedule length.
     :param workers: WorkerConstants of all workers
+    :param loads: every slot's load
     :param power: p, the workload power
-    :return: the sum of av * (H_max / av) ** p over workers with some availability (ADR 0015)
+    :return: the unit; 0 if no worker has any availability or there are no slots
     """
-    return sum(worker.availability * (worker.packable_load / worker.availability) ** power
-               for worker in workers if worker.availability > 0)
+    available = [worker.availability for worker in workers if worker.availability > 0]
+    if not available or not loads:
+        return 0.0
+    return (sum(loads) / len(loads)) ** power / (sum(available) / len(available)) ** (power - 1)
+
+
+def rest_unit(workers: Sequence[WorkerConstants]) -> float:
+    """
+    The scale of the rest penalty (ADR 0032): the mean M_w of the workers who could have a deficit. Each worker's
+    hours short are divided by their own M_w, as before, then multiplied by this, so an hour short weighs more for a
+    worker who could rarely be short, but the average hour costs the same at any schedule length.
+    :param workers: WorkerConstants of all workers
+    :return: the mean M_w; 0 if no worker can have a deficit
+    """
+    worst = [worker.worst_deficit for worker in workers if worker.worst_deficit > 0]
+    return sum(worst) / len(worst) if worst else 0.0

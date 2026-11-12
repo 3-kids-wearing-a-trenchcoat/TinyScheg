@@ -53,7 +53,7 @@ class IncrementalScore:
         # the totals of what's filled already, computed from scratch; from here on they're kept up to date
         self.likes = likes_total(constants, assignment)        # over filled pairs, before normalizing
         self.workload = workload_total(constants, assignment)  # the sum of av * (load / av) ** p, before normalizing
-        self.rest = rest_penalty(constants, assignment)        # the sum of deficit / M_w
+        self.rest = rest_penalty(constants, assignment)        # the sum of deficit * rest_unit / M_w
         self.load = _assigned_load(constants, assignment)
         self.slots: list[list[int]] = _slots_by_worker(constants, assignment)
         self.shift_bounds = [shift_likes_lower_bound(constants, shift, assignment, domains)
@@ -92,14 +92,14 @@ class IncrementalScore:
         rounding."""
         constants = self.constants
         parameters = constants.parameters
-        likes = normalized_likes(constants, self.likes_bound) if constants.shared_slots else 0.0
+        likes = normalized_likes(constants, self.likes_bound)
         return (parameters.likes_weight * likes + parameters.workload_weight * self._workload_bound()
                 + parameters.rest_weight * self.rest)
 
     def _workload_bound(self) -> float:
         """workload_lower_bound, from the running loads, caps and remaining load."""
         constants = self.constants
-        if constants.workload_scale == 0:
+        if constants.workload_unit == 0:
             return 0.0
         power = constants.parameters.workload_power
         pool = [(self.load[index] / worker.availability, worker.availability,
@@ -107,7 +107,7 @@ class IncrementalScore:
                 for index, worker in enumerate(constants.workers) if worker.availability > 0]
         level = _water_level(pool, self.remaining)
         filled = sum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
-        return len(constants.workers) * filled / constants.workload_scale
+        return filled / constants.workload_unit
 
     # --- assigning and undoing ---
 
@@ -175,9 +175,8 @@ class IncrementalScore:
         """The weighted total of the raw running totals, normalized as score() normalizes them."""
         constants = self.constants
         parameters = constants.parameters
-        normalized_workload = (len(constants.workers) * workload / constants.workload_scale
-                               if constants.workload_scale else 0.0)
-        normalized = normalized_likes(constants, likes) if constants.shared_slots else 0.0
+        normalized_workload = workload / constants.workload_unit if constants.workload_unit else 0.0
+        normalized = normalized_likes(constants, likes)
         return (parameters.likes_weight * normalized + parameters.workload_weight * normalized_workload
                 + parameters.rest_weight * rest)
 
@@ -208,7 +207,7 @@ class IncrementalScore:
     def _rest_delta(self, worker: int, slot: int) -> tuple[float, int]:
         """
         What giving the worker the slot adds to the rest total, and where the slot goes among their slots
-        :return: (the change in deficit / M_w, the slot's position in the worker's slots)
+        :return: (the change in deficit * rest_unit / M_w, the slot's position in the worker's slots)
         """
         slots = self.slots[worker]
         position = bisect.bisect_left(slots, slot)
@@ -224,4 +223,4 @@ class IncrementalScore:
             change += rest_deficit(self.constants, slot, later)
         if earlier is not None and later is not None:
             change -= rest_deficit(self.constants, earlier, later)
-        return change / worst, position
+        return change * self.constants.rest_unit / worst, position

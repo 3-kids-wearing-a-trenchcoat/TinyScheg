@@ -217,7 +217,7 @@ def test_scoring_overrides(tmp_path: pathlib.Path) -> None:
 def test_omitted_weights_keep_their_defaults(tmp_path: pathlib.Path) -> None:
     scoring = read_input(write(tmp_path, with_scoring("weights: {likes: 0}\n"))).settings.scoring
     assert scoring == ScoringParameters(likes_weight=0)
-    assert scoring.workload_weight == pytest.approx(2 / 3)
+    assert scoring.workload_weight == pytest.approx(0.5)  # the default workload and rest weights are equal
 
 
 def test_empty_scoring_section_keeps_the_defaults(tmp_path: pathlib.Path) -> None:

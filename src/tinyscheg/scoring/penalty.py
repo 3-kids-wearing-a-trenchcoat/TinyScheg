@@ -1,7 +1,7 @@
 """
 The penalty score of a (partial) schedule (see docs/explanation/scoring.md): a weighted sum of the likes, workload
-and rest penalties, each normalized to [0, k] for k workers. Lower is better, and filling another slot never lowers
-it.
+and rest penalties, each flat (ADR 0032): one disliked pairing, one shift of imbalance or one hour short costs the
+same whatever the schedule's length. Lower is better, and filling another slot never lowers it.
 
 An assignment holds a worker index per slot, in stable slot order, or None for a slot that isn't filled yet. Every
 penalty is computed from scratch, with sums always taken in the same order (shifts, slots and workers in their stable
@@ -16,14 +16,14 @@ from tinyscheg.model.shift import Shift
 from tinyscheg.scoring.constants import ScoringConstants, hours
 
 # The like function l(x), with beta (a disliked partner) as the unit. Only the ratio alpha / beta matters, since the
-# likes penalty is divided by beta to normalize it; alpha is the neutral_partner parameter.
+# likes penalty is measured in units of beta; alpha is the neutral_partner parameter.
 LIKED_PARTNER = 0.0
 DISLIKED_PARTNER = 1.0
 
 
 @dataclass(frozen=True, slots=True)
 class Penalty:
-    """A schedule's penalty: the weighted total, and each normalized part before weighting."""
+    """A schedule's penalty: the weighted total, and each part before weighting, in its own units (ADR 0032)."""
     total: float
     likes: float
     workload: float
@@ -35,7 +35,7 @@ def score(constants: ScoringConstants, assignment: Sequence[int | None]) -> Pena
     Score a (partial) schedule
     :param constants: ScoringConstants of the run
     :param assignment: a worker index per slot, or None for an unfilled slot
-    :return: the Penalty; its total lies in [0, k]
+    :return: the Penalty; at least 0
     """
     parameters = constants.parameters
     likes = likes_penalty(constants, assignment)
@@ -47,14 +47,12 @@ def score(constants: ScoringConstants, assignment: Sequence[int | None]) -> Pena
 
 def likes_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
     """
-    The normalized likes penalty L**: for each filled slot in a shared shift, its worker's like value of the workers
-    in the shift's other slots, averaged over those other slots (unfilled ones count 0)
+    The likes penalty L**: for each filled slot in a shared shift, its worker's like value of the workers in the
+    shift's other slots, averaged over those other slots (unfilled ones count 0)
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
-    :return: k * L* / (beta * n_shared), in [0, k]; 0 if no shift has more than one slot
+    :return: L* / beta, in units of a disliked partner (ADR 0032); 0 if no shift has more than one slot
     """
-    if constants.shared_slots == 0:
-        return 0.0
     return normalized_likes(constants, likes_total(constants, assignment))
 
 
@@ -88,15 +86,15 @@ def _like_value(constants: ScoringConstants, worker: int, partner: int) -> float
 
 def workload_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
     """
-    The normalized workload penalty W*: the sum of av * (assigned load / av) ** p, the load being a blend of hours
-    and shifts (ADR 0026), scaled by its largest possible value (workers with no availability are left out)
+    The workload penalty W*: the sum of av * (assigned load / av) ** p, the load being a blend of hours and shifts
+    (ADR 0026), in workload units (ADR 0032; workers with no availability are left out)
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
-    :return: k * W / workload_scale, in [0, k]; 0 if no worker can be assigned anything
+    :return: W / workload_unit; 0 if no worker can be assigned anything
     """
-    if constants.workload_scale == 0:
+    if constants.workload_unit == 0:
         return 0.0
-    return len(constants.workers) * workload_total(constants, assignment) / constants.workload_scale
+    return workload_total(constants, assignment) / constants.workload_unit
 
 
 def workload_total(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
@@ -128,17 +126,15 @@ def lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
 def likes_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
                       domains: Sequence[Sequence[int]]) -> float:
     """
-    The lowest normalized likes penalty any completion of a partial schedule could have. In a complete schedule, each
+    The lowest likes penalty any completion of a partial schedule could have. In a complete schedule, each
     pair of slots in a shared shift adds both workers' like values of each other, over the shift's other slots; a
     pair with an unfilled slot adds at least the lowest value any workers still in their domains could give
     (choosing each pair's best independently, and even the same worker twice, only lowers the bound)
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
     :param domains: for each slot, the workers who can still fill it
-    :return: in [likes_penalty(assignment), k]; 0 if no shift has more than one slot
+    :return: at least likes_penalty(assignment); 0 if no shift has more than one slot
     """
-    if constants.shared_slots == 0:
-        return 0.0
     total = sum(shift_likes_lower_bound(constants, shift, assignment, domains) for shift in constants.shifts)
     return normalized_likes(constants, total)
 
@@ -177,14 +173,14 @@ def pair_like_value(constants: ScoringConstants, worker: int, partner: int) -> f
 
 
 def normalized_likes(constants: ScoringConstants, total: float) -> float:
-    """A likes total (the sum of like values, each over its shift's other slots) normalized to [0, k]."""
-    return len(constants.workers) * total / (DISLIKED_PARTNER * constants.shared_slots)
+    """A likes total (the sum of like values, each over its shift's other slots) in units of a disliked partner."""
+    return total / DISLIKED_PARTNER
 
 
 def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
                          domains: Sequence[Sequence[int]]) -> float:
     """
-    The lowest normalized workload penalty any completion of a partial schedule could have. The load of the unfilled
+    The lowest workload penalty any completion of a partial schedule could have. The load of the unfilled
     slots must go to workers in their domains, each worker gaining at most the load of the unfilled slots they're in
     the domain of. Since each worker's term av * (load / av) ** p is convex, the total is lowest when the load tops
     up the least-loaded workers to a common level of load / av, each only up to their cap, as water fills vessels of
@@ -192,9 +188,9 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
     :param domains: for each slot, the workers who can still fill it
-    :return: in [workload_penalty(assignment), k]
+    :return: at least workload_penalty(assignment)
     """
-    if constants.workload_scale == 0:
+    if constants.workload_unit == 0:
         return 0.0
     power = constants.parameters.workload_power
     assigned_load = _assigned_load(constants, assignment)
@@ -212,7 +208,7 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
                          (assigned_load[index] + caps[index]) / worker.availability))
     level = _water_level(pool, remaining)
     filled = sum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
-    return len(constants.workers) * filled / constants.workload_scale
+    return filled / constants.workload_unit
 
 
 def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> float:
@@ -252,11 +248,13 @@ def _assigned_load(constants: ScoringConstants, assignment: Sequence[int | None]
 
 def rest_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
     """
-    The normalized rest penalty R**: for each worker, the hours by which each rest falls short of gamma times the
-    length of the shift before it, divided by the worker's worst possible deficit M_w
+    The rest penalty R**: for each worker, the hours by which each rest falls short of gamma times the length of the
+    shift before it, divided by the worker's worst possible deficit M_w and multiplied by the mean M_w (rest_unit,
+    ADR 0032): an hour short weighs more for a worker who could rarely be short, and the average hour the same at
+    any schedule length
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
-    :return: the sum over workers, in [0, k]; workers with M_w = 0 can never have a deficit and count 0
+    :return: the sum over workers, in hours; workers with M_w = 0 can never have a deficit and count 0
     """
     total = 0.0
     for worker, slot_indexes in enumerate(_slots_by_worker(constants, assignment)):
@@ -268,7 +266,7 @@ def rest_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) 
         deficit = 0.0
         for earlier, later in zip(slot_indexes, slot_indexes[1:]):
             deficit += rest_deficit(constants, earlier, later)
-        total += deficit / worst
+        total += deficit * constants.rest_unit / worst
     return total
 
 

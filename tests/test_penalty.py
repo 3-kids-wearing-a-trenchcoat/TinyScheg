@@ -38,20 +38,20 @@ def constants_for(workers: list[Worker], roles: dict[str, int], length: int, per
 
 def test_likes_in_a_two_worker_shift() -> None:
     workers = [Worker("Anne", likes=frozenset({"Bob"})), Worker("Bob"), Worker("Cy", dislikes=frozenset({"Anne"}))]
-    constants = constants_for(workers, {"any": 2}, 4, 4)  # one shift of two slots: n_shared = 2, k = 3
-    # Anne likes Bob (0); Bob is neutral about Anne (alpha)
-    assert likes_penalty(constants, [0, 1]) == pytest.approx(3 * ALPHA / 2)
+    constants = constants_for(workers, {"any": 2}, 4, 4)  # one shift of two slots
+    # flat, in units of a disliked partner (ADR 0032): Anne likes Bob (0); Bob is neutral about Anne (alpha)
+    assert likes_penalty(constants, [0, 1]) == pytest.approx(ALPHA)
     # Anne is neutral about Cy (alpha); Cy dislikes Anne (beta = 1)
-    assert likes_penalty(constants, [0, 2]) == pytest.approx(3 * (ALPHA + 1) / 2)
+    assert likes_penalty(constants, [0, 2]) == pytest.approx(ALPHA + 1)
     assert likes_penalty(constants, [0, None]) == 0  # nobody to share the shift with yet
 
 
 def test_likes_are_averaged_over_the_other_slots() -> None:
     workers = [Worker("Anne", likes=frozenset({"Bob"}), dislikes=frozenset({"Cy"})), Worker("Bob"), Worker("Cy")]
-    constants = constants_for(workers, {"any": 3}, 4, 4)  # one shift of three slots: n_shared = 3, k = 3
+    constants = constants_for(workers, {"any": 3}, 4, 4)  # one shift of three slots
     anne = (0 + 1) / 2
     bob = cy = (ALPHA + ALPHA) / 2
-    assert likes_penalty(constants, [0, 1, 2]) == pytest.approx(3 * (anne + bob + cy) / 3)
+    assert likes_penalty(constants, [0, 1, 2]) == pytest.approx(anne + bob + cy)
 
 
 def test_single_slot_shifts_have_no_likes_penalty() -> None:
@@ -64,9 +64,10 @@ def test_single_slot_shifts_have_no_likes_penalty() -> None:
 def test_spreading_work_beats_concentrating_it() -> None:
     # two 4-hour shifts back to back; each worker is available for 8 hours and could work both
     constants = constants_for([Worker("Anne"), Worker("Bob")], {"any": 1}, 4, 8)
-    assert constants.workload_scale == 2 * 8 * (8 / 8) ** 2
-    assert workload_penalty(constants, [0, 0]) == pytest.approx(2 * 8 * (8 / 8) ** 2 / 16)            # 1.0
-    assert workload_penalty(constants, [0, 1]) == pytest.approx(2 * 2 * 8 * (4 / 8) ** 2 / 16)        # 0.5
+    # in workload units (ADR 0032): one average 4-hour slot for a worker available 8 hours, 4 ** 2 / 8 = 2
+    assert constants.workload_unit == 2
+    assert workload_penalty(constants, [0, 0]) == pytest.approx(8 * (8 / 8) ** 2 / 2)                 # 4
+    assert workload_penalty(constants, [0, 1]) == pytest.approx(2 * 8 * (4 / 8) ** 2 / 2)             # 2
     assert workload_penalty(constants, [None, None]) == 0
 
 
@@ -94,8 +95,9 @@ def test_rest_deficit_relative_to_the_worst_case() -> None:
     parameters = ScoringParameters(rest_factor=3)
     constants = constants_for([Worker("Anne")], {"any": 1}, 4, 16, min_rest=2, parameters=parameters)
     assert constants.workers[0].worst_deficit == 8
-    assert rest_penalty(constants, [0, None, 0, None]) == pytest.approx(8 / 8)
-    assert rest_penalty(constants, [0, None, None, 0]) == pytest.approx(4 / 8)  # 8 hours' rest, 4 short
+    assert constants.rest_unit == 8  # the mean worst deficit, Anne's own: so her hours short count as hours
+    assert rest_penalty(constants, [0, None, 0, None]) == pytest.approx(8)
+    assert rest_penalty(constants, [0, None, None, 0]) == pytest.approx(4)  # 8 hours' rest, 4 short
     assert rest_penalty(constants, [0, None, None, None]) == 0
 
 
@@ -116,7 +118,10 @@ def test_total_is_the_weighted_sum() -> None:
     assert penalty.likes == likes_penalty(constants, assignment)
     assert penalty.workload == workload_penalty(constants, assignment)
     assert penalty.rest == rest_penalty(constants, assignment)
-    assert penalty.total == pytest.approx(0.25 * penalty.likes + 0.5 * penalty.workload + 0.25 * penalty.rest)
+    parameters = constants.parameters
+    assert penalty.total == pytest.approx(parameters.likes_weight * penalty.likes
+                                          + parameters.workload_weight * penalty.workload
+                                          + parameters.rest_weight * penalty.rest)
 
 
 def test_a_zero_weight_ignores_that_part() -> None:
@@ -124,7 +129,7 @@ def test_a_zero_weight_ignores_that_part() -> None:
     constants = constants_for(workers, {"any": 2}, 4, 4, parameters=ScoringParameters(likes_weight=0))
     penalty = score(constants, [0, 1])
     assert penalty.likes > 0
-    assert penalty.total == pytest.approx(penalty.workload * 2 / 3 + penalty.rest / 3)
+    assert penalty.total == pytest.approx(penalty.workload / 2 + penalty.rest / 2)  # the other two weights are equal
 
 
 # --- properties, on the example ---
@@ -175,12 +180,26 @@ def test_the_penalty_doesnt_depend_on_the_order_slots_were_filled(
     assert len({score(constants, partial) for partial in reached}) == 1  # exactly equal, not just close
 
 
-def test_every_part_stays_within_its_range(example: tuple[ScoringConstants, tuple[int, ...]]) -> None:
+def test_every_part_is_at_least_zero(example: tuple[ScoringConstants, tuple[int, ...]]) -> None:
     constants, assignment = example
-    k = len(constants.workers)
     penalty = score(constants, assignment)
-    for part in (penalty.total, penalty.likes, penalty.workload, penalty.rest):
-        assert 0 <= part <= k
+    assert all(part >= 0 for part in (penalty.total, penalty.likes, penalty.workload, penalty.rest))
+
+
+@pytest.mark.parametrize("period_hours", [16, 32, 64])
+def test_one_event_costs_the_same_at_any_length(period_hours: int) -> None:
+    # the flat penalty (ADR 0032): two workers sharing a 4-hour post evenly, then one of them taking one more shift
+    # and the other one fewer; and a two-slot shift with a disliked partner instead of a neutral one
+    constants = constants_for([Worker("Anne"), Worker("Bob")], {"any": 1}, 4, period_hours)
+    shifts = period_hours // 4
+    even = [index % 2 for index in range(shifts)]
+    uneven = list(even)
+    uneven[1] = 0  # Bob's first shift goes to Anne
+    # a two-shift gap: 2 workload units, whatever the length
+    assert workload_penalty(constants, uneven) - workload_penalty(constants, even) == pytest.approx(2)
+    pair = constants_for([Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob")], {"any": 2}, 4, period_hours)
+    filled = [0, 1] + [None] * (2 * shifts - 2)
+    assert likes_penalty(pair, filled) == pytest.approx(1 + ALPHA)  # Anne's dislike and Bob's neutral view
 
 
 def test_scoring_is_deterministic(example: tuple[ScoringConstants, tuple[int, ...]]) -> None:

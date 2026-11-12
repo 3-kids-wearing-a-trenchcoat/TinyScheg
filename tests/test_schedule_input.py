@@ -44,7 +44,7 @@ def test_scoring_defaults() -> None:
 def test_weights_are_relative() -> None:
     parameters = ScoringParameters(likes_weight=1, workload_weight=2, rest_weight=1)
     assert (parameters.likes_weight, parameters.workload_weight, parameters.rest_weight) == (0.25, 0.5, 0.25)
-    assert parameters == ScoringParameters()
+    assert parameters == ScoringParameters(likes_weight=2, workload_weight=4, rest_weight=2)
 
 
 def test_a_zero_weight_is_allowed() -> None:
