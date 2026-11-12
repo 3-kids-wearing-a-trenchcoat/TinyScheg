@@ -38,3 +38,19 @@ sweep_10,sweep,False,4035,16,08:00,11,10,1,2,common,common,dense,16,6,1.45,67.81
 ,sweep,,4036,20,,,,,,,,,,,,,,no legal schedule even with the most workers
 sweep_11,sweep,False,4037,24,16:00,10,9,1,2,common,common,dense,22,12,2.2,55.73,2.3215,
 sweep_12,sweep,True,4038,16,08:00,11,10,1,2,common,common,dense,16,6,1.45,75.86,1.8716,
+,confirm,,2000,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+,confirm,,2001,24,16:00,12,9,3,2,common,common,medium,,,,,,over 600 s
+,confirm,,2002,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+,confirm,,2003,24,00:00,12,12,0,3,scarce,common,dense,,,,,,over 600 s
+,confirm,,2004,24,16:00,10,8,2,2,common,scarce,sparse,,,,,,over 600 s
+confirm_01,confirm,False,2005,24,08:00,11,8,3,2,common,scarce,sparse,15,8,1.36,47.38,1.8411,
+,confirm,,2006,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+,confirm,,2007,24,,,,,,,,,,,,,,no legal schedule even with the most workers
+,confirm,,2008,24,00:00,10,8,2,2,common,scarce,sparse,,,,,,over 600 s
+,confirm,,2009,24,08:00,11,11,0,3,common,common,dense,,,,,,over 600 s
+,confirm,,2010,24,00:00,12,12,0,3,common,scarce,medium,,,,,,over 600 s
+,confirm,,2011,24,16:00,11,9,2,2,common,common,sparse,,,,,,over 600 s
+,confirm,,2012,24,00:00,12,10,2,3,common,scarce,medium,,,,,,over 600 s
+,confirm,,2013,24,08:00,12,8,4,2,common,common,sparse,,,,,,over 600 s
+confirm_02,confirm,False,2014,24,08:00,12,7,5,2,scarce,common,sparse,12,6,1.0,194.4,1.7136,
+confirm_03,confirm,True,2015,24,16:00,12,9,3,2,common,scarce,dense,18,8,1.5,64.95,1.7783,
