@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–6 complete; Phase 7 under way. Next: the audit across schedules.
+Progress: Phases 1–7 complete. Open: how the penalty's parts scale with schedule length (found in Phase 7).
 
 ## Phase 1: Walking skeleton
 
@@ -160,9 +160,9 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
   scoring from scratch on the filled part; the independent checker covers the boundary
 - [x] Command line: the new period written, the whole schedule's penalty reported, a warning for workers who have
   left
-- [ ] Audit across schedules: the audit reads the history too, to check that fairness carries over, including
+- [x] Audit across schedules: the audit reads the history too, to check that fairness carries over, including
   whether past short straws need compensating (ADR 0030)
-- [ ] End-to-end test: two consecutive schedules, the second making up for the first
+- [x] End-to-end test: two consecutive schedules, the second making up for the first
 
 ## Later
 
