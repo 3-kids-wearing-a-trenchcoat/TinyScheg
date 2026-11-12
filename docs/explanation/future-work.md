@@ -119,6 +119,10 @@ Penalties are first computed from scratch for every state. Updating them increme
 stay exactly path-independent (see [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)), for
 example by using exact arithmetic. The from-scratch computation then serves as a test oracle.
 
+Proposed on 2026-11-12 ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)): incremental totals only
+to steer the search (the value order, and pruning away from near-ties), with near-ties and complete schedules scored
+exactly from scratch, so that the result stays exactly the same.
+
 ## Dangling shifts
 
 > [!WARNING]
