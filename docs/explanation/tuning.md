@@ -10,9 +10,10 @@ point, not final, but they shape how every later output is read, so the method i
 
 ## What's tuned, against what
 
-The five independent parameters: the weights of likes, workload and rest (two independent values, since only their
-ratios matter), the workload power $p$, the rest factor $\gamma$, and the neutral partner value $\alpha / \beta$,
-which stays below 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)).
+The six independent parameters: the weights of likes, workload and rest (two independent values, since only their
+ratios matter), the workload power $p$, the rest factor $\gamma$, the neutral partner value $\alpha / \beta$,
+which stays below 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)), and the shift share $\sigma$
+([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)).
 
 The yardstick is the audit, **held fixed**: its own thresholds aren't tuned, or the two would just drift towards each
 other. Since branch and bound gives the proven best schedule for each setting, any difference in the result comes

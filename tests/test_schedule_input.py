@@ -4,9 +4,9 @@ import datetime as dt
 import pytest
 
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_MIN_REST, DEFAULT_NEUTRAL_PARTNER,
-                                            DEFAULT_REST_FACTOR, DEFAULT_REST_WEIGHT, DEFAULT_WORKLOAD_POWER,
-                                            DEFAULT_WORKLOAD_WEIGHT, MAX_NEUTRAL_PARTNER, ScoringParameters,
-                                            Settings)
+                                            DEFAULT_REST_FACTOR, DEFAULT_REST_WEIGHT, DEFAULT_SHIFT_SHARE,
+                                            DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT, MAX_NEUTRAL_PARTNER,
+                                            ScoringParameters, Settings)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 
@@ -38,6 +38,7 @@ def test_scoring_defaults() -> None:
     assert parameters.workload_power == DEFAULT_WORKLOAD_POWER
     assert parameters.rest_factor == DEFAULT_REST_FACTOR
     assert parameters.neutral_partner == DEFAULT_NEUTRAL_PARTNER
+    assert parameters.shift_share == DEFAULT_SHIFT_SHARE
 
 
 def test_weights_are_relative() -> None:
@@ -60,6 +61,8 @@ def test_a_zero_weight_is_allowed() -> None:
     {"neutral_partner": 0},
     {"neutral_partner": 0.5},  # a dislike and a like would cancel out (ADR 0023)
     {"neutral_partner": 1},
+    {"shift_share": -0.1},
+    {"shift_share": 1.5},
     {"rest_factor": float("nan")},
     {"rest_weight": "high"},
 ])

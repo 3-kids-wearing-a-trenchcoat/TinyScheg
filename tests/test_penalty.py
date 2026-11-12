@@ -212,7 +212,7 @@ def test_workload_penalty_ranks_schedules_by_the_spread_of_workloads() -> None:
 
     def weighted_variance(assignment: tuple[int, ...]) -> float:
         availability = [worker.availability for worker in constants.workers]
-        assigned = [sum(constants.slot_hours[slot] for slot, worker in enumerate(assignment) if worker == index)
+        assigned = [sum(constants.slot_load[slot] for slot, worker in enumerate(assignment) if worker == index)
                     for index in range(3)]
         mean = sum(assigned) / sum(availability)
         return sum(av * (hours / av - mean) ** 2 for av, hours in zip(availability, assigned))
@@ -229,3 +229,52 @@ def test_the_water_level_respects_each_workers_cap() -> None:
     # a worker already above the level keeps their own
     assert _water_level([(0.0, 1.0, 10.0), (5.0, 1.0, 10.0)], 2.0) == pytest.approx(2.0)
     assert _water_level([], 3.0) == 0.0
+
+
+# --- the shift share (ADR 0026) ---
+
+def shifts_input(shift_share: float) -> tuple[ScoringConstants, list]:
+    """A 4-hour period with a desk of 2-hour shifts and a gate of 1-hour shifts, for Anne, Bob and Cy."""
+    start = dt.datetime(2025, 1, 1)
+    period = DateTimeRange(start, start + dt.timedelta(hours=4))
+    posts = (Post("desk", ShiftRules(dt.timedelta(hours=2), (("any", 1),))),
+             Post("gate", ShiftRules(dt.timedelta(hours=1), (("any", 1),))))
+    workers = (Worker("Anne"), Worker("Bob"), Worker("Cy"))
+    settings = Settings(period, dt.timedelta(0), ScoringParameters(shift_share=shift_share))
+    problem = build_problem(ScheduleInput(settings, workers, posts))
+    return build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.domains), problem.slots
+
+
+def schedule(slots: list, plan: dict[tuple[str, int], int]) -> list[int]:
+    """An assignment from (post, start hour) -> worker."""
+    return [plan[(slot.post.name, slot.time.start.hour)] for slot in slots]
+
+
+# Anne works both desk shifts (4 h, 2 shifts); Bob and Cy two gate shifts each (2 h, 2 shifts)
+EVEN_SHIFTS = {("desk", 0): 0, ("desk", 2): 0, ("gate", 0): 1, ("gate", 1): 1, ("gate", 2): 2, ("gate", 3): 2}
+# the same hours, but Anne works all four gate shifts (4 h, 4 shifts), Bob and Cy a desk shift each (2 h, 1 shift)
+UNEVEN_SHIFTS = {("desk", 0): 1, ("desk", 2): 2, ("gate", 0): 0, ("gate", 1): 0, ("gate", 2): 0, ("gate", 3): 0}
+# the same shift counts as EVEN_SHIFTS, but hours spread more evenly (3, 3 and 2)
+EVEN_HOURS = {("desk", 0): 0, ("gate", 2): 0, ("desk", 2): 1, ("gate", 0): 1, ("gate", 1): 2, ("gate", 3): 2}
+
+
+def test_with_no_shift_share_only_hours_count() -> None:
+    constants, slots = shifts_input(0)
+    assert constants.slot_load == constants.slot_hours
+    assert workload_penalty(constants, schedule(slots, EVEN_SHIFTS)) == pytest.approx(
+        workload_penalty(constants, schedule(slots, UNEVEN_SHIFTS)))
+    assert workload_penalty(constants, schedule(slots, EVEN_HOURS)) < workload_penalty(constants,
+                                                                                       schedule(slots, EVEN_SHIFTS))
+
+
+def test_with_a_full_shift_share_only_shifts_count() -> None:
+    constants, slots = shifts_input(1)
+    assert len(set(constants.slot_load)) == 1
+    assert workload_penalty(constants, schedule(slots, EVEN_HOURS)) == pytest.approx(
+        workload_penalty(constants, schedule(slots, EVEN_SHIFTS)))
+
+
+def test_a_shift_share_makes_many_short_shifts_count_against_few_long_ones() -> None:
+    constants, slots = shifts_input(0.5)
+    assert workload_penalty(constants, schedule(slots, UNEVEN_SHIFTS)) > workload_penalty(
+        constants, schedule(slots, EVEN_SHIFTS))

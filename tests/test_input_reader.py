@@ -208,9 +208,10 @@ def test_scoring_defaults_when_omitted(tmp_path: pathlib.Path) -> None:
 
 def test_scoring_overrides(tmp_path: pathlib.Path) -> None:
     text = with_scoring("weights: {likes: 1, workload: 2, rest: 1}\nworkload_power: 3\nrest_factor: 2.5\n"
-                        "neutral_partner: 0.25\n")
+                        "neutral_partner: 0.25\nshift_share: 0.75\n")
     scoring = read_input(write(tmp_path, text)).settings.scoring
-    assert scoring == ScoringParameters(1, 2, 1, workload_power=3, rest_factor=2.5, neutral_partner=0.25)
+    assert scoring == ScoringParameters(1, 2, 1, workload_power=3, rest_factor=2.5, neutral_partner=0.25,
+                                        shift_share=0.75)
 
 
 def test_omitted_weights_keep_their_defaults(tmp_path: pathlib.Path) -> None:

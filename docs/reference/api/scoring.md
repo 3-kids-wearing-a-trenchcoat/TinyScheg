@@ -4,7 +4,7 @@ Sources: [`src/tinyscheg/scoring/constants.py`](https://github.com/3-kids-wearin
 [`src/tinyscheg/scoring/penalty.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/penalty.py)
 
 See [Scoring](../../explanation/scoring.md) for the formulas and why, and
-[`ScoringParameters`](schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner)
+[`ScoringParameters`](schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner-shift_share)
 for the parameters. The package depends only on `model` and `timing`: it receives slots, shifts, workers and domains
 as plain data, and the search will use it rather than the other way round. All durations are in hours, as `float`.
 
@@ -30,6 +30,8 @@ Immutable.
 * `min_rest` — the minimum rest, in hours.
 * `slots`, `shifts` — as given.
 * `slot_hours` — `tuple[float, ...]`, each slot's length.
+* `slot_load` — `tuple[float, ...]`, each slot's load for the workload penalty, from `slot_load`
+  ([ADR 0026](../../decisions/0026-workload-counts-shifts-and-hours.md)).
 * `workers` — a `WorkerConstants` per worker, in input order.
 * `shared_slots` — $n_\text{shared}$, the number of slots in shifts of more than one slot.
 * `workload_scale` — the largest possible workload penalty,
@@ -41,7 +43,7 @@ Immutable.
 
 * `availability` — $\mathrm{av}$, the hours within the period during which the worker is available. Overlapping
   unavailability is counted once.
-* `packable_hours` — $H^{\max}$, the most hours the worker could be given.
+* `packable_load` — $H^{\max}$, the most load the worker could be given.
 * `worst_deficit` — $M_w$, the largest total rest deficit the worker could have.
 * `likes`, `dislikes` — `frozenset[int]`, the indexes of the workers they like and dislike.
 
@@ -49,7 +51,13 @@ Immutable.
 
 The period's length minus the worker's unavailability within it.
 
-### `packable_hours(ranges, min_rest) -> float` and `worst_deficit(ranges, min_rest, rest_factor) -> float`
+### `slot_load(slot_hours, mean_hours, shift_share) -> float`
+
+A slot's load: $(1 - \sigma) \cdot$ `slot_hours` $+ \; \sigma \cdot$ `mean_hours`, where `mean_hours` is the mean length
+of the schedule's slots. With $\sigma = 0$ the load is the slot's hours; with $\sigma = 1$ every slot has the same load.
+The total load of all slots equals their total hours.
+
+### `packable_load(ranges, min_rest, load) -> float` and `worst_deficit(ranges, min_rest, rest_factor) -> float`
 
 $H^{\max}$ and $M_w$, each as the heaviest path through a worker's possible shifts
 ([ADR 0014](../../decisions/0014-exact-worst-rest-deficit.md),
@@ -58,7 +66,7 @@ $H^{\max}$ and $M_w$, each as the heaviest path through a worker's possible shif
 * `ranges` — the distinct time ranges of the slots in the worker's domain, sorted. Slots at the same time count once,
   since a worker can only work one of them.
 * There's a step from one range to a later one when it starts at least `min_rest` after the first ends.
-* For `packable_hours`, each range weighs its length; for `worst_deficit`, each step weighs the deficit it causes,
+* For `packable_load`, each range weighs its `load` (a function of the range); for `worst_deficit`, each step weighs the deficit it causes,
   $\max(0, \gamma \cdot |s| - \text{rest})$. A sequence's last shift has no rest after it, so no deficit.
 
 Both take $O(n^2)$ time for $n$ ranges. Tests check them against trying every legal sequence.
@@ -117,10 +125,10 @@ $[\mathcal{L}^{**}(\text{partial}), k]$.
 
 ### `workload_lower_bound(constants, assignment, domains) -> float`
 
-The lowest normalized workload penalty any completion could have: the unfilled slots' hours spread so that the least
-loaded workers are topped up to a common level of hours per available hour ("water-filling"), which minimizes the
-sum of convex terms. Each worker can gain at most the hours of the unfilled slots whose domain they're in, so a worker
-who could take few hours stops rising early. Which slots overlap is ignored, so it may be lower than anything
+The lowest normalized workload penalty any completion could have: the unfilled slots' load spread so that the least
+loaded workers are topped up to a common level of load per available hour ("water-filling"), which minimizes the
+sum of convex terms. Each worker can gain at most the load of the unfilled slots whose domain they're in, so a worker
+who could take little stops rising early. Which slots overlap is ignored, so it may be lower than anything
 reachable. In $[\mathcal{W}^*(\text{partial}), k]$.
 
 ### `likes_penalty(constants, assignment) -> float`
@@ -133,7 +141,7 @@ one slot.
 
 ### `workload_penalty(constants, assignment) -> float`
 
-$\mathcal{W}^*$: the sum of $\mathrm{av} \cdot (\text{assigned hours} / \mathrm{av})^p$ over workers with some
+$\mathcal{W}^*$: the sum of $\mathrm{av} \cdot (\text{assigned load} / \mathrm{av})^p$ over workers with some
 availability, divided by `workload_scale` and scaled to $[0, k]$. 0 if no worker can be assigned anything.
 
 ### `rest_penalty(constants, assignment) -> float`

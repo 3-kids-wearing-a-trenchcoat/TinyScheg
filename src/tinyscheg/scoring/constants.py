@@ -5,7 +5,7 @@ The constants the penalty score is computed from, calculated once per run, befor
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from tinyscheg.model.schedule_input import ScoringParameters, Settings
@@ -20,12 +20,12 @@ _ONE_HOUR = dt.timedelta(hours=1)
 class WorkerConstants:
     """
     The constants of one worker's penalty.
-    availability is av, the hours within the period the worker is available; packable_hours is H_max, the most hours
-    they could be given over any legal set of slots in their domain; worst_deficit is M_w, the largest total rest
-    deficit they could have. likes and dislikes hold worker indexes.
+    availability is av, the hours within the period the worker is available; packable_load is H_max, the most load
+    they could be given over any legal set of slots in their domain (ADR 0026); worst_deficit is M_w, the largest
+    total rest deficit they could have. likes and dislikes hold worker indexes.
     """
     availability: float
-    packable_hours: float
+    packable_load: float
     worst_deficit: float
     likes: frozenset[int]
     dislikes: frozenset[int]
@@ -35,14 +35,16 @@ class WorkerConstants:
 class ScoringConstants:
     """
     Everything the penalty of any (partial) assignment is computed from, besides the assignment itself.
-    slot_hours[i] is the length of slot i in hours; shared_slots is the number of slots in shifts of more than one
-    slot (n_shared); workload_scale is the workload penalty's largest possible value, sum(av * phi(H_max / av)).
+    slot_hours[i] is the length of slot i in hours, and slot_load[i] its load for the workload penalty: a blend of its
+    hours and of one average slot (ADR 0026); shared_slots is the number of slots in shifts of more than one slot
+    (n_shared); workload_scale is the workload penalty's largest possible value, sum(av * phi(H_max / av)).
     """
     parameters: ScoringParameters
     min_rest: float
     slots: tuple[Slot, ...]
     shifts: tuple[Shift, ...]
     slot_hours: tuple[float, ...]
+    slot_load: tuple[float, ...]
     workers: tuple[WorkerConstants, ...]
     shared_slots: int
     workload_scale: float
@@ -67,12 +69,19 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
     parameters = settings.scoring
     min_rest = hours(settings.min_rest)
     index_of = {worker.name: index for index, worker in enumerate(workers)}
+    slot_hours = tuple(hours(slot.time.duration) for slot in slots)
+    mean_hours = sum(slot_hours) / len(slot_hours) if slot_hours else 0.0
+
+    def load(time: DateTimeRange) -> float:
+        """A slot's load: its hours and one average slot, blended by the shift share (ADR 0026)."""
+        return slot_load(hours(time.duration), mean_hours, parameters.shift_share)
+
     worker_constants = []
     for index, worker in enumerate(workers):
         ranges = sorted({slot.time for slot, domain in zip(slots, domains) if index in domain})
         worker_constants.append(WorkerConstants(
             availability=availability(worker, settings.period),
-            packable_hours=packable_hours(ranges, min_rest),
+            packable_load=packable_load(ranges, min_rest, load),
             worst_deficit=worst_deficit(ranges, min_rest, parameters.rest_factor),
             likes=frozenset(index_of[name] for name in worker.likes),
             dislikes=frozenset(index_of[name] for name in worker.dislikes)))
@@ -81,7 +90,8 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         min_rest=min_rest,
         slots=tuple(slots),
         shifts=tuple(shifts),
-        slot_hours=tuple(hours(slot.time.duration) for slot in slots),
+        slot_hours=slot_hours,
+        slot_load=tuple(load(slot.time) for slot in slots),
         workers=tuple(worker_constants),
         shared_slots=sum(len(shift.slots) for shift in shifts if len(shift.slots) > 1),
         workload_scale=workload_scale(worker_constants, parameters.workload_power))
@@ -105,16 +115,30 @@ def availability(worker: Worker, period: DateTimeRange) -> float:
     return hours(period.duration) - unavailable
 
 
-def packable_hours(ranges: Sequence[DateTimeRange], min_rest: float) -> float:
+def slot_load(slot_hours: float, mean_hours: float, shift_share: float) -> float:
     """
-    The most hours a worker could work, over any legal sequence of the given time ranges
+    A slot's load for the workload penalty (ADR 0026): (1 - sigma) * its hours + sigma * the schedule's mean slot
+    hours, so that with sigma = 0 only hours count, and with sigma = 1 every shift counts the same
+    :param slot_hours: the slot's length in hours
+    :param mean_hours: the mean length of all the schedule's slots, in hours
+    :param shift_share: sigma
+    :return: the load, in hours
+    """
+    return (1 - shift_share) * slot_hours + shift_share * mean_hours
+
+
+def packable_load(ranges: Sequence[DateTimeRange], min_rest: float,
+                  load: Callable[[DateTimeRange], float]) -> float:
+    """
+    The most load a worker could be given, over any legal sequence of the given time ranges
     :param ranges: the distinct time ranges of the slots in the worker's domain, sorted
     :param min_rest: the minimum rest between two shifts, in hours
-    :return: H_max: the heaviest path through the ranges, each weighted by its length (ADR 0015)
+    :param load: a time range's load (ADR 0026)
+    :return: H_max: the heaviest path through the ranges, each weighted by its load (ADR 0015)
     """
-    best = [0.0] * len(ranges)  # best[i]: the most hours of a legal sequence starting with ranges[i]
+    best = [0.0] * len(ranges)  # best[i]: the most load of a legal sequence starting with ranges[i]
     for first in reversed(range(len(ranges))):
-        best[first] = hours(ranges[first].duration) + max(
+        best[first] = load(ranges[first]) + max(
             (best[later] for later in _followers(ranges, first, min_rest)), default=0.0)
     return max(best, default=0.0)
 
@@ -148,5 +172,5 @@ def workload_scale(workers: Sequence[WorkerConstants], power: int) -> float:
     :param power: p, the workload power
     :return: the sum of av * (H_max / av) ** p over workers with some availability (ADR 0015)
     """
-    return sum(worker.availability * (worker.packable_hours / worker.availability) ** power
+    return sum(worker.availability * (worker.packable_load / worker.availability) ** power
                for worker in workers if worker.availability > 0)

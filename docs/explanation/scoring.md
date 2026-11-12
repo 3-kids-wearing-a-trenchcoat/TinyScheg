@@ -159,16 +159,27 @@ monotonicity, since an average can decrease when a liked shift is added.
 
 ### Workload
 
-Let $w_i \in W$ be a worker with $\mathrm{av}_i > 0$, $t \in \mathbb{N}$, and let $h_t(w_i) \in [0,1]$ be $w_i$'s
-**workload** at iteration $t$: the ratio between the hours assigned and the hours available.
+Let $w_i \in W$ be a worker with $\mathrm{av}_i > 0$, $t \in \mathbb{N}$, and let $h_t(w_i) \geq 0$ be $w_i$'s
+**workload** at iteration $t$: the ratio between the load assigned and the hours available.
 
 $$
-h_t(w_i) = \frac{\text{Total hours assigned to } w_i}{\mathrm{av}_i} = \frac{\sum _{s \in A_t(w_i)} |s|}{\mathrm{av}_i}
+h_t(w_i) = \frac{\text{Total load assigned to } w_i}{\mathrm{av}_i} = \frac{\sum _{s \in A_t(w_i)} \ell(s)}{\mathrm{av}_i}
 $$
 
-Since a worker can only be assigned to slots that lie entirely within their availability, and their slots never
-overlap, $h_t(w_i) \leq 1$. Naturally, $h_t(w_i)=0$ iff $A_t(w_i) = \emptyset$, and $h_t(w_i) = 1$ iff $w_i$ is
-assigned in all of their available hours.
+A slot's **load** $\ell(s)$ blends its length with one average slot
+([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)), since workers feel both the hours they work and
+the number of times they have to show up: three short shifts weigh more than one long one of the same hours.
+
+$$
+\ell(s) = (1 - \sigma) \, |s| + \sigma \, \bar{L}
+$$
+
+where $\bar{L}$ is the mean length of all the schedule's slots (each schedule sets its own norm) and
+$\sigma \in [0, 1]$ is the **shift share** (by default 0.5; see [Parameters](#parameters)). With $\sigma = 0$ only
+hours count; with $\sigma = 1$ every shift counts the same, however long. The blend keeps the total: the load of all
+slots together equals their hours. Naturally, $h_t(w_i)=0$ iff $A_t(w_i) = \emptyset$. With $\sigma = 0$,
+$h_t(w_i) \leq 1$, since a worker's slots lie within their availability and never overlap; with $\sigma > 0$, a
+worker with many short shifts can exceed 1, which the normalization below takes care of.
 Workers with $\mathrm{av}_i = 0$ can't be assigned anywhere and are left out of the workload penalty.
 
 The absolute workload of each worker doesn't matter; what matters is that it's as **fair** as possible, meaning
@@ -194,7 +205,7 @@ $$
 with equality when $x_1 = \dots = x_n$ (and, for strictly convex $\varphi$, only then).
 
 We choose $x_i = h_t(w_i)$ and $\lambda_i = \mathrm{av}_i$. In a complete schedule every slot is filled, so the total
-number of assigned hours $T = \sum_i \mathrm{av}_i \, h_t(w_i)$ is the same for every complete schedule, and so is
+assigned load $T = \sum_i \mathrm{av}_i \, h_t(w_i)$ is the same for every complete schedule, and so is
 $\overline{x} = T / \sum_i \mathrm{av}_i$. The left-hand side is therefore a constant, and the penalty
 
 $$
@@ -246,8 +257,8 @@ components. Instead, the penalty is normalized by how much each worker could **a
 the hard constraints (see [ADR 0015](../decisions/0015-normalize-workload-by-packable-maximum.md)).
 
 For every worker $w_i$ with $\mathrm{av}_i > 0$, let $H^{\max}_i$ be the **packable maximum**: the largest total
-number of hours $w_i$ could be assigned over any legal set of slots in their domain (calculated in
-[the same way as $M_w$](#calculating-the-worst-possible-deficit-m_w), with each slot weighted by its duration). Let
+load $w_i$ could be assigned over any legal set of slots in their domain (calculated in
+[the same way as $M_w$](#calculating-the-worst-possible-deficit-m_w), with each slot weighted by its load). Let
 $h^{\max}_i = H^{\max}_i / \mathrm{av}_i$ be the corresponding **packable maximum workload**. Since
 $h_t(w_i) \leq h^{\max}_i$ and $\varphi$ is increasing,
 $\mathcal{W}(t) \leq \sum_i \mathrm{av}_i \, \varphi(h^{\max}_i)$.
@@ -403,7 +414,7 @@ The search space can be reduced by looking at **time ranges** rather than distin
 a shift from $t_1$ to $t_2$ is the same no matter which slot it's spent in.
 
 The packable maximum $H^{\max}_w$ used to normalize the workload is calculated on the same graph, with each slot
-weighted by its duration $|s|$ instead of each edge by its deficit.
+weighted by its load $\ell(s)$ instead of each edge by its deficit.
 
 If these calculations ever become too slow, they can be sped up by limiting the possible first shifts: if a worker's
 first shift starts at time $t$ and some shift ends before $t - m$, another shift could be added before it, so the
@@ -436,7 +447,7 @@ Each sub-function is monotonically non-decreasing, and the weights are non-negat
 ## Parameters
 
 > [!NOTE]
-> **Implemented**: [`ScoringParameters`](../reference/api/schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner)
+> **Implemented**: [`ScoringParameters`](../reference/api/schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner-shift_share)
 > and the `scoring` input settings. Decided in
 > [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
 
@@ -449,6 +460,7 @@ Every parameter has a default, defined once as a named constant in the code, and
 | Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
 | Rest factor | $\gamma$ | 3 | `rest_factor` | at least 1 |
 | Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
+| Shift share of a slot's load | $\sigma$ | 0.5 | `shift_share` | from 0 to 1 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)) |
 
 What the defaults mean, on a 72-hour version of the example input (9 workers):
 

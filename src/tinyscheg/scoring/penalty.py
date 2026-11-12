@@ -81,8 +81,8 @@ def _like_value(constants: ScoringConstants, worker: int, partner: int) -> float
 
 def workload_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
     """
-    The normalized workload penalty W*: the sum of av * (assigned hours / av) ** p, scaled by its largest possible
-    value (workers with no availability are left out)
+    The normalized workload penalty W*: the sum of av * (assigned load / av) ** p, the load being a blend of hours
+    and shifts (ADR 0026), scaled by its largest possible value (workers with no availability are left out)
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
     :return: k * W / workload_scale, in [0, k]; 0 if no worker can be assigned anything
@@ -90,8 +90,8 @@ def workload_penalty(constants: ScoringConstants, assignment: Sequence[int | Non
     if constants.workload_scale == 0:
         return 0.0
     power = constants.parameters.workload_power
-    assigned_hours = _assigned_hours(constants, assignment)
-    total = sum(worker.availability * (assigned_hours[index] / worker.availability) ** power
+    assigned_load = _assigned_load(constants, assignment)
+    total = sum(worker.availability * (assigned_load[index] / worker.availability) ** power
                 for index, worker in enumerate(constants.workers) if worker.availability > 0)
     return len(constants.workers) * total / constants.workload_scale
 
@@ -145,10 +145,10 @@ def likes_lower_bound(constants: ScoringConstants, assignment: Sequence[int | No
 def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
                          domains: Sequence[Sequence[int]]) -> float:
     """
-    The lowest normalized workload penalty any completion of a partial schedule could have. The hours of the unfilled
-    slots must go to workers in their domains, each worker gaining at most the hours of the unfilled slots they're in
-    the domain of. Since each worker's term av * (hours / av) ** p is convex, the total is lowest when the hours top
-    up the least-loaded workers to a common level of hours / av, each only up to their cap, as water fills vessels of
+    The lowest normalized workload penalty any completion of a partial schedule could have. The load of the unfilled
+    slots must go to workers in their domains, each worker gaining at most the load of the unfilled slots they're in
+    the domain of. Since each worker's term av * (load / av) ** p is convex, the total is lowest when the load tops
+    up the least-loaded workers to a common level of load / av, each only up to their cap, as water fills vessels of
     different heights (Jensen's inequality). Which slots overlap is ignored, so the bound may be lower than reachable.
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
@@ -158,19 +158,19 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
     if constants.workload_scale == 0:
         return 0.0
     power = constants.parameters.workload_power
-    assigned_hours = _assigned_hours(constants, assignment)
+    assigned_load = _assigned_load(constants, assignment)
     caps = [0.0] * len(constants.workers)
     remaining = 0.0
     for slot, worker in enumerate(assignment):
         if worker is None:
-            remaining += constants.slot_hours[slot]
+            remaining += constants.slot_load[slot]
             for candidate in domains[slot]:
-                caps[candidate] += constants.slot_hours[slot]
-    pool: list[tuple[float, float, float]] = []  # (hours / av, av, highest hours / av) per worker
+                caps[candidate] += constants.slot_load[slot]
+    pool: list[tuple[float, float, float]] = []  # (load / av, av, highest load / av) per worker
     for index, worker in enumerate(constants.workers):
         if worker.availability > 0:
-            pool.append((assigned_hours[index] / worker.availability, worker.availability,
-                         (assigned_hours[index] + caps[index]) / worker.availability))
+            pool.append((assigned_load[index] / worker.availability, worker.availability,
+                         (assigned_load[index] + caps[index]) / worker.availability))
     level = _water_level(pool, remaining)
     filled = sum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
     return len(constants.workers) * filled / constants.workload_scale
@@ -178,14 +178,14 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
 
 def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> float:
     """
-    The common level of hours / av that the remaining hours raise the workers of the pool to, each worker only up to
+    The common level of load / av that the remaining load raises the workers of the pool to, each worker only up to
     their highest; workers already above it keep their own
-    :param pool: (hours / av, av, highest hours / av) per worker
-    :param remaining: the hours to spread
+    :param pool: (load / av, av, highest load / av) per worker
+    :param remaining: the load to spread
     :return: the level; 0 if there's nothing to spread
     """
     def spread(level: float) -> float:
-        """The hours it takes to raise every worker to the level, within their highest."""
+        """The load it takes to raise every worker to the level, within their highest."""
         return sum(availability * (min(max(ratio, level), highest) - ratio) for ratio, availability, highest in pool)
 
     if remaining <= 0 or not pool:
@@ -198,15 +198,15 @@ def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> fl
         if upper_spread >= remaining:
             return lower + (remaining - lower_spread) * (upper - lower) / (upper_spread - lower_spread)
         lower, lower_spread = upper, upper_spread
-    return breakpoints[-1]  # every worker is at their highest: the caps can't take all the hours
+    return breakpoints[-1]  # every worker is at their highest: the caps can't take all the load
 
 
-def _assigned_hours(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[float]:
-    """Each worker's total assigned hours."""
+def _assigned_load(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[float]:
+    """Each worker's total assigned load (ADR 0026): their hours and shifts, blended by the shift share."""
     totals = [0.0] * len(constants.workers)
     for slot_index, worker in enumerate(assignment):
         if worker is not None:
-            totals[worker] += constants.slot_hours[slot_index]
+            totals[worker] += constants.slot_load[slot_index]
     return totals
 
 

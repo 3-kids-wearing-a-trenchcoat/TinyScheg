@@ -47,6 +47,7 @@ ADR that supersedes the old one.
 | [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
 | [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted |
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
+| [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
 
 ## Template
 

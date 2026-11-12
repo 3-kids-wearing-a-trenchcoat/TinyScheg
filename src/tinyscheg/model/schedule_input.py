@@ -18,6 +18,7 @@ DEFAULT_REST_WEIGHT = 0.25
 DEFAULT_WORKLOAD_POWER = 2       # phi(x) = x ** p (ADR 0021)
 DEFAULT_REST_FACTOR = 3.0        # gamma: the rest target after a shift is this many times its length
 DEFAULT_NEUTRAL_PARTNER = 1 / 3  # alpha / beta: a neutral shift partner's penalty relative to a disliked one's
+DEFAULT_SHIFT_SHARE = 0.5        # sigma: how much a shift's load counts it as a shift, rather than by its hours
 
 # Limits on the scoring parameters
 MIN_WORKLOAD_POWER = 2  # phi must be strictly convex
@@ -37,6 +38,7 @@ class ScoringParameters:
     workload_power: int = DEFAULT_WORKLOAD_POWER
     rest_factor: float = DEFAULT_REST_FACTOR
     neutral_partner: float = DEFAULT_NEUTRAL_PARTNER
+    shift_share: float = DEFAULT_SHIFT_SHARE
 
     def __post_init__(self) -> None:
         """Validate the parameters and normalize the weights."""
@@ -62,6 +64,9 @@ class ScoringParameters:
         if not 0 < self.neutral_partner < MAX_NEUTRAL_PARTNER:
             raise ValueError(f"neutral_partner must be more than 0 and less than {MAX_NEUTRAL_PARTNER:g}, so that "
                              f"disliking a partner counts more than liking one; got {self.neutral_partner!r}")
+        _check_number("shift_share", self.shift_share)
+        if not 0 <= self.shift_share <= 1:
+            raise ValueError(f"shift_share must be from 0 to 1, got {self.shift_share!r}")
 
 
 def _check_number(name: str, value: object) -> None:

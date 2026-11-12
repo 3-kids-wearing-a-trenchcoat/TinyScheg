@@ -11,7 +11,7 @@ from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.scoring.constants import (availability, build_constants, hours, packable_hours, workload_scale,
+from tinyscheg.scoring.constants import (availability, build_constants, hours, packable_load, slot_load, workload_scale,
                                          worst_deficit)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
@@ -62,11 +62,16 @@ def brute_force(ranges: list[DateTimeRange], min_rest: float, rest_factor: float
     return most_hours, largest_deficit
 
 
-def test_packable_hours_by_hand() -> None:
+def by_length(time: DateTimeRange) -> float:
+    """A load of just the hours, as with a shift share of 0."""
+    return hours(time.duration)
+
+
+def test_packable_load_by_hand() -> None:
     # 0-4 and 10-14 fit together with 6 hours' rest; 4-8 fits with neither
     ranges = [span(0, 4), span(4, 8), span(10, 14)]
-    assert packable_hours(ranges, 6) == 8
-    assert packable_hours(ranges, 0) == 12  # back to back is allowed with no minimum rest
+    assert packable_load(ranges, 6, by_length) == 8
+    assert packable_load(ranges, 0, by_length) == 12  # back to back is allowed with no minimum rest
 
 
 def test_worst_deficit_by_hand() -> None:
@@ -77,7 +82,7 @@ def test_worst_deficit_by_hand() -> None:
 
 
 def test_empty_domain() -> None:
-    assert packable_hours([], 6) == 0 and worst_deficit([], 6, 3) == 0
+    assert packable_load([], 6, by_length) == 0 and worst_deficit([], 6, 3) == 0
 
 
 @pytest.mark.parametrize("seed", range(20))
@@ -87,7 +92,7 @@ def test_maxima_match_brute_force(seed: int) -> None:
     ranges = sorted({span(start, start + generator.choice([2, 3, 4, 6])) for start in starts})
     min_rest, rest_factor = generator.choice([0, 3, 6]), generator.choice([1, 2, 3])
     expected_hours, expected_deficit = brute_force(ranges, min_rest, rest_factor)
-    assert packable_hours(ranges, min_rest) == pytest.approx(expected_hours)
+    assert packable_load(ranges, min_rest, by_length) == pytest.approx(expected_hours)
     assert worst_deficit(ranges, min_rest, rest_factor) == pytest.approx(expected_deficit)
 
 
@@ -106,7 +111,8 @@ def test_example_constants() -> None:
     assert jack.availability == 24 - 2           # 04:00-06:00
     assert jill.availability == 24               # away only on the 3rd, after the period
     assert jack.likes == frozenset({1}) and constants.workers[2].dislikes == frozenset({0, 1})
-    assert all(worker.packable_hours <= worker.availability for worker in constants.workers)
+    # the load blends hours and shifts, but keeps the total: the average slot's load is its hours (ADR 0026)
+    assert sum(constants.slot_load) == pytest.approx(sum(constants.slot_hours))
     assert constants.workload_scale == pytest.approx(workload_scale(constants.workers, 2))
 
 
@@ -119,7 +125,13 @@ def test_workers_with_no_availability_are_left_out_of_the_scale() -> None:
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
                                 problem.domains)
     anne, bob = constants.workers
-    assert (bob.availability, bob.packable_hours) == (0, 0)
-    assert anne.packable_hours == 4                       # 0-4 and 4-8 are only 0 hours apart
+    assert (bob.availability, bob.packable_load) == (0, 0)
+    assert anne.packable_load == 4                       # 0-4 and 4-8 are only 0 hours apart
     assert constants.workload_scale == 8 * (4 / 8) ** 2   # Bob doesn't count
     assert constants.shared_slots == 0
+
+
+def test_a_slots_load_blends_its_hours_and_one_average_slot() -> None:
+    assert slot_load(1, 3, 0) == 1      # hours only
+    assert slot_load(1, 3, 1) == 3      # every shift counts as one average shift
+    assert slot_load(1, 3, 0.5) == 2

@@ -26,7 +26,7 @@ T = TypeVar("T")
 
 _TOP_LEVEL_FIELDS = {"settings", "workers", "posts"}
 _SETTINGS_FIELDS = {"time", "min_rest", "scoring"}
-_SCORING_FIELDS = {"weights", "workload_power", "rest_factor", "neutral_partner"}
+_SCORING_FIELDS = {"weights", "workload_power", "rest_factor", "neutral_partner", "shift_share"}
 _WEIGHT_FIELDS = {"likes", "workload", "rest"}
 _WORKER_FIELDS = {"name", "roles", "unavailable", "likes", "dislikes"}
 _POST_FIELDS = {"name", "roles", "length", "time", "variations"}
