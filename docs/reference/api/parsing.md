@@ -18,17 +18,22 @@ that problems aren't reported twice (e.g. a "like" naming a worker whose own ent
 
 ## `input_reader` module
 
-### `read_input(path)`
+### `read_input(path, read_history=True)`
 
 Reads and validates an input file.
 
 * `path` — path of the YAML input file. It's read as UTF-8; a byte order mark, which some editors add, is ignored.
+* `read_history` — whether to read the previous schedules its [`history`](../input-format.md#history) lists, with
+  [`read_schedule`](#read_schedulepath-schedule_input-readschedule), each with its own input, read with
+  `read_history=False` (a history input's own history is never read). If false, `history` is left empty.
 
-**Returns** a `ScheduleInput`. **Raises** `InputError` if the input is invalid, including if it isn't valid YAML.
+**Returns** a `ScheduleInput`. **Raises** `InputError` if the input is invalid, including if it isn't valid YAML,
+or if a history entry's files can't be read or don't match.
 
-### `parse_input(raw)`
+### `parse_input(raw, directory=None, read_history=True)`
 
-The same as `read_input`, for a document already loaded by `yaml.safe_load`.
+The same as `read_input`, for a document already loaded by `yaml.safe_load`. History paths are relative to
+`directory` (the current directory if `None`).
 
 ## `validation` module
 
@@ -51,11 +56,18 @@ Checks the rules that span several entries, raising `InputError` listing every v
 * worker names are unique, and so are post names;
 * no worker name contains `" & "` (`NAME_SEPARATOR`, which joins names in the [output](../output-format.md));
 * every name in a worker's `likes` and `dislikes` is another existing worker, and no name is in both;
-* a post's variations don't overlap.
+* a post's variations don't overlap;
+* every history period ends by the time the schedule's period starts, and no two overlap.
 
 ### `find_problems(schedule_input)`
 
 The same checks, returning the list of problem messages (empty if there are none) instead of raising.
+
+### `history_warnings(schedule_input) -> list[str]`
+
+Warnings about the history that don't stop a run: for each previous schedule with workers who aren't in this input,
+one message naming them, e.g. `history entry #1 ("day1.yml"): "Dana" is not in this input; their history is
+ignored`.
 
 ### `location(kind, index, name=None)`
 
@@ -65,8 +77,8 @@ Formats an entry's position for messages: `location("worker", 2, "Jeff")` is `wo
 
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_schedule_reader.py`, on schedules written in every format).
-> Used by the schedule audit and the tests; schedule history will use it to read previous schedules
-> ([ADR 0029](../../decisions/0029-schedule-history-input.md)).
+> Used to read the previous schedules of an input's history
+> ([ADR 0029](../../decisions/0029-schedule-history-input.md)), by the schedule audit, and by the tests.
 
 Reads a written [schedule file](../output-format.md) back, given the input it was made for. Independent of the
 `output` package: it relies only on the file's layout.

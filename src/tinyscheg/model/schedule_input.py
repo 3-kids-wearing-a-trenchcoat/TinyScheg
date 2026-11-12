@@ -93,12 +93,29 @@ class Settings:
 
 @dataclass(frozen=True, slots=True)
 class ScheduleInput:
-    """Everything a schedule is made from. Workers and posts keep their input order."""
+    """
+    Everything a schedule is made from. Workers and posts keep their input order; history holds the previous
+    schedules it extends (ADR 0029), in input order.
+    """
     settings: Settings
     workers: tuple[Worker, ...]
     posts: tuple[Post, ...]
+    history: tuple[PreviousSchedule, ...] = ()
 
     def __post_init__(self) -> None:
-        """Store workers and posts as tuples."""
+        """Store workers, posts and history as tuples."""
         object.__setattr__(self, "workers", tuple(self.workers))
         object.__setattr__(self, "posts", tuple(self.posts))
+        object.__setattr__(self, "history", tuple(self.history))
+
+
+@dataclass(frozen=True, slots=True)
+class PreviousSchedule:
+    """
+    A previous schedule, as fixed history (ADR 0029): the input it was made for (whose own history is never read),
+    and a worker index into that input's workers for each slot of its shifts, in stable slot order. source names
+    the files it was read from, for messages.
+    """
+    source: str
+    schedule_input: ScheduleInput
+    assignment: tuple[int, ...]

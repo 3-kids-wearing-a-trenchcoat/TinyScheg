@@ -5,7 +5,7 @@ Source: [`src/tinyscheg/model/schedule_input.py`](https://github.com/3-kids-wear
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_schedule_input.py`).
 
-The parsed input as a whole, as produced by [`read_input`](parsing.md#read_inputpath). It lives in `model` so that
+The parsed input as a whole, as produced by [`read_input`](parsing.md#read_inputpath-read_historytrue). It lives in `model` so that
 the CSP and output code can use it without depending on `parsing`.
 
 ## Constants
@@ -44,7 +44,7 @@ General scheduler settings. Immutable.
 
 **Raises** `ValueError` if `min_rest` is negative.
 
-## `class ScheduleInput(settings, workers, posts)`
+## `class ScheduleInput(settings, workers, posts, history=())`
 
 Everything a schedule is made from. Immutable.
 
@@ -52,6 +52,17 @@ Everything a schedule is made from. Immutable.
 * `workers` — the [`Worker`](worker.md)s, in input order; stored as a `tuple`.
 * `posts` — the [`Post`](post-and-slot.md#class-postname-rules-windownone-variations)s, in input order; stored as a
   `tuple`.
+* `history` — the `PreviousSchedule`s this schedule extends, in input order; stored as a `tuple`
+  ([ADR 0029](../../decisions/0029-schedule-history-input.md)).
+
+## `class PreviousSchedule(source, schedule_input, assignment)`
+
+A previous schedule, as fixed history. Immutable.
+
+* `source` — the input file's path as the history lists it, for messages.
+* `schedule_input` — the `ScheduleInput` it was made for. Its own `history` is always empty: it's never read.
+* `assignment` — `tuple[int, ...]`, a worker index into `schedule_input.workers` for each slot of the shifts
+  generated from `schedule_input`, in stable slot order.
 
 Input order matters: it's part of the stable order that keeps results deterministic
 ([ADR 0012](../../decisions/0012-deterministic-path-independent-scoring.md)).

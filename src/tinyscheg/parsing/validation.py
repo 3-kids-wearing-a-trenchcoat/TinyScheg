@@ -1,6 +1,7 @@
 """Validation rules that span several input entries, and the error reporting invalid input."""
 from __future__ import annotations
 
+import datetime as dt
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
@@ -66,7 +67,50 @@ def find_problems(schedule_input: ScheduleInput) -> list[str]:
                 if first_window.overlaps(second_window):
                     problems.append(f"{where}: variation #{first + 1} ({first_window}) and variation #{second + 1} "
                                     f"({second_window}) overlap")
+    return problems + _history_problems(schedule_input)
+
+
+def _history_problems(schedule_input: ScheduleInput) -> list[str]:
+    """
+    The history's periods must be the past (ADR 0029): each ends by the time the current period starts, and no two
+    overlap
+    """
+    problems = []
+    start = schedule_input.settings.period.start
+    history = schedule_input.history
+    for index, previous in enumerate(history):
+        where = location("history entry", index, previous.source)
+        period = previous.schedule_input.settings.period
+        if period.end > start:
+            problems.append(f"{where}: its period ({_shown(period.start)} to {_shown(period.end)}) must end by the "
+                            f"time this schedule's starts ({_shown(start)})")
+        for other in range(index):
+            if period.overlaps(history[other].schedule_input.settings.period):
+                problems.append(f"{where}: its period overlaps that of history entry #{other + 1}")
     return problems
+
+
+def history_warnings(schedule_input: ScheduleInput) -> list[str]:
+    """
+    Warnings about the history that don't stop a run: workers of a previous schedule who aren't in this input
+    (they've left), whose history is ignored
+    :param schedule_input: ScheduleInput
+    :return: one message per previous schedule with such workers, in input order
+    """
+    names = {worker.name for worker in schedule_input.workers}
+    warnings = []
+    for index, previous in enumerate(schedule_input.history):
+        gone = [worker.name for worker in previous.schedule_input.workers if worker.name not in names]
+        if gone:
+            listed = ", ".join(f'"{name}"' for name in gone)
+            warnings.append(f"{location('history entry', index, previous.source)}: {listed} "
+                            f"{'is' if len(gone) == 1 else 'are'} not in this input; their history is ignored")
+    return warnings
+
+
+def _shown(moment: dt.datetime) -> str:
+    """A moment for messages."""
+    return f"{moment:%Y-%m-%d %H:%M}"
 
 
 def _duplicate_names(kind: str, names: Iterable[str]) -> list[str]:

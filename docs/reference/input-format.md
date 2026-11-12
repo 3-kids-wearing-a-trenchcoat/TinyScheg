@@ -4,10 +4,11 @@
 > **Implemented**, by the [`parsing`](api/parsing.md) package. See also the annotated
 > [`exampleInput.yml`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/exampleInput.yml).
 
-TinyScheg's input is a single YAML file with three top-level keys: `settings`, `workers` and `posts`.
-The file is read as UTF-8, so names may be written in any script (e.g. Hebrew).
+TinyScheg's input is a single YAML file with three top-level keys, `settings`, `workers` and `posts`, and an
+optional fourth, [`history`](#history). The file is read as UTF-8, so names may be written in any script (e.g.
+Hebrew).
 
-* All three keys are required, and `workers` and `posts` must each list at least one entry.
+* The first three keys are required, and `workers` and `posts` must each list at least one entry.
 * **Unknown fields are an error**, at every level. This catches typos such as `unavailble:`, which would otherwise be
   silently ignored.
 * An optional field may be omitted or left empty (`likes:` with nothing after it); either way it's considered empty.
@@ -151,6 +152,39 @@ posts:
     length: 4
 ```
 
+## `history`
+
+> [!IMPORTANT]
+> **Partially implemented.** The section is read and checked; the search and scoring don't use it yet (see the
+> [roadmap](../roadmap.md), Phase 7).
+
+The previous schedules this one extends ([ADR 0029](../decisions/0029-schedule-history-input.md)), so that the
+minimum rest holds across the boundary and fairness carries over
+([ADR 0030](../decisions/0030-history-in-scoring.md)). Optional; each entry is a previous schedule's input file and
+the schedule file written for it:
+
+| Field      | Type   | Required | Meaning |
+|------------|--------|----------|---------|
+| `input`    | string | yes      | The previous schedule's input file. |
+| `schedule` | string | yes      | Its schedule file (`.csv`, `.xlsx` or `.ods`), as written by TinyScheg, possibly edited by hand since. |
+
+```yaml
+history:
+  - input: "day1.yml"
+    schedule: "day1_schedule.xlsx"
+  - input: "day2.yml"
+    schedule: "day2_schedule.xlsx"
+```
+
+* **Paths are relative to this input file**, not to where TinyScheg runs.
+* **Each schedule file is read with its own input**, which may differ from this one in anything: posts, hours, shift
+  lengths, workers and settings. Workers are matched across inputs by name.
+* A history input's own `history` is ignored: this input lists every previous schedule it counts, so how far back
+  fairness reaches is set here.
+* Every history period must **end by the time this one starts**, and no two may overlap. Entries can be in any order.
+* A worker of a previous schedule who isn't in this input (they've left) gets a warning, and their history is
+  ignored. A worker of this input who isn't in a previous one (they've joined) counts as unavailable during it.
+
 ## Errors
 
 Input is checked in two stages, and each stage reports every problem it finds at once:
@@ -162,7 +196,12 @@ Input is checked in two stages, and each stage reports every problem it finds at
     * no worker name contains `" & "`;
     * every name in a worker's `likes` and `dislikes` is another existing worker (not the worker themselves), and no
       name is in both;
-    * a post's variations don't overlap.
+    * a post's variations don't overlap;
+    * the history's periods end by the time this one starts, and don't overlap each other.
+
+A history entry whose files can't be read, or whose schedule doesn't match its input (a missing post column or
+shift row, a wrong number of names, an unknown worker), is reported in the first stage, naming the entry. Problems in
+a history input are reported with the entry's name in front.
 
 Each message names where the problem is, counting entries from 1 in the order they appear:
 
@@ -170,4 +209,5 @@ Each message names where the problem is, counting entries from 1 in the order th
 invalid input:
   - worker #3 ("Jeff"), likes: unknown worker "Jil"
   - post #1 ("front gate"), variation #1 (19:00-07:00) and variation #2 (06:00-08:00) overlap
+  - history entry #1 ("day1.yml"), schedule 'day1_schedule.xlsx': desk at 2025-01-01T08:00:00: unknown worker 'Jil'
 ```

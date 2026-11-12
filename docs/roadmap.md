@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–6 complete; Phase 7 under way. Next: the `history` input section.
+Progress: Phases 1–6 complete; Phase 7 under way. Next: minimum rest across the boundary.
 
 ## Phase 1: Walking skeleton
 
@@ -152,7 +152,7 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
   ([ADR 0030](decisions/0030-history-in-scoring.md))
 - [x] Schedule reader in the package (`parsing/schedule_reader.py`): CSV, XLSX and ODS, each shift read where it
   starts, which also resolves the CSV read-back limitation with a minimum rest of 0; the development tools use it
-- [ ] The `history` input section: parsing, validation (periods before the current one and not overlapping), a
+- [x] The `history` input section: parsing, validation (periods before the current one and not overlapping), a
   warning for workers who have left
 - [ ] Minimum rest across the boundary between schedules, as unavailability in the search
 - [ ] History in scoring: workload over the history and the new period, rest at the boundary, the look-ahead bound

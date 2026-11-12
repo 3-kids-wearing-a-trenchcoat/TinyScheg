@@ -27,6 +27,9 @@ The schedule written is the **best** legal one: the one with the lowest
 The search runs to the end, with no limit, which can take a while: about 10 seconds for the 24-hour
 `exampleInput.yml`, and much longer for longer schedules. Ctrl+C stops it (see [Errors](#errors)).
 
+If the input has a [history](input-format.md#history), workers of a previous schedule who are no longer in the input
+are named in a warning on standard error first (`tinyscheg: warning: ...`); the run goes on.
+
 While it runs, each better schedule found is reported on standard error, with the time since the search started, so
 that a long run can be seen to be working:
 

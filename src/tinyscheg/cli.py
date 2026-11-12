@@ -16,7 +16,7 @@ from tinyscheg.model.shift import Slot
 from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import DEFAULT_EXTENSION, UnsupportedFormatError, write_schedule, writer_for
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.parsing.validation import InputError
+from tinyscheg.parsing.validation import InputError, history_warnings
 from tinyscheg.scoring.constants import build_constants
 from tinyscheg.scoring.penalty import Penalty
 
@@ -78,6 +78,8 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
     except OSError as exc:
         _error(f"can't read {input_path}: {exc.strerror or exc}")
         return EXIT_USAGE
+    for warning in history_warnings(schedule_input):
+        _error(f"warning: {warning}")
 
     problem = build_problem(schedule_input)
     unfillable = unfillable_slots(problem)

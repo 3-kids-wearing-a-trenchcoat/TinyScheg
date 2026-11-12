@@ -10,21 +10,25 @@ from __future__ import annotations
 import datetime as dt
 import math
 import os
+import pathlib
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 import yaml
 
 from tinyscheg.model.post import Post, ShiftRules, Variation
-from tinyscheg.model.schedule_input import DEFAULT_MIN_REST, ScheduleInput, ScoringParameters, Settings
+from tinyscheg.model.schedule_input import (DEFAULT_MIN_REST, PreviousSchedule, ScheduleInput, ScoringParameters,
+                                            Settings)
 from tinyscheg.model.worker import Worker
+from tinyscheg.parsing.schedule_reader import ScheduleReadError, read_schedule
 from tinyscheg.parsing.validation import InputError, location, validate
 from tinyscheg.timing.daily_window import DailyWindow
 from tinyscheg.timing.datetime_range import DateTimeRange, parse_range
 
 T = TypeVar("T")
 
-_TOP_LEVEL_FIELDS = {"settings", "workers", "posts"}
+_TOP_LEVEL_FIELDS = {"settings", "workers", "posts", "history"}
+_HISTORY_FIELDS = {"input", "schedule"}
 _SETTINGS_FIELDS = {"time", "min_rest", "scoring"}
 _SCORING_FIELDS = {"weights", "workload_power", "rest_factor", "neutral_partner", "shift_share"}
 _WEIGHT_FIELDS = {"likes", "workload", "rest"}
@@ -37,10 +41,12 @@ class _Failed(Exception):
     """Signals that converting an entry failed; its problems have already been recorded."""
 
 
-def read_input(path: str | os.PathLike[str]) -> ScheduleInput:
+def read_input(path: str | os.PathLike[str], read_history: bool = True) -> ScheduleInput:
     """
     Read and validate an input file
     :param path: path of the YAML input file (UTF-8)
+    :param read_history: bool, whether to read the previous schedules its history lists (ADR 0029); a history
+    input's own history is never read
     :return: ScheduleInput; raises InputError listing every problem if the input is invalid
     """
     # utf-8-sig also accepts files that some editors save with a byte order mark
@@ -49,13 +55,16 @@ def read_input(path: str | os.PathLike[str]) -> ScheduleInput:
             raw = yaml.safe_load(file)
         except yaml.YAMLError as exc:
             raise InputError([f"not valid YAML: {exc}"]) from exc
-    return parse_input(raw)
+    return parse_input(raw, pathlib.Path(path).parent, read_history)
 
 
-def parse_input(raw: object) -> ScheduleInput:
+def parse_input(raw: object, directory: str | os.PathLike[str] | None = None,
+                read_history: bool = True) -> ScheduleInput:
     """
     Convert loaded YAML into a validated ScheduleInput
     :param raw: the document as loaded by yaml.safe_load
+    :param directory: the directory history paths are relative to (the input file's); None for the current one
+    :param read_history: bool, whether to read the previous schedules the history lists; if not, it's left empty
     :return: ScheduleInput; raises InputError listing every problem if the input is invalid
     """
     problems: list[str] = []
@@ -65,9 +74,10 @@ def parse_input(raw: object) -> ScheduleInput:
     settings = _attempt(problems, lambda: _parse_settings(raw, problems))
     workers = _parse_entries(raw, "workers", _parse_worker, problems)
     posts = _parse_entries(raw, "posts", _parse_post, problems)
+    history = _parse_history(raw.get("history"), pathlib.Path(directory or "."), problems) if read_history else ()
     if problems:
         raise InputError(problems)
-    schedule_input = ScheduleInput(settings, workers, posts)
+    schedule_input = ScheduleInput(settings, workers, posts, history)
     validate(schedule_input)
     return schedule_input
 
@@ -162,6 +172,47 @@ def _parse_variation(raw: object, where: str, general: ShiftRules | None, proble
     rules = _convert(problems, where, lambda: ShiftRules(general.length if length is None else length,
                                                          general.roles if roles is None else roles))
     return Variation(_ok(window), _ok(rules))
+
+
+def _parse_history(raw: object, directory: pathlib.Path, problems: list[str]) -> tuple[PreviousSchedule, ...]:
+    """
+    Convert the optional history section, reading each previous schedule it lists
+    :param raw: the section as loaded, or None if it's omitted or empty
+    :param directory: the directory its paths are relative to
+    :param problems: list to record problems in
+    :return: the previous schedules, in input order
+    """
+    entries = _convert(problems, "history", lambda: _optional_list(raw))
+    previous = [_attempt(problems, lambda: _parse_previous(entry, index, directory, problems))
+                for index, entry in enumerate(entries or [])]
+    return tuple(schedule for schedule in previous if schedule is not None)
+
+
+def _parse_previous(raw: object, index: int, directory: pathlib.Path, problems: list[str]) -> PreviousSchedule:
+    """Convert one history entry, the index-th, reading its input (without its own history) and its schedule."""
+    where = location("history entry", index)
+    entry = _entry_mapping(raw, where, _HISTORY_FIELDS, problems)
+    input_name = _convert(problems, f"{where}, input", lambda: _string(_required_value(entry, "input")))
+    schedule_name = _convert(problems, f"{where}, schedule", lambda: _string(_required_value(entry, "schedule")))
+    input_name, schedule_name = _ok(input_name), _ok(schedule_name)
+    where = location("history entry", index, input_name)
+    try:
+        previous_input = read_input(directory / input_name, read_history=False)
+    except InputError as exc:
+        problems.extend(f"{where}: {problem}" for problem in exc.problems)
+        raise _Failed from exc
+    except OSError as exc:
+        problems.append(f"{where}, input: can't read {directory / input_name}: {exc.strerror or exc}")
+        raise _Failed from exc
+    try:
+        read = read_schedule(directory / schedule_name, previous_input)
+    except ScheduleReadError as exc:
+        problems.append(f"{where}, schedule {schedule_name!r}: {exc}")
+        raise _Failed from exc
+    except OSError as exc:
+        problems.append(f"{where}, schedule: can't read {directory / schedule_name}: {exc.strerror or exc}")
+        raise _Failed from exc
+    return PreviousSchedule(input_name, previous_input, read.assignment)
 
 
 # --- collecting problems ---
