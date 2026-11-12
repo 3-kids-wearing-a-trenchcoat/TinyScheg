@@ -33,7 +33,7 @@ ADR that supersedes the old one.
 | [0009](0009-yaml-input-with-time-based-variations.md) | YAML input with time-based post variations | Accepted |
 | [0010](0010-python-rewrite.md) | Rewrite in Python | Accepted |
 | [0011](0011-no-output-for-infeasible-inputs.md) | No output for infeasible inputs | Accepted |
-| [0012](0012-deterministic-path-independent-scoring.md) | Deterministic, path-independent scoring and output | Accepted |
+| [0012](0012-deterministic-path-independent-scoring.md) | Deterministic, path-independent scoring and output | Accepted, amended by [0027](0027-incremental-scoring-for-steering.md) |
 | [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted, amended by [0015](0015-normalize-workload-by-packable-maximum.md) |
 | [0014](0014-exact-worst-rest-deficit.md) | Calculate the worst rest deficit exactly | Accepted |
 | [0015](0015-normalize-workload-by-packable-maximum.md) | Normalize workload by each worker's packable maximum | Accepted |
@@ -48,7 +48,7 @@ ADR that supersedes the old one.
 | [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted |
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
 | [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
-| [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Proposed |
+| [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Accepted |
 
 ## Template
 

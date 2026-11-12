@@ -83,7 +83,7 @@ A `datetime.timedelta` in hours.
 
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_penalty.py`). Used by branch and bound
-> ([`find_best_schedule`](search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-searchresult)), and by the command
+> ([`find_best_schedule`](search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-incrementaltrue-searchresult)), and by the command
 > line to show the written schedule's penalty.
 
 The penalty of a (partial) schedule. An **assignment** holds a worker index per slot, in stable slot order, or
@@ -149,4 +149,38 @@ availability, divided by `workload_scale` and scaled to $[0, k]$. 0 if no worker
 $\mathcal{R}^{**}$: for each worker, the sum over their consecutive shifts of
 $\max(0, \gamma \cdot |s| - \text{rest after } s)$, divided by their `worst_deficit`. Workers whose worst deficit is
 0 can never have one, and count 0.
+
+### Helpers shared with the `incremental` module
+
+`shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes look-ahead),
+`pair_like_value(constants, worker, partner)` (both workers' like values of each other), `normalized_likes(constants,
+total)` and `rest_deficit(constants, earlier, later)` (one rest's deficit). Both modules use them, so that they do the
+same arithmetic.
+
+## `incremental` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_incremental.py`, against the `penalty` module as the oracle).
+> Used by branch and bound ([ADR 0027](../../decisions/0027-incremental-scoring-for-steering.md)).
+
+### `class IncrementalScore(constants, assignment, domains)`
+
+The running totals of one search, kept in step with its assignments, for the value order and the lower bound. They
+equal the `penalty` module's values up to rounding (about $10^{-14}$), and so only steer the search.
+
+* `assignment`, `domains` — the search's own (empty) assignment list and current domains, read as the search changes
+  them, never changed.
+
+Methods:
+
+* `total()` — the current schedule's total penalty, as `score` would give it.
+* `cost_if(slot, worker)` — the total with the worker in the unfilled slot, for the value order.
+* `bound()` — the lower bound, as `lower_bound` would give it.
+* `assign(slot, worker, narrowed)` — update the totals after the search assigned the slot; `narrowed` is the change
+  record's `saved_domains`, (slot, domain before) pairs. Only the assigned worker's load and rest, the shifts with a
+  slot assigned or narrowed, and the caps of the workers dropped from a domain change.
+* `undo()` — restore the totals from before the latest `assign`, exactly: saved values are put back, never
+  subtracted.
+
+**Raises** `ValueError` if the assignment isn't empty at the start.
 

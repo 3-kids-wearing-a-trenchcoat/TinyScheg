@@ -117,7 +117,7 @@ the result stays deterministic. When looking for the first legal schedule, worke
 ## Branch and bound: the pocket
 
 > [!NOTE]
-> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-searchresult),
+> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-incrementaltrue-searchresult),
 > and tested against trying every schedule on small inputs, and on shortened versions of the example, where no single
 > legal move or swap of two workers beats the schedule it finds.
 
@@ -151,6 +151,18 @@ Both look-aheads relax the problem (ignoring which slots overlap, and choosing e
 the bound may be lower than anything reachable, but never higher. Neither assumes anything about shift lengths: in
 asymmetric schedules, with shifts of different lengths, dangling shifts or variations, it holds all the same, and the
 brute-force tests include such inputs.
+
+### Incremental scoring
+
+> [!NOTE]
+> **Implemented**, and covered by tests. See [ADR 0027](../decisions/0027-incremental-scoring-for-steering.md).
+
+The value order and the bound are kept **incrementally**: running totals updated by what each assignment changes
+(one worker's load and rest, one shift's pairings, the domains narrowed by forward checking), and restored exactly on
+backtracking. They only **steer** the search. What decides its result is scored from scratch: a bound within a tiny
+margin of the pocket's penalty (a near-tie), and every complete schedule before it's compared with the pocket. So the
+search makes exactly the same decisions as with scoring from scratch, and finds the same penalty; on the example and
+the benchmark inputs, it visits the same nodes and finds the same schedules, about 1.7 times faster (2026-11-12).
 
 When the search ends, the pocket holds the best schedule.
 

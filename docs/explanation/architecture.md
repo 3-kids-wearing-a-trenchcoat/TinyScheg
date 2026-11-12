@@ -96,6 +96,7 @@ entry point. Modules marked *planned* don't exist yet.
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module); MRV/degree ordering and branch and bound are planned. |
 | `scoring/constants.py` | [The constants of the penalty score](../reference/api/scoring.md#constants-module), calculated once per run. |
 | `scoring/penalty.py` | [The penalty of a (partial) schedule](../reference/api/scoring.md#penalty-module): likes, workload, rest and their weighted sum. |
+| `scoring/incremental.py` | [Incremental scoring](../reference/api/scoring.md#incremental-module): running totals of the penalty and its bound, to steer the search (ADR 0027). |
 | `output/grid.py` | [Assigned slots to the time-by-post grid](../reference/api/output.md#grid-module) ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
 | `output/writers.py` | [Choosing the format by extension](../reference/api/output.md#writers-module), and `write_schedule`. |
 | `output/csv_writer.py` | [The grid as CSV](../reference/api/output.md#csv_writer-module); XLSX and ODS writers will sit next to it. |

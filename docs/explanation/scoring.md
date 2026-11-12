@@ -39,8 +39,8 @@ is deterministic (e.g. sums are always taken in the same order).
 Each *criterion* (likes/dislikes, workload, rest) has its own penalty function. Each function is **normalized** so
 that its value lies between $0$ and $k$ (the number of workers), and their **weighted sum** is the total penalty.
 
-Ideally, each score would be derived from its previous value to make these calculations more efficient, but how
-practical that is remains to be seen (see [Future work](future-work.md#incremental-scoring)).
+The search keeps the scores it steers by incrementally, derived from their previous values, and scores what
+decides its result from scratch ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)).
 A proper score must be produced for every single state, since its absolute value is compared with the pocket's —
 scores can't be calculated lazily.
 
@@ -470,12 +470,10 @@ What the defaults mean, on a 72-hour version of the example input (9 workers):
 | One worker paired with someone they dislike instead of a neutral partner | about +0.23 | about +0.06 |
 | One hour of rest below target | about +0.05 | about +0.01 |
 
-Scores are floating-point numbers. Each one is computed from scratch, with sums always taken in the same order, so
-the same state always gets exactly the same score, and since every operation involved is monotone under rounding,
-a state never scores lower than its parent. Exactness would only matter if scores were updated incrementally.
-
-Still open: whether scores can practically be updated incrementally from their previous values (see
-[Future work](future-work.md#incremental-scoring)); until then, they're computed from scratch.
+Scores are floating-point numbers. Computed from scratch, with sums always taken in the same order, the same state
+always gets exactly the same score, and since every operation involved is monotone under rounding, a state never
+scores lower than its parent. The search also keeps scores incrementally, which can differ by rounding (about
+$10^{-14}$), but only to steer by; whatever decides its result is computed from scratch ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)).
 
 ## Corrections
 

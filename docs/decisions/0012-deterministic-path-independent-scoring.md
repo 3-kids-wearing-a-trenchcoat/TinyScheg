@@ -1,6 +1,7 @@
 # 0012. Deterministic, path-independent scoring and output
 
-**Status:** Accepted
+**Status:** Accepted, amended by [0027](0027-incremental-scoring-for-steering.md) (path independence is required of
+what decides the result, not of what only steers the search)
 
 ## Context
 

@@ -274,6 +274,19 @@ def test_ordering_interchangeable_slots_loses_nothing() -> None:
     assert fewer > 0
 
 
+def test_incremental_scoring_finds_the_same_best_penalty_as_scoring_from_scratch() -> None:
+    # ADR 0027: incremental values only steer the search, so the result is the same
+    for schedule_input in small_inputs():
+        problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+        incremental = find_best_schedule(problem, constants)
+        from_scratch = find_best_schedule(problem, constants, incremental=False)
+        assert (incremental.penalty is None) == (from_scratch.penalty is None)
+        if incremental.penalty is not None and from_scratch.penalty is not None:
+            assert incremental.penalty == from_scratch.penalty
+            assert incremental.penalty == score(constants, incremental.assignment)
+        assert incremental.nodes == from_scratch.nodes and incremental.pruned == from_scratch.pruned
+
+
 def test_branch_and_bound_is_deterministic() -> None:
     schedule_input = small_inputs()[0]
     problem, constants = build_problem(schedule_input), constants_of(schedule_input)

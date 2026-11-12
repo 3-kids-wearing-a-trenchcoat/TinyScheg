@@ -8,7 +8,13 @@ from tinyscheg.csp.problem import Problem
 from tinyscheg.csp.state import SearchState
 from tinyscheg.model.shift import Slot
 from tinyscheg.scoring.constants import ScoringConstants
+from tinyscheg.scoring.incremental import IncrementalScore
 from tinyscheg.scoring.penalty import Penalty, lower_bound, score
+
+# Pruning compares the incremental bound with the pocket's penalty, deciding from scratch only within this margin of a
+# tie (ADR 0027): far above the rounding differences of incremental scoring (about 1e-14), far below any difference
+# that matters
+NEAR_TIE_MARGIN = 1e-9
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,12 +64,13 @@ class _Search:
     """
 
     def __init__(self, problem: Problem, constants: ScoringConstants | None = None, prune: bool = True,
-                 on_improvement: Callable[[Penalty], None] | None = None) -> None:
+                 on_improvement: Callable[[Penalty], None] | None = None, incremental: bool = True) -> None:
         """
         :param problem: Problem
         :param constants: ScoringConstants to look for the best schedule with; None to stop at the first legal one
         :param prune: False to visit every branch even when it can't beat the pocket (for testing the pruning)
         :param on_improvement: called with the new pocket's penalty whenever a better schedule is found, or None
+        :param incremental: False to steer by scoring from scratch, as before ADR 0027 (for testing and comparing)
         """
         self.problem = problem
         self.state = SearchState(problem)
@@ -77,6 +84,8 @@ class _Search:
         self.nodes = 0
         self.pruned = 0
         self.on_improvement = on_improvement
+        self.scores = (IncrementalScore(constants, self.state.assigned, self.state.domains)
+                       if constants is not None and incremental else None)
 
     def search(self) -> bool:
         """
@@ -98,8 +107,14 @@ class _Search:
         for worker in self._value_order(slot_index):
             changes = self.state.assign(slot_index, worker)
             self.filled += 1
-            if changes.emptied is None and self.search():
-                return True
+            if changes.emptied is None:
+                if self.scores is not None:
+                    self.scores.assign(slot_index, worker, changes.saved_domains)
+                stop = self.search()
+                if self.scores is not None:
+                    self.scores.undo()
+                if stop:
+                    return True
             self.state.undo(changes)
             self.filled -= 1
         return False
@@ -107,13 +122,17 @@ class _Search:
     def _value_order(self, slot_index: int) -> list[int]:
         """
         The order to try a slot's workers in. For the first legal schedule, input order. For the best, cheapest first
-        (ADR 0024): by the penalty of the schedule with the worker assigned, then input order. That changes only how
+        (ADR 0024): by the penalty of the schedule with the worker assigned (kept incrementally, ADR 0027), then input
+        order. That changes only how
         soon good schedules are found, and so how much is pruned; of equally good schedules, the first found in this
         order is kept.
         """
         domain = self.state.domains[slot_index]
         if self.constants is None:
             return list(domain)
+        if self.scores is not None:
+            incremental_costs = {worker: self.scores.cost_if(slot_index, worker) for worker in domain}
+            return sorted(domain, key=lambda worker: (incremental_costs[worker], worker))
         assigned = self.state.assigned
         costs = {}
         try:
@@ -128,12 +147,21 @@ class _Search:
         """
         True if no completion of the current (partial) schedule can beat the pocket: its lower bound (ADR 0024: the
         rest penalty so far, with the lowest likes and workload penalties the current domains could still give) is
-        already at least the pocket's.
+        already at least the pocket's. The bound is kept incrementally, and computed from scratch only near a tie
+        (ADR 0027), so the decision is the same as from scratch.
         Ties keep the pocket, so a branch that can at best tie is pruned too (ADR 0017).
         """
         if self.constants is None or self.pocket_penalty is None or not self.prune:
             return False
-        return lower_bound(self.constants, self.state.assigned, self.state.domains) >= self.pocket_penalty.total
+        pocket = self.pocket_penalty.total
+        if self.scores is not None:
+            # ADR 0027: the incremental bound decides, unless it's within NEAR_TIE_MARGIN of the pocket's penalty
+            bound = self.scores.bound()
+            if bound >= pocket + NEAR_TIE_MARGIN:
+                return True
+            if bound <= pocket - NEAR_TIE_MARGIN:
+                return False
+        return lower_bound(self.constants, self.state.assigned, self.state.domains) >= pocket
 
     def _complete(self) -> bool:
         """
@@ -165,7 +193,8 @@ def find_first_schedule(problem: Problem) -> SearchResult:
 
 
 def find_best_schedule(problem: Problem, constants: ScoringConstants, prune: bool = True,
-                       on_improvement: Callable[[Penalty], None] | None = None) -> SearchResult:
+                       on_improvement: Callable[[Penalty], None] | None = None,
+                       incremental: bool = True) -> SearchResult:
     """
     Search for the best legal schedule by branch and bound: every branch is searched unless its penalty is already
     at least the pocket's. The search runs to the end, however long that takes.
@@ -174,10 +203,11 @@ def find_best_schedule(problem: Problem, constants: ScoringConstants, prune: boo
     :param prune: False only for testing: search every branch, to check that pruning loses nothing
     :param on_improvement: called with the penalty of each better schedule as it's found (e.g. to show progress);
     None for no calls
+    :param incremental: False only for testing and comparing: steer by scoring from scratch (ADR 0027)
     :return: the legal schedule with the lowest penalty and its penalty (deterministically: of equally good
     schedules, the first found), or the point at which the search got stuck if there is none
     """
-    run = _Search(problem, constants, prune, on_improvement)
+    run = _Search(problem, constants, prune, on_improvement, incremental)
     run.search()
     if run.pocket is None:
         return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes, pruned=run.pruned)

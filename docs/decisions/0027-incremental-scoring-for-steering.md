@@ -1,6 +1,6 @@
 # 0027. Incremental scoring to steer the search, exact scoring to decide it
 
-**Status:** Proposed.
+**Status:** Accepted.
 
 ## Context
 

@@ -112,16 +112,20 @@ the penalty and bound, computed from scratch at every node (see [Incremental sco
 
 ## Incremental scoring
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!NOTE]
+> **Implemented** on 2026-11-12 ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)).
 
 Penalties are first computed from scratch for every state. Updating them incrementally would be faster, but must
 stay exactly path-independent (see [ADR 0012](../decisions/0012-deterministic-path-independent-scoring.md)), for
 example by using exact arithmetic. The from-scratch computation then serves as a test oracle.
 
-Proposed on 2026-11-12 ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)): incremental totals only
+Done on 2026-11-12 ([ADR 0027](../decisions/0027-incremental-scoring-for-steering.md)): incremental totals only
 to steer the search (the value order, and pruning away from near-ties), with near-ties and complete schedules scored
-exactly from scratch, so that the result stays exactly the same.
+exactly from scratch, so that the result stays exactly the same. On the example and the 15 benchmark inputs, the same
+nodes, penalties and schedules, 1.7 times faster overall (1.1–3.1 times per input); computing the water level in one
+sweep instead of from every breakpoint was part of it. No single hotspot remains: what's left is spread over the
+incremental updates, the workload bound's pool and the search's own bookkeeping, which tuning the Python (see
+[Faster search by non-heuristic means](#faster-search-by-non-heuristic-means)) could still speed up.
 
 ## Dangling shifts
 

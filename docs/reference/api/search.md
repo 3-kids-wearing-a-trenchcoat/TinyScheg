@@ -58,18 +58,23 @@ Everything one `assign` changed. Immutable.
 Backtracking search with forward checking. Slots are chosen by `choose_slot` and workers tried in input order, so
 the result is deterministic. Stops at the first complete, legal schedule.
 
-### `find_best_schedule(problem, constants, prune=True, on_improvement=None) -> SearchResult`
+### `find_best_schedule(problem, constants, prune=True, on_improvement=None, incremental=True) -> SearchResult`
 
 [Branch and bound](../../explanation/search-algorithm.md#branch-and-bound-the-pocket): the same search, run to the
 end, keeping the best complete schedule found so far in the pocket. At every partial schedule a
 [lower bound](scoring.md#lower_boundconstants-assignment-domains-float) on the penalty of its completions
-is computed from scratch; if it's already at least the pocket's penalty, the branch is pruned, since ties keep the
-pocket ([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)). A slot's workers are tried
+is compared with the pocket's penalty; if it's at least as high, the branch is pruned, since ties keep the pocket
+([ADR 0017](../../decisions/0017-plain-forward-checking-and-pruning-on-ties.md)). A slot's workers are tried
 cheapest first: by the penalty with them assigned, ties in input order
-([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)).
+([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)). Both are kept by an
+[`IncrementalScore`](scoring.md#incremental-module); a bound within `NEAR_TIE_MARGIN` (1e-9) of the pocket's penalty
+is computed from scratch, and so is every complete schedule's penalty
+([ADR 0027](../../decisions/0027-incremental-scoring-for-steering.md)).
 
 * `constants` — the [`ScoringConstants`](scoring.md#class-scoringconstants) of the same input.
 * `prune` — `False` only for testing: every branch is searched, to check that pruning loses nothing.
+* `incremental` — `False` only for testing and comparing: the search steers by scoring from scratch, as before
+  ADR 0027. The result is the same either way.
 * `on_improvement` — `Callable[[Penalty], None] | None`: called with the penalty of each better schedule as it's
   put in the pocket, e.g. to show progress.
 

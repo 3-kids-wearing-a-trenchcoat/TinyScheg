@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from tinyscheg.model.shift import Shift
 from tinyscheg.scoring.constants import ScoringConstants, hours
 
 # The like function l(x), with beta (a disliked partner) as the unit. Only the ratio alpha / beta matters, since the
@@ -66,7 +67,7 @@ def likes_penalty(constants: ScoringConstants, assignment: Sequence[int | None])
             total += sum(_like_value(constants, worker, partner)
                          for partner_position, partner in enumerate(workers)
                          if partner_position != position and partner is not None) / others
-    return len(constants.workers) * total / (DISLIKED_PARTNER * constants.shared_slots)
+    return normalized_likes(constants, total)
 
 
 def _like_value(constants: ScoringConstants, worker: int, partner: int) -> float:
@@ -128,17 +129,43 @@ def likes_lower_bound(constants: ScoringConstants, assignment: Sequence[int | No
     """
     if constants.shared_slots == 0:
         return 0.0
+    total = sum(shift_likes_lower_bound(constants, shift, assignment, domains) for shift in constants.shifts)
+    return normalized_likes(constants, total)
+
+
+def shift_likes_lower_bound(constants: ScoringConstants, shift: Shift, assignment: Sequence[int | None],
+                            domains: Sequence[Sequence[int]]) -> float:
+    """
+    One shift's share of likes_lower_bound, before normalizing: for each pair of its slots, the lowest pair_like_value
+    the slots' workers (or, for an unfilled slot, any worker still in its domain) could give, over the shift's other
+    slots
+    :param constants: ScoringConstants
+    :param shift: Shift
+    :param assignment: a worker index per slot, or None
+    :param domains: for each slot, the workers who can still fill it
+    :return: the shift's share; 0 for a shift of one slot
+    """
+    others = len(shift.slots) - 1
+    if others == 0:
+        return 0.0
+    candidates = [(assignment[slot.index],) if assignment[slot.index] is not None else domains[slot.index]
+                  for slot in shift.slots]
     total = 0.0
-    for shift in constants.shifts:
-        others = len(shift.slots) - 1
-        if others == 0:
-            continue
-        candidates = [(assignment[slot.index],) if assignment[slot.index] is not None else domains[slot.index]
-                      for slot in shift.slots]
-        for first in range(len(candidates)):
-            for second in range(first + 1, len(candidates)):
-                total += min(_like_value(constants, worker, partner) + _like_value(constants, partner, worker)
-                             for worker in candidates[first] for partner in candidates[second]) / others
+    for first in range(len(candidates)):
+        for second in range(first + 1, len(candidates)):
+            total += min(pair_like_value(constants, worker, partner)
+                         for worker in candidates[first] for partner in candidates[second]) / others
+    return total
+
+
+def pair_like_value(constants: ScoringConstants, worker: int, partner: int) -> float:
+    """What a pair adds to the likes penalty, before dividing by the other slots: both workers' like values of each
+    other."""
+    return _like_value(constants, worker, partner) + _like_value(constants, partner, worker)
+
+
+def normalized_likes(constants: ScoringConstants, total: float) -> float:
+    """A likes total (the sum of like values, each over its shift's other slots) normalized to [0, k]."""
     return len(constants.workers) * total / (DISLIKED_PARTNER * constants.shared_slots)
 
 
@@ -184,21 +211,22 @@ def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> fl
     :param remaining: the load to spread
     :return: the level; 0 if there's nothing to spread
     """
-    def spread(level: float) -> float:
-        """The load it takes to raise every worker to the level, within their highest."""
-        return sum(availability * (min(max(ratio, level), highest) - ratio) for ratio, availability, highest in pool)
-
     if remaining <= 0 or not pool:
         return 0.0
-    # spread() is piecewise linear and rises between consecutive breakpoints (where a worker starts or stops rising)
-    breakpoints = sorted({ratio for ratio, _, _ in pool} | {highest for _, _, highest in pool})
-    lower, lower_spread = breakpoints[0], 0.0
-    for upper in breakpoints[1:]:
-        upper_spread = spread(upper)
-        if upper_spread >= remaining:
-            return lower + (remaining - lower_spread) * (upper - lower) / (upper_spread - lower_spread)
-        lower, lower_spread = upper, upper_spread
-    return breakpoints[-1]  # every worker is at their highest: the caps can't take all the load
+    # Raising the level from L takes load at a rate (slope) equal to the availability of the workers rising at L:
+    # each starts rising at their own load / av and stops at their highest. Sweep the points where the slope
+    # changes, in order, until the remaining load is spread.
+    changes = sorted([(ratio, availability) for ratio, availability, highest in pool if highest > ratio]
+                     + [(highest, -availability) for ratio, availability, highest in pool if highest > ratio])
+    if not changes:
+        return 0.0  # nobody can take any load
+    level, spread, slope = changes[0][0], 0.0, 0.0
+    for point, change in changes:
+        if slope > 0 and spread + slope * (point - level) >= remaining:
+            return level + (remaining - spread) / slope
+        spread += slope * (point - level)
+        level, slope = point, slope + change
+    return level  # every worker is at their highest: the caps can't take all the load
 
 
 def _assigned_load(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[float]:
@@ -218,20 +246,25 @@ def rest_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) 
     :param assignment: a worker index per slot, or None
     :return: the sum over workers, in [0, k]; workers with M_w = 0 can never have a deficit and count 0
     """
-    rest_factor = constants.parameters.rest_factor
     total = 0.0
     for worker, slot_indexes in enumerate(_slots_by_worker(constants, assignment)):
         worst = constants.workers[worker].worst_deficit
         if worst == 0:
             continue
-        deficit = 0.0
         # Slots in stable order are sorted by start time, and a worker's slots never overlap, so consecutive slots
         # are consecutive shifts; the last one has no rest after it, and so no deficit.
+        deficit = 0.0
         for earlier, later in zip(slot_indexes, slot_indexes[1:]):
-            rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end)
-            deficit += max(0.0, rest_factor * constants.slot_hours[earlier] - rest)
+            deficit += rest_deficit(constants, earlier, later)
         total += deficit / worst
     return total
+
+
+def rest_deficit(constants: ScoringConstants, earlier: int, later: int) -> float:
+    """The hours by which the rest between two consecutive slots of a worker falls short of gamma times the earlier
+    slot's length."""
+    rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end)
+    return max(0.0, constants.parameters.rest_factor * constants.slot_hours[earlier] - rest)
 
 
 def _slots_by_worker(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[list[int]]:
