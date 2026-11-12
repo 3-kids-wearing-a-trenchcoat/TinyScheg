@@ -462,16 +462,26 @@ Every parameter has a default, defined once as a named constant in the code, and
 | Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
 | Shift share of a slot's load | $\sigma$ | 0.5 | `shift_share` | from 0 to 1 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)) |
 
-What the defaults mean, on a 72-hour version of the example input (9 workers):
+What the defaults mean on the example input (`exampleInput.yml`: 9 workers, 24 hours, 17 slots), as changes to the
+best schedule branch and bound finds for it, with every parameter at its default (recomputed on 2026-11-12, after
+[ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md) and
+[ADR 0028](../decisions/0028-rest-factor-default-2-5.md)):
 
-| Change to a schedule | Penalty change, before weights | After default weights |
-|----------------------|-------------------------------|-----------------------|
-| Moving one 3-hour shift from the busiest worker to the least busy | about −0.23 | about −0.11 |
-| One worker paired with someone they dislike instead of a neutral partner | about +0.23 | about +0.06 |
-| One hour of rest below target | about +0.05 | about +0.01 |
+| Change to the schedule | Penalty change, before weights | After default weights |
+|------------------------|-------------------------------|-----------------------|
+| Moving a 3-hour shift from one worker to another with the same load (a gap of two shifts) | +0.22 | +0.11 |
+| The same with a 4-hour shift | +0.30 | +0.15 |
+| One worker paired with someone they dislike instead of a neutral partner | +0.60 | +0.15 |
+| One hour of rest below target | +0.18 to +0.50 (+0.50 for most workers) | +0.05 to +0.13 |
 
-(Computed before the shift share and the rest factor 2.5 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md),
-[ADR 0028](../decisions/0028-rest-factor-default-2-5.md)), so only indicative now.)
+* **Workload:** a gap in 4-hour shifts costs about 1.4 times a gap in 3-hour ones. With hours alone it would be
+  about 1.8 times ($(4/3)^2$); with the shift share at 0.5, part of each shift's load is the same whatever its length.
+* **Likes and rest are normalized per schedule**, by the number of shared slots and by each worker's worst possible
+  deficit, so on a short schedule a single pairing or hour weighs more than on a long one. Here, most workers could
+  be at most 2 hours below their rest targets over the whole day, so one hour is half of their worst.
+* So on this input, one disliked pairing costs about as much as a two-shift gap in 4-hour shifts, and an hour of rest
+  below target slightly more than a two-shift gap in 3-hour shifts. These balances shift with the input's length and
+  shape; [tuning](tuning.md) checks the outcome against the audit rather than these figures.
 
 Scores are floating-point numbers. Computed from scratch, with sums always taken in the same order, the same state
 always gets exactly the same score, and since every operation involved is monotone under rounding, a state never
