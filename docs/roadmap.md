@@ -177,6 +177,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       wrong (see `explanation/future-work.md`)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
+- [ ] Forcing a specific worker into a specific shift (low priority)
 - [ ] Right-to-left spreadsheets
 - [ ] Docs: tutorials, generated API reference, publishing the site
 - [ ] An optional graphical interface, for people who don't use the command line

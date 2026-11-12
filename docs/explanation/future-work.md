@@ -156,6 +156,19 @@ Workers' preferences currently concern only other workers (likes and dislikes). 
 preferences about *when* or *where* they work, e.g. avoiding mornings or preferring a particular post. These would
 be additional, monotone penalty components.
 
+## Forcing a worker into a shift
+
+> [!WARNING]
+> **Not yet implemented.** Low priority; deferred 2026-11-12.
+
+Letting the input name a worker who must fill a particular shift (for example, someone who has to be at a post at a
+certain time), as a hard constraint rather than a preference. The machinery exists since
+[ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md): such a slot could be filled before the
+search starts, like a history slot, with forward checking from it, and the scoring would count it like any other.
+Open: how the input names the shift (post and start time) and the role if the shift has several slots, and what to
+report when the forced assignment itself breaks a hard constraint (the worker unavailable, without the role, or too
+close to another forced shift).
+
 ## Spreadsheet presentation
 
 > [!WARNING]
