@@ -30,11 +30,12 @@ class SearchState:
 
     def __init__(self, problem: Problem) -> None:
         """
-        :param problem: Problem, the fixed description of the CSP; the state starts from its domains
+        :param problem: Problem, the fixed description of the CSP; the state starts from its domains, with its fixed
+        (history) slots already filled
         """
         self.problem = problem
         self.domains: list[tuple[int, ...]] = list(problem.domains)
-        self.assigned: list[int | None] = [None] * len(problem.slots)
+        self.assigned: list[int | None] = list(problem.fixed) if problem.fixed else [None] * len(problem.slots)
 
     def assign(self, slot_index: int, worker: int) -> Changes:
         """

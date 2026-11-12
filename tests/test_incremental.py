@@ -75,10 +75,23 @@ def test_undo_restores_every_total_exactly() -> None:
     assert (incremental.total(), incremental.bound(), incremental.caps, incremental.shift_bounds) == before
 
 
-def test_an_incremental_score_starts_from_an_empty_assignment() -> None:
+def test_an_incremental_score_can_start_from_a_partly_filled_schedule() -> None:
+    # as with a history (ADR 0031): the totals of what's filled are computed from scratch, then kept up to date
     schedule_input = small_inputs()[0]
     problem, constants = build_problem(schedule_input), constants_of(schedule_input)
     state = SearchState(problem)
-    state.assign(0, state.domains[0][0])
-    with pytest.raises(ValueError, match="empty"):
-        IncrementalScore(constants, state.assigned, state.domains)
+    for _ in range(3):
+        slot = choose_slot(state)
+        assert slot is not None
+        assert state.assign(slot, state.domains[slot][0]).emptied is None
+    incremental = IncrementalScore(constants, state.assigned, state.domains)
+    assert_matches(incremental, state)
+    slot = choose_slot(state)
+    assert slot is not None
+    changes = state.assign(slot, state.domains[slot][0])
+    assert changes.emptied is None
+    incremental.assign(slot, state.assigned[slot], changes.saved_domains)
+    assert_matches(incremental, state)
+    state.undo(changes)
+    incremental.undo()
+    assert_matches(incremental, state)

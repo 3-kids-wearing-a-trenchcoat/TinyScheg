@@ -11,8 +11,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tinyscheg.scoring.constants import ScoringConstants
-from tinyscheg.scoring.penalty import (_water_level, normalized_likes, pair_like_value, rest_deficit,
-                                       shift_likes_lower_bound)
+from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, _water_level, likes_total, normalized_likes,
+                                       pair_like_value, rest_deficit, rest_penalty, shift_likes_lower_bound,
+                                       workload_total)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,29 +43,29 @@ class IncrementalScore:
                  domains: Sequence[Sequence[int]]) -> None:
         """
         :param constants: ScoringConstants of the run
-        :param assignment: the search's assignment (a worker index per slot, or None), which must be empty; it's read,
-        not changed, so it must be the search's own list
+        :param assignment: the search's assignment (a worker index per slot, or None), as it is when the search starts:
+        empty, or with the history filled in (ADR 0031); it's read, not changed, so it must be the search's own list
         :param domains: the search's current domains, likewise read as the search changes them
         """
-        if any(worker is not None for worker in assignment):
-            raise ValueError("an IncrementalScore starts from an empty assignment")
         self.constants = constants
         self.assignment = assignment
         self.domains = domains
-        workers = len(constants.workers)
-        self.likes = 0.0      # the likes total over filled pairs, before normalizing
-        self.workload = 0.0   # the sum of av * (load / av) ** p, before normalizing
-        self.rest = 0.0       # the sum of deficit / M_w
-        self.load = [0.0] * workers
-        self.slots: list[list[int]] = [[] for _ in range(workers)]
+        # the totals of what's filled already, computed from scratch; from here on they're kept up to date
+        self.likes = likes_total(constants, assignment)        # over filled pairs, before normalizing
+        self.workload = workload_total(constants, assignment)  # the sum of av * (load / av) ** p, before normalizing
+        self.rest = rest_penalty(constants, assignment)        # the sum of deficit / M_w
+        self.load = _assigned_load(constants, assignment)
+        self.slots: list[list[int]] = _slots_by_worker(constants, assignment)
         self.shift_bounds = [shift_likes_lower_bound(constants, shift, assignment, domains)
                              for shift in constants.shifts]
         self.likes_bound = sum(self.shift_bounds)
-        self.caps = [0.0] * workers
+        self.caps = [0.0] * len(constants.workers)
+        self.remaining = 0.0
         for slot, domain in enumerate(domains):
-            for worker in domain:
-                self.caps[worker] += constants.slot_load[slot]
-        self.remaining = sum(constants.slot_load)
+            if assignment[slot] is None:
+                self.remaining += constants.slot_load[slot]
+                for worker in domain:
+                    self.caps[worker] += constants.slot_load[slot]
         self._saved: list[_Saved] = []
 
     # --- the value order ---

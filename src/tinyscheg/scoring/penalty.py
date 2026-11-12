@@ -55,6 +55,12 @@ def likes_penalty(constants: ScoringConstants, assignment: Sequence[int | None])
     """
     if constants.shared_slots == 0:
         return 0.0
+    return normalized_likes(constants, likes_total(constants, assignment))
+
+
+def likes_total(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
+    """The likes penalty before normalizing: the sum of the like values over filled pairs, each over its shift's other
+    slots."""
     total = 0.0
     for shift in constants.shifts:
         others = len(shift.slots) - 1
@@ -67,7 +73,7 @@ def likes_penalty(constants: ScoringConstants, assignment: Sequence[int | None])
             total += sum(_like_value(constants, worker, partner)
                          for partner_position, partner in enumerate(workers)
                          if partner_position != position and partner is not None) / others
-    return normalized_likes(constants, total)
+    return total
 
 
 def _like_value(constants: ScoringConstants, worker: int, partner: int) -> float:
@@ -90,11 +96,15 @@ def workload_penalty(constants: ScoringConstants, assignment: Sequence[int | Non
     """
     if constants.workload_scale == 0:
         return 0.0
+    return len(constants.workers) * workload_total(constants, assignment) / constants.workload_scale
+
+
+def workload_total(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
+    """The workload penalty before normalizing: the sum of av * (assigned load / av) ** p."""
     power = constants.parameters.workload_power
     assigned_load = _assigned_load(constants, assignment)
-    total = sum(worker.availability * (assigned_load[index] / worker.availability) ** power
-                for index, worker in enumerate(constants.workers) if worker.availability > 0)
-    return len(constants.workers) * total / constants.workload_scale
+    return sum(worker.availability * (assigned_load[index] / worker.availability) ** power
+               for index, worker in enumerate(constants.workers) if worker.availability > 0)
 
 
 def lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
