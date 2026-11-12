@@ -7,7 +7,11 @@ Usage:
   PYTHONPATH=src python tools/tune.py report STAGE           each setting's results, best first
   PYTHONPATH=src python tools/tune.py reaudit STAGE          re-audit a finished stage's schedules, after the audit
                                                              changed (no new search; the old file is kept as .bak)
-Stages: baseline (the defaults, on every input) and sensitivity (one parameter at a time, on the tuning inputs).
+  PYTHONPATH=src python tools/tune.py round NAME --setting PARAM=VALUE,... [--setting ...] [--inputs GROUP]
+                                                             run a tuning round: the settings given, on a group of
+                                                             inputs (tuning, holdout or confirm), as stage NAME
+Stages: baseline (the defaults, on every input), sensitivity (one parameter at a time, on the tuning inputs), and
+any number of named rounds.
 """
 from __future__ import annotations
 
@@ -18,6 +22,7 @@ import json
 import multiprocessing
 import os
 import pathlib
+import re
 import shutil
 import signal
 import statistics
@@ -41,6 +46,9 @@ MANIFEST = BENCHMARKS / "manifest.csv"
 RESULTS = BENCHMARKS / "results"
 JOB_TIME_LIMIT = 600.0   # seconds; a run taking longer is recorded as timed out, so one setting can't stall a stage
 DEFAULT_JOBS = max(1, (os.cpu_count() or 2) - 2)  # parallel runs, leaving a little of the machine free
+FIXED_STAGES = ("baseline", "sensitivity")        # every other stage is a named round
+ROUND_NAME = re.compile(r"[A-Za-z0-9_-]+")        # a round's name is also its results file's name
+INPUT_GROUPS = ("tuning", "holdout", "confirm")   # the inputs a round can run on (see group_inputs)
 
 # sensitivity: each parameter over these values, the others at their defaults
 LIKES_SHARES = (0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6)   # the likes weight's share; workload and rest keep their ratio
@@ -126,8 +134,55 @@ def stage_jobs(stage: str) -> list[tuple[Setting, Benchmark]]:
     """
     if stage == "baseline":
         return [(DEFAULTS, benchmark) for benchmark in benchmarks()]
-    tuning = [benchmark for benchmark in benchmarks() if benchmark.tier == "sweep" and not benchmark.holdout]
-    return [(setting, benchmark) for setting in sensitivity_settings() for benchmark in tuning]
+    return [(setting, benchmark) for setting in sensitivity_settings() for benchmark in group_inputs("tuning")]
+
+
+def group_inputs(group: str) -> list[Benchmark]:
+    """
+    A group of benchmark inputs, in manifest order
+    :param group: "tuning" (the sweep tier without the held-back inputs), "holdout" (the held-back inputs of every
+    tier) or "confirm" (the confirm tier)
+    :return: list of Benchmark
+    """
+    if group == "tuning":
+        return [benchmark for benchmark in benchmarks() if benchmark.tier == "sweep" and not benchmark.holdout]
+    if group == "holdout":
+        return [benchmark for benchmark in benchmarks() if benchmark.holdout]
+    if group == "confirm":
+        return [benchmark for benchmark in benchmarks() if benchmark.tier == "confirm"]
+    raise ValueError(f"unknown input group {group!r}; expected one of {', '.join(INPUT_GROUPS)}")
+
+
+def parse_setting(text: str) -> Setting:
+    """
+    A setting from the command line: comma-separated PARAM=VALUE pairs, each PARAM a ScoringParameters field, the
+    others at their defaults; named by its pairs in field order, so that the same setting always gets the same name
+    :param text: str, e.g. "rest_factor=2.5,shift_share=0.5"
+    :return: Setting
+    :raise ValueError: on an unknown parameter, a value of the wrong type or out of range, or a parameter given twice
+    """
+    fields = [field.name for field in dataclasses.fields(Setting) if field.name != "name"]
+    values: dict[str, float | int] = {}
+    for pair in filter(None, (part.strip() for part in text.split(","))):
+        name, equals, value = pair.partition("=")
+        name = name.strip()
+        if not equals or name not in fields:
+            raise ValueError(f"{pair!r} isn't PARAM=VALUE with PARAM one of {', '.join(fields)}")
+        if name in values:
+            raise ValueError(f"{name} is given twice")
+        kind = type(getattr(DEFAULTS, name))  # int for the workload power, float otherwise
+        values[name] = kind(value)
+    if not values:
+        raise ValueError("a setting needs at least one PARAM=VALUE")
+    named = ",".join(f"{name}={values[name]:g}" for name in fields if name in values)
+    setting = Setting(named, **values)
+    setting.parameters()  # validates the values
+    return setting
+
+
+def round_jobs(settings: list[Setting], group: str) -> list[tuple[Setting, Benchmark]]:
+    """The runs of a round: every setting on every input of the group."""
+    return [(setting, benchmark) for setting in settings for benchmark in group_inputs(group)]
 
 
 # --- one run ---
@@ -228,10 +283,13 @@ def read_results(stage: str) -> list[dict[str, str]]:
         return list(csv.DictReader(file))
 
 
-def run_stage(stage: str, jobs: int) -> None:
+def run_stage(stage: str, jobs: int, planned: list[tuple[Setting, Benchmark]] | None = None) -> None:
     """
     Run every run of a stage not yet in its results file, in parallel, appending each result as it finishes and
     keeping the status file up to date
+    :param stage: str, the stage's name
+    :param jobs: int, parallel runs
+    :param planned: the stage's runs; by default, those of a fixed stage (stage_jobs)
     """
     RESULTS.mkdir(exist_ok=True)
     if results_path(stage).exists():
@@ -239,7 +297,7 @@ def run_stage(stage: str, jobs: int) -> None:
             if tuple(csv.DictReader(file).fieldnames or ()) != RESULT_FIELDS:
                 raise ValueError(f"{stage}'s results have older columns; re-audit them first (tune.py reaudit)")
     done = {(row["setting"], row["input"]) for row in read_results(stage)}
-    planned = stage_jobs(stage)
+    planned = stage_jobs(stage) if planned is None else planned
     todo = [(stage, setting, benchmark) for setting, benchmark in planned if (setting.name, benchmark.name) not in done]
     path = results_path(stage)
     new_file = not path.exists()
@@ -319,6 +377,26 @@ def setting_summaries(rows: list[dict[str, str]], include_holdout: bool = False)
                                             s["total_severity"]))
 
 
+def stages() -> list[str]:
+    """Every stage: the fixed ones, then the rounds started so far, by name."""
+    rounds = {path.name.removesuffix(".status.json") for path in RESULTS.glob("*.status.json")} - set(FIXED_STAGES)
+    return [*FIXED_STAGES, *sorted(rounds)]
+
+
+def run_round(name: str, settings: list[str], group: str, jobs: int) -> None:
+    """
+    Run a tuning round as its own stage, resumable like the others; running it again with more settings adds them
+    :param name: str, the round's name
+    :param settings: list of str, each a setting as parse_setting reads it
+    :param group: str, the input group
+    :param jobs: int, parallel runs
+    :raise ValueError: on a bad name, setting or group
+    """
+    if name in FIXED_STAGES or not ROUND_NAME.fullmatch(name):
+        raise ValueError(f"a round's name must be letters, digits, - or _, and not {' or '.join(FIXED_STAGES)}")
+    run_stage(name, jobs, round_jobs([parse_setting(text) for text in settings], group))
+
+
 def describe_status(stage: str) -> Iterator[str]:
     """Lines describing a stage's progress."""
     path = status_path(stage)
@@ -345,15 +423,28 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel runs (default {DEFAULT_JOBS})")
     commands.add_parser("status", help="progress of every stage")
     report = commands.add_parser("report", help="each setting's results, best first")
-    report.add_argument("stage", choices=["baseline", "sensitivity"])
+    report.add_argument("stage", help="a fixed stage or a round's name")
     report.add_argument("--holdout", action="store_true", help="include the held-back inputs")
     reaudit = commands.add_parser("reaudit", help="re-audit a finished stage's schedules, after the audit changed")
-    reaudit.add_argument("stage", choices=["baseline", "sensitivity"])
+    reaudit.add_argument("stage", help="a fixed stage or a round's name")
     reaudit.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel audits (default {DEFAULT_JOBS})")
+    tuning_round = commands.add_parser("round", help="run a tuning round: the settings given, on a group of inputs")
+    tuning_round.add_argument("name", help="the round's name, also its results file's")
+    tuning_round.add_argument("--setting", action="append", required=True, metavar="PARAM=VALUE,...",
+                              help="a setting to run (repeatable); parameters not given keep their defaults")
+    tuning_round.add_argument("--inputs", choices=INPUT_GROUPS, default="tuning",
+                              help="the inputs to run on (default: tuning)")
+    tuning_round.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel runs (default {DEFAULT_JOBS})")
     arguments = parser.parse_args(argv)
     if arguments.command == "run":
         try:
             run_stage(arguments.stage, arguments.jobs)
+        except ValueError as exc:
+            print(f"tune: {exc}", file=sys.stderr)
+            return 1
+    elif arguments.command == "round":
+        try:
+            run_round(arguments.name, arguments.setting, arguments.inputs, arguments.jobs)
         except ValueError as exc:
             print(f"tune: {exc}", file=sys.stderr)
             return 1
@@ -364,13 +455,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"tune: {exc}", file=sys.stderr)
             return 1
     elif arguments.command == "status":
-        for stage in ("baseline", "sensitivity"):
+        for stage in stages():
             print("\n".join(describe_status(stage)))
     else:
-        print(f"{'setting':<22} {'inputs':>6} {'easy-fix sev.':>13} {'concentration':>13} {'total sev.':>10} "
+        if not read_results(arguments.stage):
+            print(f"tune: {arguments.stage} has no results", file=sys.stderr)
+            return 1
+        print(f"{'setting':<34} {'inputs':>6} {'easy-fix sev.':>13} {'concentration':>13} {'total sev.':>10} "
               f"{'liked-p. sev.':>13} {'seconds':>8}")
         for summary in setting_summaries(read_results(arguments.stage), arguments.holdout):
-            print(f"{summary['setting']:<22} {summary['inputs']:>6} {summary['easy_fix_severity']:>13.2f} "
+            print(f"{summary['setting']:<34} {summary['inputs']:>6} {summary['easy_fix_severity']:>13.2f} "
                   f"{summary['concentration']:>13.2f} {summary['total_severity']:>10.2f} "
                   f"{summary['separate_severity']:>13.2f} {summary['seconds']:>8.1f}")
     return 0

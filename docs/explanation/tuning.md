@@ -74,7 +74,14 @@ searching again.
    decision, needing its own ADR, since no parameter setting can fix it.
 2. **Sensitivity** — one parameter at a time over a range, the others at their defaults, on the tuning inputs: which
    parameters matter, and over what range.
-3. **Joint sweep** — over the parameters that matter, looking for wide good regions rather than single best points.
+3. **Rounds, by hand** — a few candidate settings at a time, chosen from what the earlier stages showed, run on the
+   tuning inputs, read, and adjusted for the next round, until the complaints stop dropping: the aim is fewer
+   complaints, not none. Each round is its own stage, named on the command line:
+   `python tools/tune.py round NAME --setting rest_factor=2.5,shift_share=0.5 --setting ...`, where each setting
+   names only the parameters it changes from the defaults, and `--inputs holdout` or `--inputs confirm` runs it on
+   the held-back inputs or the confirm tier instead (report it with `--holdout` to include the held-back ones).
+   Running a round again with more settings adds them. There's no automated search over the parameters: which
+   values to try next is a judgement made from the results and the feedback cards.
 4. **Choice and check** — a few candidate settings, checked on the held-back inputs and the longer tiers, with the
    feedback cards of some schedules read by hand: the audit models the workers, but isn't them. The chosen defaults
    then go in as named constants, with an ADR.

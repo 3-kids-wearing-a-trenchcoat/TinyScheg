@@ -151,3 +151,41 @@ def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Pat
     assert reaudited["easy_fix_severity"] == str(row["easy_fix_severity"])
     assert reaudited["penalty"] == str(row["penalty"]) and reaudited["assignment"] == row["assignment"]
     assert tune.results_path("baseline").with_suffix(".csv.bak").exists()
+
+
+def test_a_setting_from_the_command_line_is_named_by_its_parameters_in_field_order() -> None:
+    setting = tune.parse_setting("shift_share=0.25, rest_factor=2.5")
+    assert setting == tune.Setting("rest_factor=2.5,shift_share=0.25", rest_factor=2.5, shift_share=0.25)
+    assert tune.parse_setting("workload_power=3").workload_power == 3
+    for bad in ("", "rest_factor", "speed=2", "rest_factor=2,rest_factor=3", "shift_share=2", "workload_power=2.5"):
+        with pytest.raises(ValueError):
+            tune.parse_setting(bad)
+
+
+def test_input_groups_split_the_manifest() -> None:
+    tuning, holdout, confirm = (tune.group_inputs(group) for group in tune.INPUT_GROUPS)
+    assert tuning and holdout and confirm
+    assert all(b.tier == "sweep" and not b.holdout for b in tuning)
+    assert all(b.holdout for b in holdout) and all(b.tier == "confirm" for b in confirm)
+    assert not {b.name for b in tuning} & ({b.name for b in holdout} | {b.name for b in confirm})
+
+
+def test_a_round_runs_its_settings_as_its_own_resumable_stage(tmp_path: pathlib.Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    generated = next(generate.generate(seed, HOURS) for seed in SEEDS if generate.generate(seed, HOURS))
+    assert generated is not None
+    (tmp_path / "inputs").mkdir()
+    generate.write_input(tmp_path / "inputs" / "small.yml", *generated)
+    monkeypatch.setattr(tune, "BENCHMARKS", tmp_path)
+    monkeypatch.setattr(tune, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(tune, "benchmarks", lambda: [tune.Benchmark("small", "sweep", False)])
+    tune.run_round("trial", ["rest_factor=2.5"], "tuning", 1)
+    tune.run_round("trial", ["rest_factor=2.5", "rest_factor=2.5,shift_share=0.25"], "tuning", 1)  # adds one
+    rows = tune.read_results("trial")
+    assert [(row["stage"], row["setting"]) for row in rows] == [
+        ("trial", "rest_factor=2.5"), ("trial", "rest_factor=2.5,shift_share=0.25")]
+    assert all(row["status"] == "done" for row in rows)
+    assert "trial" in tune.stages()
+    for bad_name in ("baseline", "two words", "../escape"):
+        with pytest.raises(ValueError, match="name"):
+            tune.run_round(bad_name, ["rest_factor=2.5"], "tuning", 1)

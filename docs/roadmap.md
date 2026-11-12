@@ -123,9 +123,9 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
     - [x] Benchmark generator and tuning runner (`tools/benchmarks/generate.py`, `tools/tune.py`)
     - [x] Speed up branch and bound enough for informative benchmarks: cheapest-first value order and a lower bound
       on workload ([ADR 0024](decisions/0024-cheapest-first-value-order-and-workload-bound.md))
-    - [ ] Baseline at the defaults, and diagnosis of each complaint with an easy fix
-    - [ ] Sensitivity, one parameter at a time
-    - [ ] Joint sweep
+    - [x] Baseline at the defaults, and diagnosis of each complaint with an easy fix
+    - [x] Sensitivity, one parameter at a time
+    - [ ] Rounds by hand: a few candidate settings at a time (`tools/tune.py round`)
     - [ ] Choose and check the defaults (held-back inputs, longer tiers, cards read by hand); ADR
 
 ## Phase 6: Spreadsheet output
