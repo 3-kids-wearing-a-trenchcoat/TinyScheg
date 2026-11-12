@@ -87,20 +87,21 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
         _error("no legal schedule exists:\n" + "\n".join(f"  - no worker can fill {describe_slot(slot)}"
                                                           for slot in unfillable))
         return EXIT_NO_SCHEDULE
-    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+    # with a history, the whole schedule's settings: its period runs from the history's start (ADR 0031)
+    settings = problem.settings or schedule_input.settings
+    constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.domains)
     result = find_best_schedule(problem, constants, on_improvement=_progress_reporter())
     if result.assignment is None or result.penalty is None:
         _error(_describe_failure(problem, result))
         return EXIT_NO_SCHEDULE
 
-    grid = build_grid(schedule_input.posts, problem.shifts, problem.workers, result.assignment)
+    grid = build_grid(schedule_input.posts, problem.new_shifts, problem.workers, result.assignment)
     try:
         write_schedule(grid, output_path)
     except OSError as exc:
         _error(f"can't write {output_path}: {exc.strerror or exc}")
         return EXIT_USAGE
-    print(f"wrote {output_path}: {len(problem.shifts)} shifts, {len(problem.slots)} slots, "
+    print(f"wrote {output_path}: {len(problem.new_shifts)} shifts, {len(problem.new_slots)} slots, "
           f"{len(problem.workers)} workers")
     print(f"{describe_penalty(result.penalty)}, the best possible")
     return EXIT_SUCCESS
@@ -133,7 +134,7 @@ def describe_slot(slot: Slot) -> str:
 
 def _describe_failure(problem: Problem, result: SearchResult) -> str:
     """The message for a search that found no schedule: how far it got, and where it was stuck (ADR 0020)."""
-    message = (f"no legal schedule exists; the search filled at most {result.deepest} of {len(problem.slots)} "
+    message = (f"no legal schedule exists; the search filled at most {result.deepest} of {len(problem.new_slots)} "
                f"slots")
     if result.stuck_slot is not None:
         message += f", and got stuck at {describe_slot(result.stuck_slot)}"

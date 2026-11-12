@@ -17,8 +17,9 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 class Grid:
     """
     A schedule as a table: one column per post, one row per interval between shift boundaries.
-    cells[row][column] is the index of the shift covering that cell, or None if the post isn't active then; a shift
-    covering several rows has its index in each of them, which is what spreadsheet formats merge.
+    cells[row][column] is the index of the shift covering that cell (its position in the shifts the grid was built
+    from), or None if the post isn't active then; a shift covering several rows has its index in each of them, which
+    is what spreadsheet formats merge.
     shift_names[i] is the text shown for shift i: its workers' names in stable slot order, joined with " & ".
     """
     columns: tuple[str, ...]
@@ -66,22 +67,23 @@ def build_grid(posts: Sequence[Post], shifts: Sequence[Shift], workers: Sequence
     """
     Lay a schedule out as a grid
     :param posts: all posts, in input order; each gets a column, even one with no shifts in the period
-    :param shifts: the schedule's shifts, in stable order
+    :param shifts: the shifts to show, in stable order: the schedule's, or the new period's of a schedule with a
+    history (ADR 0031)
     :param workers: all workers, in input order
-    :param assignment: a worker index per slot, in stable slot order
+    :param assignment: a worker index per slot (by slot.index), in stable slot order
     :return: the Grid
     """
     rows = _rows(shifts)
     row_starts = [row.start for row in rows]
     column_of = {post.name: column for column, post in enumerate(posts)}  # post names are unique (validation)
     cells: list[list[int | None]] = [[None] * len(posts) for _ in rows]
-    for shift in shifts:
+    for position, shift in enumerate(shifts):
         # Shifts never cross a row boundary, since every shift's start and end is one, so a shift covers the rows
         # from the one starting at its start up to the one ending at its end.
         first_row = bisect.bisect_left(row_starts, shift.time.start)
         last_row = bisect.bisect_left(row_starts, shift.time.end)
         for row in range(first_row, last_row):
-            cells[row][column_of[shift.post.name]] = shift.index
+            cells[row][column_of[shift.post.name]] = position
     shift_names = tuple(NAME_SEPARATOR.join(workers[assignment[slot.index]].name for slot in shift.slots)
                         for shift in shifts)
     return Grid(columns=tuple(post.name for post in posts),

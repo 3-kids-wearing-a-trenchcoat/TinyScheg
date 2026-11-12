@@ -4,12 +4,14 @@ import textwrap
 
 import pytest
 
+from schedule_checker import hard_constraint_violations
 from tinyscheg.cli import EXIT_SUCCESS, main
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import write_schedule
 from tinyscheg.parsing.input_reader import read_input
+from tinyscheg.parsing.schedule_reader import read_schedule
 from tinyscheg.parsing.validation import InputError, history_warnings
 
 
@@ -128,3 +130,16 @@ def test_workers_who_have_left_are_warned_about(tmp_path: pathlib.Path,
         'history entry #1 ("day1.yml"): "Dana" is not in this input; their history is ignored']
     assert main([str(tmp_path / "day2.yml"), "-o", str(tmp_path / "out.csv")]) == EXIT_SUCCESS
     assert 'tinyscheg: warning: history entry #1 ("day1.yml"): "Dana" is not in this input' in capsys.readouterr().err
+
+
+def test_the_command_line_writes_only_the_new_period(tmp_path: pathlib.Path,
+                                                     capsys: pytest.CaptureFixture[str]) -> None:
+    write_previous(tmp_path, "day1", input_text("2025-01-01T00:00", "2025-01-01T12:00"))
+    (tmp_path / "day2.yml").write_text(input_text("2025-01-01T12:00", "2025-01-02T00:00", history=history_of("day1")),
+                                       encoding="utf-8")
+    output = tmp_path / "day2_schedule.xlsx"
+    assert main([str(tmp_path / "day2.yml"), "-o", str(output)]) == EXIT_SUCCESS
+    assert capsys.readouterr().out.startswith(f"wrote {output}: 3 shifts, 3 slots, 3 workers")
+    schedule_input = read_input(tmp_path / "day2.yml")
+    read = read_schedule(output, schedule_input)  # the new period, read with this input alone
+    assert hard_constraint_violations(schedule_input, read.slots, read.assignment) == []  # including the boundary
