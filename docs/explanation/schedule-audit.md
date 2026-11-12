@@ -23,10 +23,15 @@ for legality — and nothing from `csp/` or `scoring/`. A bug or blind spot ther
 
 ## How workers judge a schedule
 
-The audit is built on how workers actually react to a schedule:
+The audit is built on how workers actually react to a schedule. It models **self-centred, jealous workers**, whose
+two questions are "why is he getting more than me?" and "why wasn't my request met, when it easily could have been by
+doing X?":
 
 * **Relative, not absolute.** Workers compare themselves with each other: not "why do I have three shifts today?"
   but "why am I doing three shifts today when X only does two?".
+* **Each schedule sets its own norms.** What's good or bad is judged against what the schedule usually gives, not
+  against an absolute standard. If a schedule usually gives 12 hours of rest, a worker with two 8-hour rests drew
+  short straws, though 8 hours is generous in itself; if everyone rests 6 hours, a 6-hour rest is just the norm.
 * **Unavoidable unevenness is tolerated.** If everyone does two shifts and one worker does three, someone had to.
   If everyone does two and one worker does four, that's an outrage: it could have been two workers doing three.
 * **Complaints aren't a failure in themselves.** Most are unavoidable. Complaints that could have been fixed
@@ -70,8 +75,10 @@ complaint of severity 1 against B.
 A **short straw** is a bad draw. Each worker's short straws over the whole period are counted, and compared between
 peers (available at least as long over the whole period) with the same tolerance:
 
-* **Short rest** — a rest between two of the worker's shifts that's shorter than `min_rest + SHORT_REST_MARGIN`
-  (2 hours): close to the legal minimum.
+* **Short rest** — a rest between two of the worker's shifts that's more than `SHORT_REST_MARGIN` (2 hours) shorter
+  than the schedule's **typical rest**: the median of all the rests between shifts in the schedule, everyone's
+  together. (Decided 2026-11-12; it used to be any rest under `min_rest + SHORT_REST_MARGIN`, close to the legal
+  minimum, but in the tuning benchmarks most rests were that short, so it counted the norm as a straw.)
 * **Disliked partner** — each shift shared with a worker they dislike.
 
 Having the most shifts on a day isn't a short straw: [load](#load) already compares per-day load, with the same

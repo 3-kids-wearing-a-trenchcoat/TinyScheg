@@ -9,6 +9,7 @@ import argparse
 import datetime as dt
 import itertools
 import pathlib
+import statistics
 import sys
 from collections import Counter
 from collections.abc import Iterator, Sequence
@@ -24,7 +25,8 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 
 TOLERANCE = 1                               # a gap of one (shift, short straw, ...) is tolerated; more is a complaint
 DAY_BOUNDARY = dt.time(0, 0)                # days, the windows load is compared over, start at this time
-SHORT_REST_MARGIN = dt.timedelta(hours=2)   # a rest shorter than min_rest plus this is a short straw
+SHORT_REST_MARGIN = dt.timedelta(hours=2)   # a rest shorter than the schedule's typical rest by more than this is a
+                                            # short straw: each schedule is judged by the norms it sets itself
 MAX_CHANGES = 3                             # an easy fix is a chain of at most this many moves and swaps
 SEVERITY_EPSILON = 1e-9                     # severities closer than this are equal (hours are divided as floats)
 SHOWN_DECIMALS = 2                          # decimals shown for hours and severities
@@ -179,24 +181,50 @@ def worker_stats(context: AuditContext, assignment: Sequence[int]) -> tuple[Work
     :return: a WorkerStats per worker, in input order
     """
     crews = workers_by_shift(context, assignment)
-    return tuple(_one_worker(context, crews, worker) for worker in range(len(context.schedule_input.workers)))
+    workers = range(len(context.schedule_input.workers))
+    own = [tuple(index for index, crew in enumerate(crews) if worker in crew) for worker in workers]  # time order
+    rests = [_rests(context, shifts) for shifts in own]
+    short_rest = typical_rest(rests) - hours(SHORT_REST_MARGIN)
+    return tuple(_one_worker(context, crews, worker, own[worker], rests[worker], short_rest) for worker in workers)
 
 
-def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int) -> WorkerStats:
-    """The statistics of one worker, given every shift's crew."""
-    own = tuple(index for index, crew in enumerate(crews) if worker in crew)  # stable order is time order
+def _rests(context: AuditContext, own: tuple[int, ...]) -> tuple[float, ...]:
+    """The rests, in hours, between a worker's shifts (given by index)."""
+    times = sorted(context.shifts[index].time for index in own)
+    return tuple(hours(later.start - earlier.end) for earlier, later in zip(times, times[1:]))
+
+
+def typical_rest(rests: Sequence[Sequence[float]]) -> float:
+    """
+    The schedule's typical rest, the norm short rests are measured against: the median of every worker's rests
+    :param rests: each worker's rests, in hours
+    :return: the median rest in hours; infinity if nobody has a rest, so that no rest is short
+    """
+    every_rest = [rest for worker_rests in rests for rest in worker_rests]
+    return statistics.median(every_rest) if every_rest else float("inf")
+
+
+def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int, own: tuple[int, ...],
+                rests: tuple[float, ...], short_rest: float) -> WorkerStats:
+    """
+    The statistics of one worker
+    :param context: AuditContext
+    :param crews: every shift's workers
+    :param worker: the worker's index
+    :param own: the worker's shifts, by index, in time order
+    :param rests: the worker's rests, in hours
+    :param short_rest: a rest shorter than this many hours is a short straw
+    :return: WorkerStats
+    """
     count: Counter[str] = Counter()
     worked: Counter[str] = Counter()
     for index in own:
         for label in (context.shift_day[index], WHOLE_PERIOD):
             count[label] += 1
             worked[label] += hours(context.shifts[index].time.duration)
-    times = sorted(context.shifts[index].time for index in own)
-    rests = tuple(hours(later.start - earlier.end) for earlier, later in zip(times, times[1:]))
     partners: Counter[int] = Counter(other for index in own for other in set(crews[index]) if other != worker)
     liked = sum(1 for index in own if context.likes[worker] & set(crews[index]))
     disliked = sum(1 for index in own if context.dislikes[worker] & set(crews[index]))
-    short_rest = hours(context.schedule_input.settings.min_rest + SHORT_REST_MARGIN)
     straws = {SHORT_REST: sum(1 for rest in rests if rest < short_rest), DISLIKED_PARTNER: disliked}
     return WorkerStats(own, dict(count), dict(worked), rests, dict(partners), liked, disliked, straws)
 

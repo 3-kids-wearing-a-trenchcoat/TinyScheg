@@ -92,13 +92,28 @@ def test_a_worker_who_was_away_longer_is_not_a_peer() -> None:
 # --- short straws and pairings ---
 
 def test_short_straws_are_counted_by_kind() -> None:
-    # Anne works 0-4 and 4-8 (no rest, a short straw); Bob works 8-12
-    context = context_for([Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob")], {"gate": {"any": 1}}, 12)
-    audit = evaluate(context, (0, 0, 1))
+    # 4-hour shifts; the others rest 8 hours between shifts, Anne works 0-4 and 4-8 with no rest: a short straw
+    workers = [Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob"), Worker("Cy"), Worker("Dan")]
+    context = context_for(workers, {"gate": {"any": 1}}, 36)
+    audit = evaluate(context, (0, 0, 1, 2, 3, 1, 2, 3, 1))
     assert audit.stats[0].straws == {"short rest": 1, "disliked partner": 0}
-    assert audit.stats[1].total_straws == 0
-    # working the day's extra shift isn't a straw of its own: that's load, and a gap of one straw is tolerated
+    assert all(stats.total_straws == 0 for stats in audit.stats[1:])
+    # a gap of one straw is tolerated
     assert complaints_of(audit, SHORT_STRAWS) == []
+
+
+def test_a_rest_is_short_only_against_the_schedules_own_norm() -> None:
+    # the same 8-hour rests: short when the others rest 16-20 hours, not when everyone rests 8
+    workers = [Worker(name) for name in ("Anne", "Bob", "Cy", "Dan", "Eve", "Fay")]
+    context = context_for(workers, {"gate": {"any": 1}}, 48)
+    # 12 shifts of 4 hours: Anne 0-4, 12-16, 24-28 (rests 8, 8); the others rest 16 or 20 hours, or work once
+    long_rests = evaluate(context, (0, 1, 2, 0, 3, 4, 0, 1, 2, 3, 4, 5))
+    assert long_rests.stats[0].rests == (8.0, 8.0)
+    assert long_rests.stats[0].straws["short rest"] == 2
+    complaints = complaints_of(long_rests, SHORT_STRAWS)
+    assert complaints and all(worker == 0 for worker, *_ in complaints)  # 2 straws against 0
+    everyone_eight = evaluate(context, (0, 1, 2) * 4)
+    assert all(stats.straws["short rest"] == 0 for stats in everyone_eight.stats)
 
 
 def test_a_disliked_pairing_has_an_easy_fix_by_swapping_posts_in_the_same_hour() -> None:
