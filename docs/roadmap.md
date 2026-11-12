@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–6 complete; Phase 7 under way. Next: the schedule reader in the package.
+Progress: Phases 1–6 complete; Phase 7 under way. Next: the `history` input section.
 
 ## Phase 1: Walking skeleton
 
@@ -97,7 +97,7 @@ code with `csp/` or `scoring/`.
   even split possible (in any 24 hours and overall), easy fixes (could a few simple legal swaps or moves fix it?), how
   often each worker draws the short straw, and social pairings
 - [x] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit,
-  with a reader for written CSV schedules (`tools/schedule_reader.py`)
+  with a reader for written CSV schedules (since moved into the package, see Phase 7)
 - [x] Per-worker feedback cards and a group summary of how concentrated the unfairness is
 - [x] Sampling: many legal schedules (by shuffling the workers' order), each audited and shown next to its internal
   penalty, flagging where the two disagree
@@ -150,7 +150,7 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
 - [x] Design: previous inputs and their schedule files, read back as fixed history
   ([ADR 0029](decisions/0029-schedule-history-input.md)), scored together with the new schedule
   ([ADR 0030](decisions/0030-history-in-scoring.md))
-- [ ] Schedule reader in the package (`parsing/schedule_reader.py`): CSV, XLSX and ODS, each shift read where it
+- [x] Schedule reader in the package (`parsing/schedule_reader.py`): CSV, XLSX and ODS, each shift read where it
   starts, which also resolves the CSV read-back limitation with a minimum rest of 0; the development tools use it
 - [ ] The `history` input section: parsing, validation (periods before the current one and not overlapping), a
   warning for workers who have left

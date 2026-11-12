@@ -6,12 +6,12 @@ import pytest
 from openpyxl import load_workbook
 
 from schedule_checker import hard_constraint_violations
-from schedule_reader import read_schedule
 from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, describe_penalty, main
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_best_schedule
 from tinyscheg.output.writers import WRITERS, UnsupportedFormatError, writer_for
 from tinyscheg.parsing.input_reader import read_input
+from tinyscheg.parsing.schedule_reader import read_schedule
 from tinyscheg.scoring.constants import build_constants
 from tinyscheg.scoring.penalty import Penalty, score
 

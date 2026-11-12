@@ -45,12 +45,13 @@ two rows, and so do the desk's 08:00–12:00 and the front gate's 10:00–13:00 
 
 ## Reading the output back
 
-The output is meant to be read back in as input by the planned
+The output is meant to be read back in by the planned
 [schedule history](../explanation/future-work.md#schedule-history) feature, so post and worker names match the input
 exactly and times are absolute. This is also why worker names must not contain `" & "`.
 
-In CSV, consecutive rows with identical contents in a post's column are read as a single shift. This is exact as long
-as `min_rest` is positive; with `min_rest: 0`, two consecutive shifts staffed by the same workers would be read back
-as one.
+A schedule is read back together with the input it was made for
+([`read_schedule`](api/parsing.md#read_schedulepath-schedule_input-readschedule)): each shift generated from the
+input is read from the row where it starts, in its post's column. So in every format, including CSV, two consecutive
+shifts filled by the same workers are read as two, whatever the minimum rest.
 
 Which worker fills which role isn't part of the output.

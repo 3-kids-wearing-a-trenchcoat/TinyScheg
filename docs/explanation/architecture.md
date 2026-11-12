@@ -90,6 +90,7 @@ entry point. Modules marked *planned* don't exist yet.
 | `model/shift_generation.py` | [Segments, shifts and slots in stable order](../reference/api/post-and-slot.md#shift_generation-module) ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). |
 | `parsing/input_reader.py` | [`read_input`](../reference/api/parsing.md#input_reader-module): YAML input to model objects. |
 | `parsing/validation.py` | [`InputError` and the validation rules](../reference/api/parsing.md#validation-module). |
+| `parsing/schedule_reader.py` | [`read_schedule`](../reference/api/parsing.md#schedule_reader-module): a written schedule file (CSV, XLSX or ODS) back to assignments. |
 | `csp/problem.py` | [`Problem`](../reference/api/problem.md): domains and difference constraints, by slot and worker index. |
 | `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module); MRV/degree ordering and branch and bound are planned. |

@@ -16,10 +16,10 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from schedule_checker import hard_constraint_violations
-from schedule_reader import ScheduleReadError, read_schedule
 from tinyscheg.model.schedule_input import ScheduleInput
 from tinyscheg.model.shift import Shift, Slot
 from tinyscheg.parsing.input_reader import read_input
+from tinyscheg.parsing.schedule_reader import ScheduleReadError, read_schedule
 from tinyscheg.parsing.validation import InputError
 from tinyscheg.timing.datetime_range import DateTimeRange
 
@@ -664,7 +664,7 @@ def audit_schedule(schedule_input: ScheduleInput, schedule_path: pathlib.Path) -
     """
     Audit a written schedule
     :param schedule_input: ScheduleInput the schedule was made for
-    :param schedule_path: pathlib.Path of the CSV schedule
+    :param schedule_path: pathlib.Path of the schedule file (CSV, XLSX or ODS)
     :return: the report: a card per worker, then the group summary
     :raises ScheduleReadError: if the file doesn't match the input
     :raises ValueError: if the schedule breaks a hard constraint
@@ -688,7 +688,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(prog="audit", description="Audit a schedule from each worker's point of view.")
     parser.add_argument("input", help="the YAML input file")
-    parser.add_argument("schedule", help="the CSV schedule written for it")
+    parser.add_argument("schedule", help="the schedule written for it (CSV, XLSX or ODS)")
     arguments = parser.parse_args(argv)
     try:
         print(audit_schedule(read_input(arguments.input), pathlib.Path(arguments.schedule)))

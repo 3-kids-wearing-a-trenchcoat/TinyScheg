@@ -10,7 +10,7 @@ has to be put on the import path with `PYTHONPATH=src`.
 
 ## Audit one schedule
 
-1. Write a schedule as CSV:
+1. Write a schedule (as CSV here; XLSX and ODS work the same):
    ```bash
    python src/main.py exampleInput.yml -o schedule.csv
    ```

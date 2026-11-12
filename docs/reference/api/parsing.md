@@ -1,7 +1,8 @@
 # `parsing` package
 
-Sources: [`src/tinyscheg/parsing/input_reader.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/parsing/input_reader.py) and
-[`src/tinyscheg/parsing/validation.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/parsing/validation.py)
+Sources: [`src/tinyscheg/parsing/input_reader.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/parsing/input_reader.py),
+[`src/tinyscheg/parsing/validation.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/parsing/validation.py) and
+[`src/tinyscheg/parsing/schedule_reader.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/parsing/schedule_reader.py)
 
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_input_reader.py`, `tests/test_validation.py`).
@@ -59,3 +60,39 @@ The same checks, returning the list of problem messages (empty if there are none
 ### `location(kind, index, name=None)`
 
 Formats an entry's position for messages: `location("worker", 2, "Jeff")` is `worker #3 ("Jeff")`.
+
+## `schedule_reader` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_schedule_reader.py`, on schedules written in every format).
+> Used by the schedule audit and the tests; schedule history will use it to read previous schedules
+> ([ADR 0029](../../decisions/0029-schedule-history-input.md)).
+
+Reads a written [schedule file](../output-format.md) back, given the input it was made for. Independent of the
+`output` package: it relies only on the file's layout.
+
+### `read_schedule(path, schedule_input) -> ReadSchedule`
+
+* `path` — the schedule file. Its extension, in any case, gives the format: `.csv`, `.xlsx` or `.ods`.
+* `schedule_input` — the [`ScheduleInput`](schedule-input.md) it was made for. Its shifts are generated as for any
+  run, and each is read from the cell where it starts: the row whose start is the shift's start, in the column
+  headed by its post's name. Since shift starts come from the input, consecutive shifts filled by the same workers
+  are read apart in every format, even with a minimum rest of 0.
+
+Formats:
+
+* **CSV** — start times as ISO 8601 text; UTF-8, with or without a byte order mark (`CSV_READ_ENCODING`).
+* **XLSX** — the first sheet; a merged cell's names are in its first cell.
+* **ODS** — the first sheet; covered (merged) cells read as empty. Repeated rows and cells, which spreadsheets
+  write for empty space, are expanded up to `ODS_REPEAT_LIMIT` (1000) times.
+
+Spreadsheets saved again by another program (for example after editing by hand in LibreOffice or Excel) read the
+same, as long as the layout is kept. Empty rows are skipped.
+
+**Raises** `ScheduleReadError` (a `ValueError`) naming the problem: an unsupported format, a missing post column, no
+row for a shift's start, a start that isn't a date and time, a shift with the wrong number of names, or an unknown
+worker. `OSError` if the file can't be read.
+
+### `class ReadSchedule(shifts, slots, assignment)`
+
+Immutable. The shifts and slots generated from the input, in stable order, and `assignment`, a worker index per slot.
