@@ -64,6 +64,12 @@ difference constraint with it. This avoids ever trying combinations that violate
 * A slot whose domain is reduced to a **single** worker is not assigned automatically: having the smallest possible
   domain, it's the next slot chosen anyway.
 
+Forward checking also removes **symmetric duplicates** ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)):
+slots of the same shift that need the same role are interchangeable, so they're filled in ascending worker order.
+When one is assigned, the later ones keep only the workers after it, and the earlier ones only those before it. Every
+schedule has an equivalent in this order, with the same penalty, so nothing is lost. Shifts themselves are never
+treated as interchangeable: in asymmetric schedules they differ in length, rest targets and availability.
+
 ## Variable ordering
 
 > [!NOTE]

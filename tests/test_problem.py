@@ -3,7 +3,8 @@ import datetime as dt
 import itertools
 import pathlib
 
-from tinyscheg.csp.problem import (build_problem, difference_constraints, initial_domain, must_differ,
+from tinyscheg.csp.problem import (build_problem, difference_constraints, initial_domain, interchangeable_slots,
+                                   must_differ,
                                    unfillable_slots)
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, Settings
@@ -118,3 +119,13 @@ def test_unfillable_slots() -> None:
 def test_build_problem_is_deterministic() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     assert build_problem(schedule_input) == build_problem(schedule_input)
+
+
+def test_interchangeable_slots_share_a_shift_and_a_role() -> None:
+    # one 4-hour shift needing a medic and 2 of anyone, then another
+    period = DateTimeRange(dt.datetime(2025, 1, 1), dt.datetime(2025, 1, 1, 8))
+    post = Post("gate", ShiftRules(dt.timedelta(hours=4), (("medic", 1), ("any", 2))))
+    problem = build_problem(ScheduleInput(Settings(period), (Worker("Anne"),), (post,)))
+    assert [slot.role for slot in problem.slots] == ["medic", "any", "any"] * 2
+    assert problem.interchangeable == ((), (2,), (1,), (), (5,), (4,))
+    assert interchangeable_slots(problem.slots) == problem.interchangeable

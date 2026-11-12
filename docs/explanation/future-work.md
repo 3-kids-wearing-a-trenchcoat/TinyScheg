@@ -44,8 +44,9 @@ minimal set of conflicting requirements.
 > [!IMPORTANT]
 > **Partially implemented.** Cheapest-first value ordering and a lower bound on workload were implemented on
 > 2026-11-11 ([ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md)), when search speed
-> blocked [tuning](tuning.md). The rest below is deferred. Branch and bound runs to the end with no limit and can be
-> interrupted with Ctrl+C.
+> blocked [tuning](tuning.md), and symmetry breaking within shifts on 2026-11-12
+> ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)). The rest below is deferred. Branch and bound runs
+> to the end with no limit and can be interrupted with Ctrl+C.
 
 Measured on the example on 2026-11-11, with prototypes in which each idea was checked against brute force on small
 inputs (before ADR 0024, branch and bound proved the best 24-hour schedule, 17 slots, in about 200 s, but didn't
@@ -63,16 +64,18 @@ As implemented, the command line proves the 24-hour example in about 100 s. Chea
 sooner, but costs time per step, so on some inputs the bound alone would be faster. Neither finishes a 48-hour
 schedule. Still deferred:
 
-* **Symmetry breaking.** Slots of the same shift that require the same role are interchangeable: assigning
-  (Anne, Bob) or (Bob, Anne) to them yields the same schedule, so the search explores $k!$ equivalent branches for
-  $k$ identical slots. Requiring workers to be assigned to identical slots in a fixed order removes the duplicates.
-  It made no difference on the example, where few shifts have identical slots.
+* **Symmetry breaking between workers.** Within a shift it's done (ADR 0025): on the one benchmark input with
+  interchangeable slots, 43 times fewer nodes (174 s down to 4.5 s); none of the example's shifts have any. Two
+  workers identical in every respect (roles, availability, their likes and dislikes, and everyone else's of them)
+  could be ordered too, but that's rare and easy to get subtly wrong. Shifts are never interchangeable: in asymmetric
+  schedules they differ in length, rest targets and availability.
 * **Tighter bounds.** Lower bounds for the rest and likes penalties, which now count only what's assigned, and a
   workload bound that respects which worker can take which slot. Likely the way to finish 48-hour schedules.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
-  ordering affects the *result* and not just the speed. Decided against for now (2026-11-11): the search runs to the
-  end, and Ctrl+C stops it without writing anything.
+  ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
+  runs for a single schedule aren't to be forbidden in real use, so the search runs to the end, and Ctrl+C stops it
+  without writing anything. Run times are watched during development instead.
 
 ## Incremental scoring
 

@@ -27,8 +27,10 @@ itself is never changed.
 #### `assign(slot_index, worker) -> Changes`
 
 Assigns `worker` to the unassigned slot `slot_index`, then **forward checks**: removes the worker from the domain of
-every unassigned slot constrained with it. If a domain becomes empty, checking stops there, and `Changes.emptied`
-says which slot it was.
+every unassigned slot constrained with it, and keeps the slot's unassigned interchangeable slots in ascending worker
+order: later ones keep only the workers after `worker`, earlier ones only those before it
+([ADR 0025](../../decisions/0025-order-interchangeable-slots.md)). If a domain becomes empty, checking stops there,
+and `Changes.emptied` says which slot it was.
 
 **Raises** `ValueError` if the slot is already assigned, or the worker isn't in its domain.
 

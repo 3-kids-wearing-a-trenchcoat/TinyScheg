@@ -9,7 +9,7 @@ The scheduling problem as a CSP (see [CSP formulation](../../explanation/csp-for
 variables and workers the values. Workers and slots are referred to **by index**: a worker's index is its position in
 the input, and a slot's index is its position in the stable slot order (`slot.index`).
 
-## `class Problem(workers, shifts, slots, domains, neighbours, min_rest)`
+## `class Problem(workers, shifts, slots, domains, neighbours, min_rest, interchangeable=())`
 
 The fixed description of a scheduling CSP. It's immutable and doesn't change during the search, which keeps its own
 state, starting from `domains`.
@@ -23,6 +23,9 @@ state, starting from `domains`.
 * `neighbours` — `tuple[tuple[int, ...], ...]`: for each slot, the indexes of the slots that must get a different
   worker, ascending. Constraints are symmetric, and a slot is never its own neighbour.
 * `min_rest` — `datetime.timedelta`, the minimum rest between two of a worker's shifts.
+* `interchangeable` — `tuple[tuple[int, ...], ...]`: for each slot, the indexes of the other slots of its shift that
+  need the same role, ascending; the search fills them in ascending worker order
+  ([ADR 0025](../../decisions/0025-order-interchangeable-slots.md)). Empty (the default) for none.
 
 ## `build_problem(schedule_input) -> Problem`
 
@@ -50,6 +53,11 @@ Finds every pair of slots that `must_differ`, as the `neighbours` of `Problem`.
 
 Each slot is compared with the slots after it, stopping at the first one that starts at or after this slot's end plus
 `min_rest`: every slot after that starts later still, so none of them can be constrained with this one.
+
+## `interchangeable_slots(slots) -> tuple[tuple[int, ...], ...]`
+
+Finds each slot's interchangeable slots, as the `interchangeable` of `Problem`: the other slots of the same shift
+with the same role.
 
 ## `unfillable_slots(problem) -> tuple[Slot, ...]`
 

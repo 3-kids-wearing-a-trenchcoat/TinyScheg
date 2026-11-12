@@ -21,6 +21,9 @@ class Problem:
     The fixed description of a scheduling CSP. It doesn't change during the search, which keeps its own state.
     domains[i] holds the indexes of the workers who can fill slot i, ascending (which is the order values are tried
     in); neighbours[i] holds the indexes of the slots that must get a different worker from slot i, ascending.
+    interchangeable[i] holds the indexes of the other slots of slot i's shift that need the same role, ascending
+    (empty for none, or if not given): swapping their workers changes nothing, so the search fills them in ascending
+    worker order (ADR 0025).
     """
     workers: tuple[Worker, ...]
     shifts: tuple[Shift, ...]
@@ -28,6 +31,7 @@ class Problem:
     domains: tuple[tuple[int, ...], ...]
     neighbours: tuple[tuple[int, ...], ...]
     min_rest: dt.timedelta
+    interchangeable: tuple[tuple[int, ...], ...] = ()
 
 
 def build_problem(schedule_input: ScheduleInput) -> Problem:
@@ -44,7 +48,8 @@ def build_problem(schedule_input: ScheduleInput) -> Problem:
                    slots=slots,
                    domains=tuple(initial_domain(slot, schedule_input.workers) for slot in slots),
                    neighbours=difference_constraints(slots, settings.min_rest),
-                   min_rest=settings.min_rest)
+                   min_rest=settings.min_rest,
+                   interchangeable=interchangeable_slots(slots))
 
 
 def initial_domain(slot: Slot, workers: Sequence[Worker]) -> tuple[int, ...]:
@@ -83,6 +88,21 @@ def difference_constraints(slots: Sequence[Slot], min_rest: dt.timedelta) -> tup
                 neighbours[first_index].append(second_index)
                 neighbours[second_index].append(first_index)
     return tuple(tuple(sorted(indexes)) for indexes in neighbours)
+
+
+def interchangeable_slots(slots: Sequence[Slot]) -> tuple[tuple[int, ...], ...]:
+    """
+    Find the slots whose workers could be swapped without changing anything: those of the same shift needing the same
+    role. They have the same time, length and role, so the same initial domain and constraints, and the scoring
+    treats a shift's slots alike (ADR 0025).
+    :param slots: all slots in stable order
+    :return: for each slot, the indexes of the other slots of its shift with its role, ascending
+    """
+    groups: dict[tuple[int, str], list[int]] = {}
+    for slot in slots:
+        groups.setdefault((slot.shift_index, slot.role), []).append(slot.index)
+    return tuple(tuple(other for other in groups[(slot.shift_index, slot.role)] if other != slot.index)
+                 for slot in slots)
 
 
 def unfillable_slots(problem: Problem) -> tuple[Slot, ...]:

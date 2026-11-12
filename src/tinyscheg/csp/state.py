@@ -39,7 +39,8 @@ class SearchState:
     def assign(self, slot_index: int, worker: int) -> Changes:
         """
         Assign a worker to a slot, then forward check: remove the worker from the domain of every unassigned slot
-        constrained with this one
+        constrained with this one, and keep the slot's unassigned interchangeable slots in ascending worker order:
+        later ones keep only higher workers, earlier ones only lower (ADR 0025)
         :param slot_index: int, an unassigned slot
         :param worker: int, a worker index in the slot's domain
         :return: the Changes made; if a domain became empty, emptied says which, and the remaining neighbours were
@@ -61,7 +62,33 @@ class SearchState:
             if not self.domains[neighbour]:
                 emptied = neighbour
                 break  # this assignment is a dead end; there's no point in checking further
+        if emptied is None and self.problem.interchangeable:
+            emptied = self._order_interchangeable(slot_index, worker, saved)
         return Changes(slot_index, tuple(saved), emptied)
+
+    def _order_interchangeable(self, slot_index: int, worker: int,
+                               saved: list[tuple[int, tuple[int, ...]]]) -> int | None:
+        """
+        Keep the unassigned slots interchangeable with a newly assigned one in ascending worker order
+        :param slot_index: int, the slot just assigned
+        :param worker: int, its worker
+        :param saved: the change record so far, appended to
+        :return: the index of a slot whose domain became empty, or None
+        """
+        for other in self.problem.interchangeable[slot_index]:
+            if self.assigned[other] is not None:
+                continue
+            domain = self.domains[other]
+            # a later slot keeps the workers after this one, an earlier slot those before it
+            kept = tuple(candidate for candidate in domain
+                         if candidate != worker and (candidate > worker) == (other > slot_index))
+            if kept == domain:
+                continue
+            saved.append((other, domain))
+            self.domains[other] = kept
+            if not kept:
+                return other
+        return None
 
     def undo(self, changes: Changes) -> None:
         """

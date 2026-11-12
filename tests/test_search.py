@@ -241,6 +241,20 @@ def test_pruning_loses_nothing() -> None:
     assert fewer > 0
 
 
+def test_ordering_interchangeable_slots_loses_nothing() -> None:
+    fewer = 0
+    for schedule_input in small_inputs():
+        problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+        unordered = dataclasses.replace(problem, interchangeable=())
+        ordered_result, unordered_result = find_best_schedule(problem, constants), find_best_schedule(unordered,
+                                                                                                       constants)
+        assert (ordered_result.penalty is None) == (unordered_result.penalty is None)
+        if ordered_result.penalty is not None and unordered_result.penalty is not None:
+            assert ordered_result.penalty.total == unordered_result.penalty.total
+        fewer += ordered_result.nodes < unordered_result.nodes
+    assert fewer > 0
+
+
 def test_branch_and_bound_is_deterministic() -> None:
     schedule_input = small_inputs()[0]
     problem, constants = build_problem(schedule_input), constants_of(schedule_input)

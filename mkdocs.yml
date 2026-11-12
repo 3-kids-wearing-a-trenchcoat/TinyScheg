@@ -81,6 +81,7 @@ nav:
       - 0022 Scoring parameters: decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md
       - 0023 Dislikes outweigh likes: decisions/0023-dislikes-outweigh-likes.md
       - 0024 Faster branch and bound: decisions/0024-cheapest-first-value-order-and-workload-bound.md
+      - 0025 Interchangeable slots in order: decisions/0025-order-interchangeable-slots.md
 
 markdown_extensions:
   - admonition

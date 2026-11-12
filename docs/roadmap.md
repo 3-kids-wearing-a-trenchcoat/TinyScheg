@@ -149,7 +149,7 @@ Extending a previous schedule rather than starting fresh ([Future work](explanat
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Incremental scoring, exactly path-independent
-- [ ] Faster search: symmetry breaking, tighter lower bounds (rest, likes, slot-aware workload), a time or node limit
+- [ ] Faster search: symmetry between identical workers, tighter lower bounds (rest, likes, slot-aware workload)
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out

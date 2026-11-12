@@ -71,3 +71,16 @@ def test_assigning_an_assigned_slot_is_an_error() -> None:
     state.assign(0, 0)
     with pytest.raises(ValueError):
         state.assign(0, 1)
+
+
+def test_interchangeable_slots_are_kept_in_ascending_worker_order() -> None:
+    # slots 0, 1 and 2 are one shift's interchangeable slots (and so constrained with each other)
+    base = problem([(0, 1, 2)] * 3, [(1, 2), (0, 2), (0, 1)])
+    ordered = Problem(base.workers, (), base.slots, base.domains, base.neighbours, base.min_rest,
+                      interchangeable=((1, 2), (0, 2), (0, 1)))
+    state = SearchState(ordered)
+    changes = state.assign(1, 1)
+    assert state.domains == [(0,), (0, 1, 2), (2,)]  # earlier slots get the workers before, later ones those after
+    state.undo(changes)
+    assert state.domains == [(0, 1, 2)] * 3
+    assert state.assign(1, 2).emptied == 2  # nobody comes after the last worker
