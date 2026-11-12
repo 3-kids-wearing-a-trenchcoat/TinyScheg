@@ -20,16 +20,16 @@ has to be put on the import path with `PYTHONPATH=src`.
    PYTHONPATH=src python tools/audit.py exampleInput.yml schedule.csv
    ```
 
-The report has a card per worker, then the group summary. A card looks like this (some complaints left out):
+The report has a card per worker, then the group summary. A card looks like this (one complaint left out):
 
 ```
 Gilgamesh: 3 shifts, 8 h; available 24 h
   2025-01-01: 3 shifts, 8 h; available 24 h
   rests: 7 h, 9 h
-  short straws: 1 (short rest 1, disliked partner 0)
+  short straws: 0 (short rest 0, disliked partner 0)
   partners: Enkidu ×2; with someone they like: 2, with someone they dislike: 0
   complaints:
-    - [1] load on 2025-01-01: 3 shifts (8 h), against Jill's 1 (4 h); no easy fix found
+    - [1] load on 2025-01-01: 3 shifts (8 h), against Jill's 1 (4 h); easy fix: giving Jack front gate 2025-01-01 22:00–2025-01-02 00:00 instead of Gilgamesh
 ```
 
 Each complaint starts with its severity in brackets, and ends with its [easy fix](../explanation/schedule-audit.md#easy-fixes),
