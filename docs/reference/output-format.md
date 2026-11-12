@@ -1,8 +1,8 @@
 # Output format
 
 > [!IMPORTANT]
-> **Partially implemented.** The grid, CSV and choosing the format by extension are implemented
-> ([`output`](api/output.md)); XLSX and ODS aren't.
+> **Partially implemented.** The grid, CSV, XLSX and choosing the format by extension are implemented
+> ([`output`](api/output.md)); ODS isn't yet.
 
 TinyScheg writes the finished schedule as a grid of time against post
 ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)), in one of three formats chosen by the output file's
@@ -11,11 +11,12 @@ extension:
 | Extension | Format | Notes |
 |-----------|--------|-------|
 | `.csv`    | CSV    | Unicode (UTF-8 with a byte order mark, so Excel recognizes the encoding and shows names in any script, e.g. Hebrew, correctly); times as ISO 8601 text (`YYYY-MM-DDTHH:MM:SS`). |
-| `.xlsx`   | Microsoft Excel | Times as date-time cells; multi-row shifts as merged cells. |
+| `.xlsx`   | Microsoft Excel | Times as date-time cells, shown as `yyyy-mm-dd hh:mm`; multi-row shifts as merged cells. One sheet, `schedule`, with a bold header row frozen together with the time columns, and each post's column as wide as its longest text. |
 | `.ods`    | OpenDocument spreadsheet | Times as date-time cells; multi-row shifts as merged cells. |
 
 > [!NOTE]
-> The first working version writes CSV only. XLSX and ODS are planned to follow.
+> ODS is planned to follow. Spreadsheets are written left to right; right-to-left sheets are
+> [future work](../explanation/future-work.md#spreadsheet-presentation).
 
 ## Layout
 

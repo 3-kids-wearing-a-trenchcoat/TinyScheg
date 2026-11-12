@@ -3,13 +3,14 @@ import pathlib
 import textwrap
 
 import pytest
+from openpyxl import load_workbook
 
 from schedule_checker import hard_constraint_violations
 from schedule_reader import read_schedule
 from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, describe_penalty, main
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_best_schedule
-from tinyscheg.output.writers import UnsupportedFormatError, writer_for
+from tinyscheg.output.writers import WRITERS, UnsupportedFormatError, writer_for
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import build_constants
 from tinyscheg.scoring.penalty import Penalty, score
@@ -97,6 +98,16 @@ def test_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) 
     assert progress[-1].startswith(f"tinyscheg: found penalty {score(constants, assignment).total:.2f} after ")
 
 
+
+def test_end_to_end_xlsx(tmp_path: pathlib.Path) -> None:
+    input_path = write(tmp_path, SMALL)
+    output = tmp_path / "schedule.xlsx"
+    assert main([str(input_path), "-o", str(output)]) == EXIT_SUCCESS
+    sheet = load_workbook(output).active
+    assert [cell.value for cell in sheet[1]][:2] == ["start", "end"]
+    assert sheet.max_row > 1
+
+
 def test_describe_penalty() -> None:
     assert describe_penalty(Penalty(2.8449, 0.3125, 4.6188, 0.1201)) == (
         "penalty 2.84 (likes 0.31, workload 4.62, rest 0.12)")
@@ -121,7 +132,7 @@ def test_existing_output_is_overwritten(tmp_path: pathlib.Path) -> None:
 def test_unsupported_format_is_checked_first(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     output = tmp_path / "schedule.txt"
     assert main([str(tmp_path / "missing.yml"), "-o", str(output)]) == EXIT_USAGE
-    assert 'unsupported output format ".txt" (supported: .csv)' in capsys.readouterr().err
+    assert f'unsupported output format ".txt" (supported: {", ".join(WRITERS)})' in capsys.readouterr().err
     assert not output.exists()
 
 

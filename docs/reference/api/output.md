@@ -1,8 +1,9 @@
-# `output` package: `grid`, `writers` and `csv_writer`
+# `output` package: `grid`, `writers`, `csv_writer` and `xlsx_writer`
 
 Sources: [`src/tinyscheg/output/grid.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/grid.py),
 [`src/tinyscheg/output/writers.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/writers.py) and
-[`src/tinyscheg/output/csv_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/csv_writer.py)
+[`src/tinyscheg/output/csv_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/csv_writer.py) and
+[`src/tinyscheg/output/xlsx_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/xlsx_writer.py)
 
 See [Output format](../output-format.md) for the layout and formats, and
 [ADR 0019](../../decisions/0019-output-as-a-time-by-post-grid.md) for why. The grid is the internal table every format
@@ -29,6 +30,12 @@ A schedule as a table. Immutable.
 
 The cell as shown: the covering shift's names, or `""` if the post isn't active then.
 
+#### `spans() -> tuple[Span, ...]`
+
+Each shift's block of cells, which spreadsheet formats show as one merged cell: a `Span(column, first_row, last_row,
+shift_index)` (rows inclusive, all indexes 0-based) per shift in the grid, by column, then by first row. Consecutive
+shifts filled by the same workers are separate spans, since their cells hold different shift indexes.
+
 ### `build_grid(posts, shifts, workers, assignment) -> Grid`
 
 Lays a schedule out as a grid.
@@ -48,8 +55,8 @@ Every shift's start and end is a row boundary, so each shift covers whole, conse
 
 Chooses the output format by file extension. Kept out of the command-line code so that any front end can use it.
 
-* `WRITERS` — `dict[str, Writer]`, the writer for each supported extension (lower case). Currently only `".csv"`;
-  `.xlsx` and `.ods` are planned.
+* `WRITERS` — `dict[str, Writer]`, the writer for each supported extension (lower case). Currently `".csv"` and
+  `".xlsx"`; `.ods` is planned.
 * `DEFAULT_EXTENSION` — `".csv"`, used when no output path is given.
 
 ### `writer_for(path) -> Writer`
@@ -74,3 +81,21 @@ Writes a grid as CSV, with the standard library's `csv` module, replacing the fi
 * a header row of `start`, `end`, then the post names;
 * times as ISO 8601 (`2025-01-01T06:00:00`);
 * each cell's `text`, so a shift covering several rows has its names repeated in each.
+
+## `xlsx_writer` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_xlsx_writer.py`, reading the workbook back with openpyxl).
+
+### `write_xlsx(grid, path) -> None`
+
+Writes a grid as an Excel workbook with openpyxl, replacing the file if it exists. One sheet, `SHEET_TITLE`
+(`"schedule"`):
+
+* a header row of `start`, `end`, then the post names, in bold;
+* times as date-time cells, shown as `DATETIME_FORMAT` (`yyyy-mm-dd hh:mm`);
+* each shift's names once, in the first cell of its [span](#spans-tuplespan), merged over the rows it covers and
+  centred vertically; cells where the post isn't active are left empty;
+* the header row and the time columns frozen;
+* the time columns `TIME_COLUMN_WIDTH` (17) characters wide, and each post's column as wide as its longest text plus
+  `COLUMN_PADDING` (2), at least `MIN_POST_COLUMN_WIDTH` (10).

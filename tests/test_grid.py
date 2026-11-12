@@ -86,3 +86,12 @@ def test_example_schedule_grid_matches_the_assignment() -> None:
         names = grid.shift_names[shift.index].split(" & ")
         assert names == [problem.workers[assignment[slot.index]].name for slot in shift.slots]
     assert all(any(cell is not None for cell in row) for row in grid.cells)
+
+
+def test_spans_are_each_shifts_block_of_rows() -> None:
+    # a shift over two rows, then the next shift with the same workers; the second column opens in the second row
+    grid = Grid(("gate", "desk"), (DateTimeRange(at(1, 6), at(1, 7)), DateTimeRange(at(1, 7), at(1, 8)),
+                                   DateTimeRange(at(1, 8), at(1, 9))),
+                ((0, None), (0, 1), (2, 1)), ("Anne", "Bob", "Anne"))
+    assert [(span.column, span.first_row, span.last_row, span.shift_index) for span in grid.spans()] == [
+        (0, 0, 1, 0), (0, 2, 2, 2), (1, 1, 2, 1)]

@@ -31,6 +31,35 @@ class Grid:
         shift_index = self.cells[row][column]
         return "" if shift_index is None else self.shift_names[shift_index]
 
+    def spans(self) -> tuple[Span, ...]:
+        """
+        Each shift's block of cells: the consecutive rows it covers in its column, which spreadsheet formats show as
+        one merged cell
+        :return: a Span per shift in the grid, by column, then by first row
+        """
+        result = []
+        for column in range(len(self.columns)):
+            row = 0
+            while row < len(self.rows):
+                shift_index = self.cells[row][column]
+                last = row
+                while (shift_index is not None and last + 1 < len(self.rows)
+                       and self.cells[last + 1][column] == shift_index):
+                    last += 1
+                if shift_index is not None:
+                    result.append(Span(column, row, last, shift_index))
+                row = last + 1
+        return tuple(result)
+
+
+@dataclass(frozen=True, slots=True)
+class Span:
+    """A shift's block of cells in a Grid: its column, and the first and last rows it covers (inclusive)."""
+    column: int
+    first_row: int
+    last_row: int
+    shift_index: int
+
 
 def build_grid(posts: Sequence[Post], shifts: Sequence[Shift], workers: Sequence[Worker],
                assignment: Sequence[int]) -> Grid:

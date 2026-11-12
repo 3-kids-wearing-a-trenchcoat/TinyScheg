@@ -78,6 +78,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Scoring parameters and constants    | Implemented and tested    |
 | Scoring penalties                   | Implemented and tested    |
 | Output (CSV grid)                   | Implemented and tested    |
-| Output (XLSX, ODS)                  | Not yet implemented       |
+| Output (XLSX)                       | Implemented and tested    |
+| Output (ODS)                        | Not yet implemented       |
 | Command-line interface              | Implemented and tested    |
 | Schedule audit (development tool)   | Implemented and tested    |
