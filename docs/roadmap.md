@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–5 complete; Phase 6 under way. Next: the ODS writer.
+Progress: Phases 1–6 complete. Next: Phase 7, schedule history.
 
 ## Phase 1: Walking skeleton
 
@@ -141,7 +141,7 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
 ([Output format](reference/output-format.md))
 
 - [x] XLSX writer (openpyxl), multi-row shifts as merged cells
-- [ ] ODS writer (odfpy), multi-row shifts as merged cells
+- [x] ODS writer (odfpy), multi-row shifts as merged cells
 
 ## Phase 7: Schedule history
 

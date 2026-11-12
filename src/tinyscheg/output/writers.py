@@ -6,12 +6,13 @@ from collections.abc import Callable
 
 from tinyscheg.output.csv_writer import write_csv
 from tinyscheg.output.grid import Grid
+from tinyscheg.output.ods_writer import write_ods
 from tinyscheg.output.xlsx_writer import write_xlsx
 
 Writer = Callable[[Grid, pathlib.Path], None]
 
-# Supported formats by file extension; ODS is planned (see the roadmap)
-WRITERS: dict[str, Writer] = {".csv": write_csv, ".xlsx": write_xlsx}
+# Supported formats by file extension
+WRITERS: dict[str, Writer] = {".csv": write_csv, ".xlsx": write_xlsx, ".ods": write_ods}
 DEFAULT_EXTENSION = ".csv"
 
 

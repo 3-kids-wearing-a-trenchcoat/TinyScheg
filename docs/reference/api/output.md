@@ -1,9 +1,10 @@
-# `output` package: `grid`, `writers`, `csv_writer` and `xlsx_writer`
+# `output` package: `grid`, `writers` and the format writers
 
 Sources: [`src/tinyscheg/output/grid.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/grid.py),
 [`src/tinyscheg/output/writers.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/writers.py) and
-[`src/tinyscheg/output/csv_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/csv_writer.py) and
-[`src/tinyscheg/output/xlsx_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/xlsx_writer.py)
+[`src/tinyscheg/output/csv_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/csv_writer.py),
+[`src/tinyscheg/output/xlsx_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/xlsx_writer.py) and
+[`src/tinyscheg/output/ods_writer.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/output/ods_writer.py)
 
 See [Output format](../output-format.md) for the layout and formats, and
 [ADR 0019](../../decisions/0019-output-as-a-time-by-post-grid.md) for why. The grid is the internal table every format
@@ -55,8 +56,8 @@ Every shift's start and end is a row boundary, so each shift covers whole, conse
 
 Chooses the output format by file extension. Kept out of the command-line code so that any front end can use it.
 
-* `WRITERS` — `dict[str, Writer]`, the writer for each supported extension (lower case). Currently `".csv"` and
-  `".xlsx"`; `.ods` is planned.
+* `WRITERS` — `dict[str, Writer]`, the writer for each supported extension (lower case). `".csv"`, `".xlsx"` and
+  `".ods"`.
 * `DEFAULT_EXTENSION` — `".csv"`, used when no output path is given.
 
 ### `writer_for(path) -> Writer`
@@ -99,3 +100,20 @@ Writes a grid as an Excel workbook with openpyxl, replacing the file if it exist
 * the header row and the time columns frozen;
 * the time columns `TIME_COLUMN_WIDTH` (17) characters wide, and each post's column as wide as its longest text plus
   `COLUMN_PADDING` (2), at least `MIN_POST_COLUMN_WIDTH` (10).
+
+## `ods_writer` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_ods_writer.py`, reading the spreadsheet back with odfpy).
+
+### `write_ods(grid, path) -> None`
+
+Writes a grid as an OpenDocument spreadsheet with odfpy, replacing the file if it exists, laid out as
+[`write_xlsx`](#write_xlsxgrid-path-none) lays out a workbook, and with the same named constants for the sheet title,
+time headers and column widths:
+
+* times as date cells (`office:date-value`), with a date style showing `yyyy-mm-dd hh:mm` and that text in the cell;
+* a span's first cell holding its names, with `table:number-rows-spanned` if it covers several rows, and covered
+  cells (`table:covered-table-cell`) below it;
+* the header row and time columns frozen through the document's view settings;
+* column widths in characters converted at `CHARACTER_WIDTH_CM` (0.23 cm) per character.

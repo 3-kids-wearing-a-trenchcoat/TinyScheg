@@ -57,8 +57,7 @@ See [Search algorithm](search-algorithm.md) and [Scoring](scoring.md).
 ## 4. Build output
 
 > [!IMPORTANT]
-> **Partially implemented.** The grid and the CSV and XLSX writers are implemented
-> ([`output`](../reference/api/output.md)); ODS isn't yet.
+> **Implemented.** The grid and the CSV, XLSX and ODS writers ([`output`](../reference/api/output.md)).
 
 Transform the best schedule's list of assigned slots into a grid of time against post, written as CSV, XLSX or ODS
 (see [Output format](../reference/output-format.md)). The grid is an internal table that knows nothing about file
@@ -100,7 +99,8 @@ entry point. Modules marked *planned* don't exist yet.
 | `output/grid.py` | [Assigned slots to the time-by-post grid](../reference/api/output.md#grid-module) ([ADR 0019](../decisions/0019-output-as-a-time-by-post-grid.md)). |
 | `output/writers.py` | [Choosing the format by extension](../reference/api/output.md#writers-module), and `write_schedule`. |
 | `output/csv_writer.py` | [The grid as CSV](../reference/api/output.md#csv_writer-module). |
-| `output/xlsx_writer.py` | [The grid as an Excel workbook](../reference/api/output.md#xlsx_writer-module), with openpyxl; an ODS writer will sit next to it. |
+| `output/xlsx_writer.py` | [The grid as an Excel workbook](../reference/api/output.md#xlsx_writer-module), with openpyxl. |
+| `output/ods_writer.py` | [The grid as an OpenDocument spreadsheet](../reference/api/output.md#ods_writer-module), with odfpy. |
 
 Dependencies point one way: `timing` ← `model` ← (`parsing`, `csp`, `output`), with `cli` using all of them.
 `parsing`, `csp` and `output` don't import each other. `scoring` depends only on `model` and `timing`, and will be

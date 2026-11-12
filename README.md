@@ -35,7 +35,8 @@ To create a schedule, run from the repository root:
 python src/main.py exampleInput.yml -o schedule.csv
 ```
 
-Without `-o`, the schedule is written next to the input as `<input name>_schedule.csv`. See
+The output file's extension chooses the format: `.csv`, `.xlsx` (Excel) or `.ods` (LibreOffice and other
+OpenDocument spreadsheets). Without `-o`, the schedule is written next to the input as `<input name>_schedule.csv`. See
 [Command line](docs/reference/command-line.md) for details.
 
 Input is a YAML file describing the schedule settings, workers and posts. [`exampleInput.yml`](exampleInput.yml)

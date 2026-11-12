@@ -16,7 +16,7 @@ python src/main.py INPUT [-o OUTPUT]
 
 * `INPUT` — the YAML input file (see [Input format](input-format.md)).
 * `-o OUTPUT`, `--output OUTPUT` — the schedule file to write. Its extension sets the format (see
-  [Output format](output-format.md)); currently `.csv` and `.xlsx` are supported, in any case. If omitted, the schedule is
+  [Output format](output-format.md)); `.csv`, `.xlsx` and `.ods` are supported, in any case. If omitted, the schedule is
   written next to the input, named after it: `shifts/week1.yml` → `shifts/week1_schedule.csv`.
 
 An existing file at the output path is replaced, but only once a schedule has been found: if anything goes wrong, no
@@ -55,7 +55,7 @@ seconds in progress lines to `ELAPSED_DECIMALS` (0).
 Every problem is reported on standard error, prefixed with `tinyscheg:`, and nothing is written.
 
 * **Unsupported output format** — checked before anything else, so a long search doesn't end in a typo:
-  `unsupported output format ".txt" (supported: .csv, .xlsx)`.
+  `unsupported output format ".txt" (supported: .csv, .xlsx, .ods)`.
 * **Missing or unreadable input file** — `can't read week1.yml: No such file or directory`.
 * **Invalid input** — every problem found, each naming where it is (see [Input format](input-format.md#errors)).
 * **No legal schedule** ([ADR 0011](../decisions/0011-no-output-for-infeasible-inputs.md),
