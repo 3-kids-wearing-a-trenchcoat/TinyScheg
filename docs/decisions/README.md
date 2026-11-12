@@ -43,12 +43,13 @@ ADR that supersedes the old one.
 | [0019](0019-output-as-a-time-by-post-grid.md) | Output the schedule as a time-by-post grid | Accepted |
 | [0020](0020-report-where-infeasibility-was-found.md) | Report where infeasibility was found | Accepted |
 | [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
-| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md) |
+| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md) and [0028](0028-rest-factor-default-2-5.md) |
 | [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
 | [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted |
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
 | [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
 | [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Accepted |
+| [0028](0028-rest-factor-default-2-5.md) | Default rest factor 2.5 | Accepted |
 
 ## Template
 

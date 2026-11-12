@@ -315,7 +315,7 @@ $$
 $$
 
 and the **rest target** after $s_i$ — the shift's duration times $\gamma$, for some $1 \leq \gamma \in \mathbb{R}$
-(the rest factor, a [parameter](#parameters), 3 by default):
+(the rest factor, a [parameter](#parameters), 2.5 by default, [ADR 0028](../decisions/0028-rest-factor-default-2-5.md)):
 
 $$
 r(s_i) = \gamma \cdot |s_i|
@@ -458,7 +458,7 @@ Every parameter has a default, defined once as a named constant in the code, and
 |-----------|--------|---------|-------------|----------------|
 | Weights of likes, workload and rest | $a$, $b$, $c$ | 0.25, 0.5, 0.25 | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
 | Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
-| Rest factor | $\gamma$ | 3 | `rest_factor` | at least 1 |
+| Rest factor | $\gamma$ | 2.5 | `rest_factor` | at least 1 ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)) |
 | Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
 | Shift share of a slot's load | $\sigma$ | 0.5 | `shift_share` | from 0 to 1 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)) |
 
@@ -469,6 +469,9 @@ What the defaults mean, on a 72-hour version of the example input (9 workers):
 | Moving one 3-hour shift from the busiest worker to the least busy | about −0.23 | about −0.11 |
 | One worker paired with someone they dislike instead of a neutral partner | about +0.23 | about +0.06 |
 | One hour of rest below target | about +0.05 | about +0.01 |
+
+(Computed before the shift share and the rest factor 2.5 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md),
+[ADR 0028](../decisions/0028-rest-factor-default-2-5.md)), so only indicative now.)
 
 Scores are floating-point numbers. Computed from scratch, with sums always taken in the same order, the same state
 always gets exactly the same score, and since every operation involved is monotone under rounding, a state never

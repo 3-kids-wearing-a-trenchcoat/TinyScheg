@@ -1,6 +1,7 @@
 # 0022. Scoring parameters: named defaults, optionally set in the input
 
-**Status:** Accepted. Amended by [0023](0023-dislikes-outweigh-likes.md) (`neutral_partner` must be less than 1/2).
+**Status:** Accepted. Amended by [0023](0023-dislikes-outweigh-likes.md) (`neutral_partner` must be less than 1/2) and
+[0028](0028-rest-factor-default-2-5.md) (default rest factor 2.5).
 
 ## Context
 

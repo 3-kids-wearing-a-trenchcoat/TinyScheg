@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–4 complete; Phase 5 under way. Next: tune the scoring parameters with the audit.
+Progress: Phases 1–5 complete. Next: Phase 6, spreadsheet output.
 
 ## Phase 1: Walking skeleton
 
@@ -118,15 +118,16 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
   now 24 hours long, so that it finishes
 - [x] Check that no simple legal swap lowers the chosen schedule's penalty: no single legal move or swap beats branch
   and bound's schedule, tested on 12- and 14-hour versions of the example and checked once on the 24-hour one
-- [ ] Tune the scoring parameters with the audit ([Tuning the scoring](explanation/tuning.md))
+- [x] Tune the scoring parameters with the audit ([Tuning the scoring](explanation/tuning.md))
     - [x] Plan, priorities and benchmark requirements
     - [x] Benchmark generator and tuning runner (`tools/benchmarks/generate.py`, `tools/tune.py`)
     - [x] Speed up branch and bound enough for informative benchmarks: cheapest-first value order and a lower bound
       on workload ([ADR 0024](decisions/0024-cheapest-first-value-order-and-workload-bound.md))
     - [x] Baseline at the defaults, and diagnosis of each complaint with an easy fix
     - [x] Sensitivity, one parameter at a time
-    - [ ] Rounds by hand: a few candidate settings at a time (`tools/tune.py round`)
-    - [ ] Choose and check the defaults (held-back inputs, longer tiers, cards read by hand); ADR
+    - [x] Rounds by hand: a few candidate settings at a time (`tools/tune.py round`)
+    - [x] Choose and check the defaults (held-back inputs, the confirm tier, cards read by hand): rest factor 2.5
+      ([ADR 0028](decisions/0028-rest-factor-default-2-5.md)). The 48-hour tier is out of the search's reach for now
 
 ## Phase 6: Spreadsheet output
 
@@ -153,6 +154,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Faster search by non-heuristic means: libraries, parallelization, rewriting hot modules in another language
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
+- [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
       wrong (see `explanation/future-work.md`)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)

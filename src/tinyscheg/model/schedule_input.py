@@ -16,7 +16,7 @@ DEFAULT_LIKES_WEIGHT = 0.25
 DEFAULT_WORKLOAD_WEIGHT = 0.5
 DEFAULT_REST_WEIGHT = 0.25
 DEFAULT_WORKLOAD_POWER = 2       # phi(x) = x ** p (ADR 0021)
-DEFAULT_REST_FACTOR = 3.0        # gamma: the rest target after a shift is this many times its length
+DEFAULT_REST_FACTOR = 2.5        # gamma: the rest target after a shift is this many times its length
 DEFAULT_NEUTRAL_PARTNER = 1 / 3  # alpha / beta: a neutral shift partner's penalty relative to a disliked one's
 DEFAULT_SHIFT_SHARE = 0.5        # sigma: how much a shift's load counts it as a shift, rather than by its hours
 

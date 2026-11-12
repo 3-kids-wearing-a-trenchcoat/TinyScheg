@@ -168,6 +168,17 @@ liked-partner complaints apart instead of fixing them through tuning. If they tu
 formula: each worker's shortfall of liked pairings through a convex function, as workload does, which needs an ADR,
 a check that the penalty stays monotone along the search, and new tuning runs.
 
+## Tuning on longer schedules
+
+> [!WARNING]
+> **Not yet done.** Deferred 2026-11-12, until the search can finish 48-hour inputs.
+
+The defaults were tuned on schedules of 16 to 24 hours ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)),
+the longest branch and bound could finish. On those, the whole schedule is the day, so the audit's comparison of load
+in any 24 hours adds nothing to its overall comparison. Whether the scoring keeps load even within each day of a
+longer schedule, as well as overall, can only be checked on 48-hour inputs (the multiday tier, dropped for now). The
+check: generate the tier, run the defaults on it, and see whether day-load complaints with an easy fix appear.
+
 ## Schedule audit
 
 > [!WARNING]

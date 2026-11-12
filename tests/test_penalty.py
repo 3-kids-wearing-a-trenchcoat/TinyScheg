@@ -89,9 +89,10 @@ def test_higher_power_leans_harder_on_the_most_loaded() -> None:
 # --- rest ---
 
 def test_rest_deficit_relative_to_the_worst_case() -> None:
-    # 4-hour shifts at 0, 4, 8 and 12 with 2 hours' minimum rest; the target after a 4-hour shift is 12 hours.
-    # The worst Anne could do is 0-4 then 8-12 (4 hours' rest, 8 short), so M_w = 8.
-    constants = constants_for([Worker("Anne")], {"any": 1}, 4, 16, min_rest=2)
+    # 4-hour shifts at 0, 4, 8 and 12 with 2 hours' minimum rest; with a rest factor of 3, the target after a 4-hour
+    # shift is 12 hours. The worst Anne could do is 0-4 then 8-12 (4 hours' rest, 8 short), so M_w = 8.
+    parameters = ScoringParameters(rest_factor=3)
+    constants = constants_for([Worker("Anne")], {"any": 1}, 4, 16, min_rest=2, parameters=parameters)
     assert constants.workers[0].worst_deficit == 8
     assert rest_penalty(constants, [0, None, 0, None]) == pytest.approx(8 / 8)
     assert rest_penalty(constants, [0, None, None, 0]) == pytest.approx(4 / 8)  # 8 hours' rest, 4 short

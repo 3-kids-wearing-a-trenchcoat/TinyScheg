@@ -6,7 +6,8 @@ point, not final, but they shape how every later output is read, so the method i
 
 > [!IMPORTANT]
 > **Partially implemented.** The benchmark generator (`tools/benchmarks/generate.py`) and the tuning runner
-> (`tools/tune.py`) exist and are tested; the stages below are being run. No default has been changed yet.
+> (`tools/tune.py`) exist and are tested. The first round is done: the default rest factor became 2.5
+> ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)). Longer schedules are still to be checked.
 
 ## What's tuned, against what
 
