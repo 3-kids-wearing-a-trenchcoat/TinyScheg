@@ -91,6 +91,25 @@ schedule. Still deferred:
   runs for a single schedule aren't to be forbidden in real use, so the search runs to the end, and Ctrl+C stops it
   without writing anything. Run times are watched during development instead.
 
+## Faster search by non-heuristic means
+
+> [!WARNING]
+> **Not yet implemented.** Deferred 2026-11-12.
+
+Everything under [Search performance](#search-performance) speeds the search up by searching smarter: finding a good
+pocket sooner, or pruning more. The other way is to run the same search faster, without changing what it explores:
+
+* **Libraries**, such as a compiled numeric library for the scoring, or a constraint or optimization solver.
+* **Parallelization**, such as splitting the search tree between processes, which then share the pocket's penalty
+  so that each prunes on the best found by any.
+* **Rewriting the hot modules in another language**, such as the search and scoring in a compiled language, called
+  from Python.
+
+Any of these must keep the result deterministic and exactly the same (the same best penalty, and the same schedule
+among equally good ones, or a rule for which one is kept), and adding a library needs the usual justification
+(see the project's working rules). Profiling first would show where the time actually goes: most of it is probably
+the penalty and bound, computed from scratch at every node (see [Incremental scoring](#incremental-scoring)).
+
 ## Incremental scoring
 
 > [!WARNING]

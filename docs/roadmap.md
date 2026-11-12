@@ -150,6 +150,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Incremental scoring, exactly path-independent
 - [ ] Faster search: symmetry between identical workers, a rest look-ahead, workload caps that account for overlaps
+- [ ] Faster search by non-heuristic means: libraries, parallelization, rewriting hot modules in another language
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
