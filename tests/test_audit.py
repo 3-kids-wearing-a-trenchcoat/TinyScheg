@@ -4,9 +4,9 @@ import pathlib
 
 import pytest
 
-from audit import (EXIT_ILLEGAL, EXIT_SUCCESS, LIKED_PARTNERS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD, Audit,
-                   AuditContext, Complaint,
-                   available_hours, build_context, candidate_changes, days, evaluate, find_fixes, is_harmless,
+from audit import (ANY_DAY, EXIT_ILLEGAL, EXIT_SUCCESS, LIKED_PARTNERS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD,
+                   Audit, AuditContext, Complaint,
+                   available_hours, build_context, candidate_changes, day_windows, evaluate, find_fixes, is_harmless,
                    is_legal_change, main, slots_by_worker, summarize)
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
@@ -47,11 +47,19 @@ def complaints_of(audit: Audit, kind: str) -> list[tuple[int, int, str, float]]:
 
 # --- windows and availability ---
 
-def test_days_start_at_the_boundary_and_a_shift_belongs_to_the_day_it_starts() -> None:
-    period = DateTimeRange(at(6), at(30))
-    assert [window.label for window in days(period)] == ["2025-01-01", "2025-01-02"]
-    context = context_for([Worker("Anne")], {"gate": {"any": 1}}, 28)  # the last shift starts at 24:00
-    assert context.shift_day[-2:] == ("2025-01-01", "2025-01-02")
+def test_day_windows_start_at_each_shift_and_lie_within_the_period() -> None:
+    context = context_for([Worker("Anne")], {"gate": {"any": 1}}, 36)  # shifts start every 4 hours, 0 to 32
+    assert [window.label for window in context.windows] == [
+        "2025-01-01 00:00", "2025-01-01 04:00", "2025-01-01 08:00", "2025-01-01 12:00", WHOLE_PERIOD]
+    assert context.shift_windows[3] == ("2025-01-01 00:00", "2025-01-01 04:00", "2025-01-01 08:00",
+                                        "2025-01-01 12:00", WHOLE_PERIOD)  # starts at 12:00
+    assert context.shift_windows[0] == ("2025-01-01 00:00", WHOLE_PERIOD)
+
+
+def test_a_period_of_a_day_or_less_has_no_day_windows() -> None:
+    assert day_windows(DateTimeRange(at(16), at(40)), ()) == []
+    assert [window.label for window in context_for([Worker("Anne")], {"gate": {"any": 1}}, 24).windows] == [
+        WHOLE_PERIOD]
 
 
 def test_overlapping_unavailability_is_counted_once() -> None:
@@ -65,8 +73,15 @@ def test_one_extra_shift_is_tolerated_two_are_a_complaint() -> None:
     context = context_for([Worker("Anne"), Worker("Bob")], {"gate": {"any": 1}}, 20)  # 5 shifts
     assert complaints_of(evaluate(context, (0, 0, 0, 1, 1)), LOAD) == []
     context = context_for([Worker("Anne"), Worker("Bob")], {"gate": {"any": 1}}, 24)  # 6 shifts
-    assert complaints_of(evaluate(context, (0, 0, 0, 0, 1, 1)), LOAD) == [
-        (0, 1, "2025-01-01", 1), (0, 1, WHOLE_PERIOD, 1)]
+    assert complaints_of(evaluate(context, (0, 0, 0, 0, 1, 1)), LOAD) == [(0, 1, WHOLE_PERIOD, 1)]
+
+
+def test_a_day_is_any_24_hours_whatever_midnight_and_counts_once_per_pair() -> None:
+    # 4-hour shifts over 36 hours; everyone works 3 shifts, but Anne's are 20:00-08:00 straight, across midnight,
+    # and Cy's 08:00-20:00, while Bob has none between 08:00 and 08:00 the next day (windows from 08:00)
+    context = context_for([Worker("Anne"), Worker("Bob"), Worker("Cy")], {"gate": {"any": 1}}, 36)
+    audit = evaluate(context, (1, 1, 2, 2, 2, 0, 0, 0, 1))
+    assert sorted(complaints_of(audit, LOAD)) == [(0, 1, ANY_DAY, 2), (2, 0, ANY_DAY, 1), (2, 1, ANY_DAY, 2)]
 
 
 def test_hours_count_in_units_of_the_longest_shift() -> None:
@@ -158,7 +173,7 @@ def test_extra_load_forced_by_roles_has_no_easy_fix() -> None:
     context = context_for([Worker("Anne", roles=frozenset({"medic"})), Worker("Bob")], {"aid": {"medic": 1}}, 16)
     assignment = (0, 0, 0, 0)
     audit = evaluate(context, assignment)
-    assert complaints_of(audit, LOAD) == [(0, 1, "2025-01-01", 3), (0, 1, WHOLE_PERIOD, 3)]
+    assert complaints_of(audit, LOAD) == [(0, 1, WHOLE_PERIOD, 3)]
     assert find_fixes(context, assignment, audit) == {}
 
 

@@ -24,7 +24,8 @@ from tinyscheg.parsing.validation import InputError
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 TOLERANCE = 1                               # a gap of one (shift, short straw, ...) is tolerated; more is a complaint
-DAY_BOUNDARY = dt.time(0, 0)                # days, the windows load is compared over, start at this time
+DAY_LENGTH = dt.timedelta(hours=24)         # load is also compared over every stretch this long within the period
+                                            # ("during the day"), wherever it starts: midnight means nothing special
 SHORT_REST_MARGIN = dt.timedelta(hours=2)   # a rest shorter than the schedule's typical rest by more than this is a
                                             # short straw: each schedule is judged by the norms it sets itself
 MAX_CHANGES = 3                             # an easy fix is a chain of at most this many moves and swaps
@@ -32,6 +33,7 @@ SEVERITY_EPSILON = 1e-9                     # severities closer than this are eq
 SHOWN_DECIMALS = 2                          # decimals shown for hours and severities
 
 WHOLE_PERIOD = "overall"                    # the label of the window covering the whole period
+ANY_DAY = f"in any {DAY_LENGTH / dt.timedelta(hours=1):g} hours"  # the label of load complaints over day windows
 
 LOAD = "load"
 SHORT_STRAWS = "short straws"
@@ -43,7 +45,7 @@ SEPARATE_KINDS = (LIKED_PARTNERS,)
 
 SHORT_REST = "short rest"
 DISLIKED_PARTNER = "disliked partner"
-STRAW_KINDS = (SHORT_REST, DISLIKED_PARTNER)  # per-day load isn't a straw: load complaints already measure it
+STRAW_KINDS = (SHORT_REST, DISLIKED_PARTNER)  # a day's load isn't a straw: load complaints already measure it
 
 EXIT_SUCCESS = 0
 EXIT_ILLEGAL = 1  # the schedule breaks a hard constraint, so there's nothing to audit
@@ -54,7 +56,7 @@ EXIT_USAGE = 2    # invalid arguments, or the files couldn't be read or don't ma
 
 @dataclass(frozen=True, slots=True)
 class Window:
-    """A stretch of time load is compared over: a day, or the whole period."""
+    """A stretch of time load is compared over: a day window (DAY_LENGTH long), or the whole period."""
     label: str
     time: DateTimeRange
 
@@ -63,6 +65,7 @@ class Window:
 class AuditContext:
     """
     Everything about an input that doesn't depend on the assignment, computed once.
+    windows are the day windows, then the whole period; shift_windows[s] the labels of the windows shift s starts in.
     availability[w][label] is worker w's available hours in that window; longest[label] the length in hours of the
     longest shift starting in it (windows without shifts are left out).
     """
@@ -70,7 +73,7 @@ class AuditContext:
     shifts: tuple[Shift, ...]
     slots: tuple[Slot, ...]
     windows: tuple[Window, ...]
-    shift_day: tuple[str, ...]
+    shift_windows: tuple[tuple[str, ...], ...]
     availability: tuple[dict[str, float], ...]
     longest: dict[str, float]
     likes: tuple[frozenset[int], ...]
@@ -82,20 +85,20 @@ def hours(length: dt.timedelta) -> float:
     return length / dt.timedelta(hours=1)
 
 
-def day_start(moment: dt.datetime) -> dt.datetime:
-    """The start of the day (beginning at DAY_BOUNDARY) that a moment falls in."""
-    start = dt.datetime.combine(moment.date(), DAY_BOUNDARY)
-    return start if start <= moment else start - dt.timedelta(days=1)
-
-
-def days(period: DateTimeRange) -> list[Window]:
-    """The days the period touches, each labelled with the date it starts on."""
-    result = []
-    start = day_start(period.start)
-    while start < period.end:
-        result.append(Window(start.date().isoformat(), DateTimeRange(start, start + dt.timedelta(days=1))))
-        start += dt.timedelta(days=1)
-    return result
+def day_windows(period: DateTimeRange, shifts: Sequence[Shift]) -> list[Window]:
+    """
+    The day windows: stretches of DAY_LENGTH within the period, one starting at each shift's start and one ending at
+    the period's end, so that whatever shifts start within some stretch of DAY_LENGTH also start within one of them.
+    None if the period is no longer than DAY_LENGTH, since the whole period then already compares the day.
+    :param period: DateTimeRange
+    :param shifts: the shifts
+    :return: the windows in time order, each labelled with its start
+    """
+    if period.duration <= DAY_LENGTH:
+        return []
+    starts = {shift.time.start for shift in shifts} | {period.start, period.end - DAY_LENGTH}
+    return [Window(f"{start:%Y-%m-%d %H:%M}", DateTimeRange(start, start + DAY_LENGTH)) for start in sorted(starts)
+            if period.start <= start and start + DAY_LENGTH <= period.end]
 
 
 def available_hours(unavailable: Sequence[DateTimeRange], window: DateTimeRange, period: DateTimeRange) -> float:
@@ -128,16 +131,17 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
     :return: the AuditContext
     """
     period = schedule_input.settings.period
-    windows = tuple(days(period)) + (Window(WHOLE_PERIOD, period),)
-    shift_day = tuple(day_start(shift.time.start).date().isoformat() for shift in shifts)
+    windows = tuple(day_windows(period, shifts)) + (Window(WHOLE_PERIOD, period),)
+    shift_windows = tuple(tuple(window.label for window in windows
+                                if window.time.start <= shift.time.start < window.time.end) for shift in shifts)
     longest: dict[str, float] = {}
-    for shift, day in zip(shifts, shift_day):
-        for label in (day, WHOLE_PERIOD):
+    for shift, labels in zip(shifts, shift_windows):
+        for label in labels:
             longest[label] = max(longest.get(label, 0.0), hours(shift.time.duration))
     index_of = {worker.name: index for index, worker in enumerate(schedule_input.workers)}
     return AuditContext(
         schedule_input=schedule_input, shifts=tuple(shifts), slots=tuple(slots), windows=windows,
-        shift_day=shift_day,
+        shift_windows=shift_windows,
         availability=tuple({window.label: available_hours(worker.unavailable, window.time, period)
                             for window in windows} for worker in schedule_input.workers),
         longest=longest,
@@ -219,7 +223,7 @@ def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int
     count: Counter[str] = Counter()
     worked: Counter[str] = Counter()
     for index in own:
-        for label in (context.shift_day[index], WHOLE_PERIOD):
+        for label in context.shift_windows[index]:
             count[label] += 1
             worked[label] += hours(context.shifts[index].time.duration)
     partners: Counter[int] = Counter(other for index in own for other in set(crews[index]) if other != worker)
@@ -284,19 +288,46 @@ def _pairs(context: AuditContext, label: str) -> Iterator[tuple[int, int]]:
             yield worker, other
 
 
+def load_gap(context: AuditContext, stats: tuple[WorkerStats, ...], worker: int, other: int, label: str) -> float:
+    """
+    How far a worker's load exceeds another's in a window: the gap in shifts, or in hours over the window's longest
+    shift, whichever is larger
+    """
+    mine, theirs = stats[worker], stats[other]
+    return max(mine.shift_count.get(label, 0) - theirs.shift_count.get(label, 0),
+               (mine.shift_hours.get(label, 0.0) - theirs.shift_hours.get(label, 0.0)) / context.longest[label])
+
+
+def worst_day(context: AuditContext, stats: tuple[WorkerStats, ...], worker: int, other: int) -> tuple[str, float]:
+    """
+    The day window in which a worker's load most exceeds another's, among those in which the other is a peer
+    :return: (the window's label, the gap); ("", 0.0) if there's no such window
+    """
+    worst = ("", 0.0)
+    for window in context.windows[:-1]:
+        if window.label in context.longest and is_peer(context, worker, other, window.label):
+            gap = load_gap(context, stats, worker, other, window.label)
+            if gap > worst[1] + SEVERITY_EPSILON:
+                worst = (window.label, gap)
+    return worst
+
+
 def _load_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> list[Complaint]:
-    """Load complaints, per day and overall: the gap in shifts, or in hours over the window's longest shift."""
+    """
+    Load complaints, over the whole period, and in any day: one per pair of workers, over the day window where the
+    gap is widest, so that overlapping windows don't count the same extra load several times
+    """
     result = []
-    for window in context.windows:
-        longest = context.longest.get(window.label)
-        if longest is None:
-            continue
-        for worker, other in _pairs(context, window.label):
-            mine, theirs = stats[worker], stats[other]
-            gap = max(mine.shift_count.get(window.label, 0) - theirs.shift_count.get(window.label, 0),
-                      (mine.shift_hours.get(window.label, 0.0) - theirs.shift_hours.get(window.label, 0.0)) / longest)
+    if WHOLE_PERIOD in context.longest:
+        for worker, other in _pairs(context, WHOLE_PERIOD):
+            gap = load_gap(context, stats, worker, other, WHOLE_PERIOD)
             if gap > TOLERANCE + SEVERITY_EPSILON:
-                result.append(Complaint(LOAD, worker, other, window.label, gap))
+                result.append(Complaint(LOAD, worker, other, WHOLE_PERIOD, gap))
+    if len(context.windows) > 1:
+        for worker, other in itertools.permutations(range(len(context.schedule_input.workers)), 2):
+            gap = worst_day(context, stats, worker, other)[1]
+            if gap > TOLERANCE + SEVERITY_EPSILON:
+                result.append(Complaint(LOAD, worker, other, ANY_DAY, gap))
     return result
 
 
@@ -563,8 +594,11 @@ def describe_complaint(context: AuditContext, audit: Audit, complaint: Complaint
     other = context.schedule_input.workers[complaint.against].name
     mine, theirs = audit.stats[complaint.worker], audit.stats[complaint.against]
     if complaint.kind == LOAD:
-        label = complaint.window
-        when = "overall" if label == WHOLE_PERIOD else f"on {label}"
+        if complaint.window == WHOLE_PERIOD:
+            label, when = WHOLE_PERIOD, "overall"
+        else:
+            label = worst_day(context, audit.stats, complaint.worker, complaint.against)[0]
+            when = f"in the {shown(hours(DAY_LENGTH))} hours from {label}"
         return (f"load {when}: {mine.shift_count.get(label, 0)} shifts ({shown(mine.shift_hours.get(label, 0.0))} h), "
                 f"against {other}'s {theirs.shift_count.get(label, 0)} ({shown(theirs.shift_hours.get(label, 0.0))} h)")
     if complaint.kind == SHORT_STRAWS:
@@ -586,10 +620,13 @@ def card(context: AuditContext, audit: Audit, fixes: dict[ComplaintKey, Fix], wo
     availability = context.availability[worker]
     lines = [f"{workers[worker].name}: {stats.shift_count.get(WHOLE_PERIOD, 0)} shifts, "
              f"{shown(stats.shift_hours.get(WHOLE_PERIOD, 0.0))} h; available {shown(availability[WHOLE_PERIOD])} h"]
-    for window in context.windows[:-1]:
-        lines.append(f"  {window.label}: {stats.shift_count.get(window.label, 0)} shifts, "
-                     f"{shown(stats.shift_hours.get(window.label, 0.0))} h; available "
-                     f"{shown(availability[window.label])} h")
+    busiest = max(context.windows[:-1], default=None,
+                  key=lambda window: (stats.shift_count.get(window.label, 0), stats.shift_hours.get(window.label, 0)))
+    if busiest is not None:
+        lines.append(f"  busiest {shown(hours(DAY_LENGTH))} hours, from {busiest.label}: "
+                     f"{stats.shift_count.get(busiest.label, 0)} shifts, "
+                     f"{shown(stats.shift_hours.get(busiest.label, 0.0))} h; available "
+                     f"{shown(availability[busiest.label])} h")
     rests = ", ".join(f"{shown(rest)} h" for rest in stats.rests) or "none"
     lines.append(f"  rests: {rests}")
     straws = ", ".join(f"{kind} {stats.straws[kind]}" for kind in STRAW_KINDS)

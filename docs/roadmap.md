@@ -94,7 +94,7 @@ code with `csp/` or `scoring/`.
 
 - [x] Spec: the criteria and their definitions, for approval before any code
   ([Schedule audit](explanation/schedule-audit.md)). Judged **relative to other workers**: excess over the most
-  even split possible (per day and overall), easy fixes (could a few simple legal swaps or moves fix it?), how
+  even split possible (in any 24 hours and overall), easy fixes (could a few simple legal swaps or moves fix it?), how
   often each worker draws the short straw, and social pairings
 - [x] Move the independent hard-constraint checker from `tests/` to `tools/`, shared by the tests and the audit,
   with a reader for written CSV schedules (`tools/schedule_reader.py`)

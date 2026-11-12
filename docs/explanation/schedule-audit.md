@@ -59,16 +59,29 @@ A worker's availability during a window is the part of the window inside the per
 
 ### Load
 
-Load is compared per **day** and over the **whole period**:
+Load is compared over the **whole period** and **in any day**: each worker wants to do no more than anyone else,
+both during the day and in the schedule overall.
 
-* **Days** run from `DAY_BOUNDARY` (midnight) to the next; a shift belongs to the day it starts on. Days are only
-  counting windows.
+* **A day is any 24 hours** (`DAY_LENGTH`) within the period, wherever it starts. Midnight means nothing special, as
+  the schedule makes no distinction between day and night: two shifts two hours apart are on the same day even if
+  midnight falls between them. A shift counts in the days it starts in.
+* In practice, the windows compared start at each shift's start, plus one ending at the period's end; whatever shifts
+  start within some 24 hours also start within one of those.
+* A worker complains about a peer **once** for the day, over the window where the gap is widest, so overlapping
+  windows don't count the same extra load several times. Peers are found per window, as usual.
+* A period of 24 hours or less has no separate day comparison: the whole period is the day.
 * Load is measured both in **shifts** and in **hours**, and the gap is taken in shifts: the larger of the difference
   in shifts and the difference in hours divided by the longest shift in the window. That keeps "one extra shift"
   tolerated even when posts have different shift lengths.
 
-For example, if A did 4 shifts of 4 hours on a day and B, available all that day, did 2, the gap is 2 and A has a
-complaint of severity 1 against B.
+For example, if A did 4 shifts of 4 hours within some 24 hours and B, available all that time, did 2, the gap is 2
+and A has a complaint of severity 1 against B.
+
+(Decided 2026-11-12. Days used to be calendar days, from midnight, with a shift belonging to the day it starts on.
+In the tuning checks, almost every per-day complaint came from that split alone: in a schedule starting at 16:00,
+a worker with shifts at 01:00 and 12:00 complained about one who worked 20:00–00:00, though their loads over the
+schedule were within the tolerance, and a 22:00–04:00 shift counted for nothing on the day most of its hours fell
+on.)
 
 ### Short straws
 
@@ -81,7 +94,7 @@ peers (available at least as long over the whole period) with the same tolerance
   minimum, but in the tuning benchmarks most rests were that short, so it counted the norm as a straw.)
 * **Disliked partner** — each shift shared with a worker they dislike.
 
-Having the most shifts on a day isn't a short straw: [load](#load) already compares per-day load, with the same
+Having the most shifts in a day isn't a short straw: [load](#load) already compares load in any day, with the same
 tolerance. Counting it again would count one extra shift twice, since two shifts on one day usually also mean a short
 rest: a worker with two close shifts would be 2 straws ahead of a peer with one shift, a complaint, although the load
 gap of one shift is tolerated. (An earlier version did count it, and the first tuning baseline was dominated by such
@@ -124,7 +137,7 @@ Each candidate change is audited in full, which is slow but straightforward.
 
 ## The report
 
-* A **card per worker**: their shifts and hours (per day and overall) against their availability, their shortest
+* A **card per worker**: their shifts and hours (overall, and in their busiest 24 hours) against their availability, their shortest
   rests, their short straws, who they shared shifts with, and their complaints, most severe first, each with its
   easy fix, if one was found.
 * A **group summary**: the number of complaints and how many have an easy fix; the total severity of those with an
@@ -165,5 +178,5 @@ blind spots.
 
 ## Parameters
 
-Named constants at the top of the audit's code: `TOLERANCE` (1), `DAY_BOUNDARY` (00:00), `SHORT_REST_MARGIN`
+Named constants at the top of the audit's code: `TOLERANCE` (1), `DAY_LENGTH` (24 hours), `SHORT_REST_MARGIN`
 (2 hours), `MAX_CHANGES` (3). They're the audit's own, and unrelated to the [scoring parameters](scoring.md#parameters).

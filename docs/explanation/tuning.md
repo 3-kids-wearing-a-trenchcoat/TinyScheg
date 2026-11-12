@@ -91,4 +91,5 @@ searching again.
 * Tuning to the audit's quirks: reading cards by hand at the last stage guards against it.
 * The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
 * Benchmarks are small (16–24 hours) so that branch and bound finishes; the longer tiers check that results carry
-  over. Fairness across days can only be studied on 48-hour inputs, if any finish.
+  over. Since a period of 24 hours or less is itself the day, the audit's load in any day only adds anything on
+  longer inputs, so load within a day can only be studied on 48-hour inputs, if any finish.
