@@ -366,21 +366,28 @@ def main() -> None:
         parser.error("the number of jobs must be at least 1")
     names = arguments.tier or list(TIERS)
     INPUTS.mkdir(exist_ok=True)
-    new_rows: list[dict[str, Any]] = []
     for name in names:
         for old in INPUTS.glob(f"{name}_*.yml"):
             old.unlink()
-        new_rows += build_tier(TIERS[name], arguments.jobs)
-    # read the other tiers' rows only now, so that tiers generated at the same time don't overwrite each other
+        write_manifest(name, build_tier(TIERS[name], arguments.jobs))
+
+
+def write_manifest(tier_name: str, rows: list[dict[str, Any]]) -> None:
+    """
+    Replace one tier's rows in the manifest, as soon as the tier is done, so that a slow tier generated after it
+    can't hold it back
+    :param tier_name: str
+    :param rows: the tier's new manifest rows
+    """
+    # the other tiers' rows are read only now, so that tiers generated at the same time don't overwrite each other
     kept_rows: list[dict[str, Any]] = []
     if MANIFEST.exists():
         with open(MANIFEST, encoding="utf-8", newline="") as file:
-            kept_rows = [row for row in csv.DictReader(file) if row["tier"] not in names]
-    kept_rows += new_rows
+            kept_rows = [row for row in csv.DictReader(file) if row["tier"] != tier_name]
     with open(MANIFEST, "w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, MANIFEST_FIELDS)
         writer.writeheader()
-        writer.writerows(kept_rows)
+        writer.writerows(kept_rows + rows)
 
 
 if __name__ == "__main__":

@@ -76,6 +76,16 @@ def test_a_tier_keeps_the_same_inputs_for_any_number_of_jobs(tmp_path: pathlib.P
     assert sorted(path.name for path in (tmp_path / "3").iterdir()) == ["test_01.yml", "test_02.yml", "test_03.yml"]
 
 
+def test_writing_a_tier_replaces_only_its_own_manifest_rows(tmp_path: pathlib.Path,
+                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(generate, "MANIFEST", tmp_path / "manifest.csv")
+    generate.write_manifest("sweep", [{"name": "sweep_01", "tier": "sweep"}, {"name": "sweep_02", "tier": "sweep"}])
+    generate.write_manifest("confirm", [{"name": "confirm_01", "tier": "confirm"}])
+    generate.write_manifest("sweep", [{"name": "sweep_01", "tier": "sweep"}])
+    with open(tmp_path / "manifest.csv", encoding="utf-8", newline="") as file:
+        assert [row["name"] for row in csv.DictReader(file)] == ["confirm_01", "sweep_01"]
+
+
 # --- the tuning runner ---
 
 def test_a_weight_share_keeps_the_other_weights_ratio() -> None:
