@@ -158,3 +158,53 @@ def test_the_audit_judges_a_schedule_together_with_its_history(tmp_path: pathlib
     report = capsys.readouterr().out
     assert report.startswith("together with its history: 1 previous schedule(s), 3 slots that no fix may change")
     assert "Anne: " in report
+
+
+def consecutive_text(start: str, end: str, away: str = "", history: str = "") -> str:
+    """
+    An input for consecutive schedules: 2-hour desk shifts, 2 hours' minimum rest and a rest target of one shift, so
+    that no rest falls short and workload alone decides; Cy may be away
+    """
+    return textwrap.dedent(f"""\
+        settings:
+          time: ["{start}", "{end}"]
+          min_rest: 2
+          scoring: {{rest_factor: 1}}
+        workers:
+          - name: "Anne"
+          - name: "Bob"
+          - name: "Cy"
+            unavailable: [{away}]
+        posts:
+          - name: "desk"
+            roles: {{any: 1}}
+            length: 2
+        """) + history
+
+
+def second_day(tmp_path: pathlib.Path) -> list[int]:
+    """Write day 2 with day 1 as its history through the command line, and count each worker's new shifts."""
+    (tmp_path / "day2.yml").write_text(consecutive_text("2025-01-01T12:00", "2025-01-02T00:00",
+                                                        history=history_of("day1", extension=".csv")), encoding="utf-8")
+    assert main([str(tmp_path / "day2.yml"), "-o", str(tmp_path / "day2_schedule.xlsx")]) == EXIT_SUCCESS
+    assignment = read_schedule(tmp_path / "day2_schedule.xlsx", read_input(tmp_path / "day2.yml")).assignment
+    return [assignment.count(worker) for worker in range(3)]
+
+
+def test_two_consecutive_schedules_the_second_making_up_for_the_first(tmp_path: pathlib.Path) -> None:
+    # day 1 is written by the command line, then edited by hand: Anne took all of Cy's shifts
+    (tmp_path / "day1.yml").write_text(consecutive_text("2025-01-01T00:00", "2025-01-01T12:00"), encoding="utf-8")
+    assert main([str(tmp_path / "day1.yml"), "-o", str(tmp_path / "day1_schedule.csv")]) == EXIT_SUCCESS
+    day1 = tmp_path / "day1_schedule.csv"
+    day1.write_text(day1.read_text(encoding="utf-8-sig").replace("Cy", "Anne"), encoding="utf-8-sig")
+    anne, bob, cy = second_day(tmp_path)
+    assert cy > bob > anne  # Cy did nothing before, Anne the most
+
+
+def test_being_away_in_the_history_is_no_debt(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "day1.yml").write_text(consecutive_text("2025-01-01T00:00", "2025-01-01T12:00",
+                                                        away='["2025-01-01T00:00", "2025-01-01T12:00"]'),
+                                       encoding="utf-8")
+    assert main([str(tmp_path / "day1.yml"), "-o", str(tmp_path / "day1_schedule.csv")]) == EXIT_SUCCESS
+    counts = second_day(tmp_path)
+    assert sum(counts) == 6 and max(counts) - min(counts) <= 1  # Cy was away, so the new shifts are split evenly
