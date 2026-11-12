@@ -23,7 +23,7 @@ A schedule as a table. Immutable.
 * `rows` — `tuple[DateTimeRange, ...]`, the intervals between consecutive shift boundaries over all posts, in time
   order. Intervals during which no post is active are left out.
 * `cells` — `tuple[tuple[int | None, ...], ...]`: for each row and column, the index of the shift covering that
-  cell, or `None` if the post isn't active then. A shift covering several rows has its index in each of them; this is
+  cell (its position in the shifts the grid was built from), or `None` if the post isn't active then. A shift covering several rows has its index in each of them; this is
   what spreadsheet formats merge, and it tells consecutive shifts apart even when the same workers fill both.
 * `shift_names` — `tuple[str, ...]`: for each shift, its workers' names in stable slot order, joined with `" & "`.
 
@@ -42,9 +42,10 @@ shifts filled by the same workers are separate spans, since their cells hold dif
 Lays a schedule out as a grid.
 
 * `posts` — all posts, in input order. Each gets a column, even one with no shifts in the period.
-* `shifts` — the schedule's shifts, in stable order.
+* `shifts` — the shifts to show, in stable order: the schedule's, or with a history, the new period's
+  (`Problem.new_shifts`).
 * `workers` — all workers, in input order.
-* `assignment` — a worker index per slot, in stable slot order, as found by the
+* `assignment` — a worker index per slot (by `slot.index`), in stable slot order, as found by the
   [search](search.md#find_first_scheduleproblem-searchresult).
 
 Every shift's start and end is a row boundary, so each shift covers whole, consecutive rows.

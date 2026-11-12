@@ -9,8 +9,9 @@ in its "Later" section.
 ## Schedule history
 
 > [!WARNING]
-> **Not yet implemented.** Designed on 2026-11-12 ([ADR 0029](../decisions/0029-schedule-history-input.md),
-> [ADR 0030](../decisions/0030-history-in-scoring.md)), and being built as Phase 7 of the [roadmap](../roadmap.md).
+> **Partially implemented.** Built on 2026-11-12 ([ADR 0029](../decisions/0029-schedule-history-input.md),
+> [ADR 0030](../decisions/0030-history-in-scoring.md), [ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md));
+> the audit across schedules is still to come (Phase 7 of the [roadmap](../roadmap.md)).
 
 Currently every run creates a **new** schedule, in which every worker is "fresh". When schedules are created for
 consecutive periods (typically 24–48 hours), this causes two problems at the boundary between periods:
@@ -22,8 +23,8 @@ consecutive periods (typically 24–48 hours), this causes two problems at the b
 
 The solution: the input lists **previous schedules**, each as its input and its schedule file
 ([output](../reference/output-format.md#reading-the-output-back), which is designed to be read back). Their
-assignments are **fixed** history, and the history and the new schedule are scored as one, so the algorithm
-effectively *extends* the earlier schedules rather than starting from scratch:
+assignments are **fixed**: the history is the already-filled first part of one schedule, which the search continues
+and which is scored as a whole, from scratch, so the algorithm effectively *extends* the earlier schedules:
 
 * the minimum rest holds across the boundary, as a hard constraint;
 * workload is counted over the history and the new period together, relative to each worker's availability in

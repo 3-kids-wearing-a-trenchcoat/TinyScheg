@@ -16,8 +16,8 @@ The changing part of the search, and the change records used to undo assignments
 
 ### `class SearchState(problem)`
 
-The domains and assignments of all slots, starting from `problem.domains` with nothing assigned. The `Problem`
-itself is never changed.
+The domains and assignments of all slots, starting from `problem.domains` with nothing assigned, or with the history
+slots filled if the problem has a history (`problem.fixed`). The `Problem` itself is never changed.
 
 * `problem` — the `Problem`.
 * `domains` — `list[tuple[int, ...]]`: for each slot, the workers who can still fill it, ascending. Domains are

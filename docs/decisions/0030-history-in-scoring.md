@@ -1,6 +1,7 @@
 # 0030. History in scoring: the history and the new schedule scored as one
 
-**Status:** Accepted.
+**Status:** Accepted. Amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) (points 1–3: scored
+as one schedule from scratch, with no special cases).
 
 ## Context
 

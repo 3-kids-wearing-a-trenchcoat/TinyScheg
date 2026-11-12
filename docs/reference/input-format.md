@@ -154,13 +154,15 @@ posts:
 
 ## `history`
 
-> [!IMPORTANT]
-> **Partially implemented.** The section is read and checked; the search and scoring don't use it yet (see the
-> [roadmap](../roadmap.md), Phase 7).
+> [!NOTE]
+> **Implemented.** The section is read and checked, and the schedule is searched as the continuation of the
+> previous ones ([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)).
 
 The previous schedules this one extends ([ADR 0029](../decisions/0029-schedule-history-input.md)), so that the
 minimum rest holds across the boundary and fairness carries over
-([ADR 0030](../decisions/0030-history-in-scoring.md)). Optional; each entry is a previous schedule's input file and
+([ADR 0030](../decisions/0030-history-in-scoring.md), [ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): the
+history's shifts are treated as the already-filled first part of one schedule, which the search continues. Optional;
+each entry is a previous schedule's input file and
 the schedule file written for it:
 
 | Field      | Type   | Required | Meaning |

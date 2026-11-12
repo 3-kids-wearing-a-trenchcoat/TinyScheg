@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–6 complete; Phase 7 under way. Next: minimum rest across the boundary.
+Progress: Phases 1–6 complete; Phase 7 under way. Next: the audit across schedules.
 
 ## Phase 1: Walking skeleton
 
@@ -154,10 +154,12 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
   starts, which also resolves the CSV read-back limitation with a minimum rest of 0; the development tools use it
 - [x] The `history` input section: parsing, validation (periods before the current one and not overlapping), a
   warning for workers who have left
-- [ ] Minimum rest across the boundary between schedules, as unavailability in the search
-- [ ] History in scoring: workload over the history and the new period, rest at the boundary, the look-ahead bound
-  and incremental scoring
-- [ ] Command line: report the history used
+- [x] The history as the already-filled first part of one schedule
+  ([ADR 0031](decisions/0031-history-as-the-filled-part-of-one-schedule.md)): history slots fixed, the minimum rest
+  across the boundary from the ordinary constraints, availability over the whole schedule, scoring and incremental
+  scoring from scratch on the filled part; the independent checker covers the boundary
+- [x] Command line: the new period written, the whole schedule's penalty reported, a warning for workers who have
+  left
 - [ ] Audit across schedules: the audit reads the history too, to check that fairness carries over, including
   whether past short straws need compensating (ADR 0030)
 - [ ] End-to-end test: two consecutive schedules, the second making up for the first

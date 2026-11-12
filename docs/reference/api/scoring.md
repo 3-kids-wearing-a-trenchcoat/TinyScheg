@@ -152,7 +152,9 @@ $\max(0, \gamma \cdot |s| - \text{rest after } s)$, divided by their `worst_defi
 
 ### Helpers shared with the `incremental` module
 
-`shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes look-ahead),
+`likes_total(constants, assignment)` and `workload_total(constants, assignment)` (the likes and workload penalties
+before normalizing), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
+look-ahead),
 `pair_like_value(constants, worker, partner)` (both workers' like values of each other), `normalized_likes(constants,
 total)` and `rest_deficit(constants, earlier, later)` (one rest's deficit). Both modules use them, so that they do the
 same arithmetic.
@@ -182,5 +184,7 @@ Methods:
 * `undo()` — restore the totals from before the latest `assign`, exactly: saved values are put back, never
   subtracted.
 
-**Raises** `ValueError` if the assignment isn't empty at the start.
+The assignment may already be partly filled, as with a history
+([ADR 0031](../../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): the totals of what's filled are
+then computed from scratch, with `likes_total`, `workload_total` and `rest_penalty`, and kept up to date from there.
 

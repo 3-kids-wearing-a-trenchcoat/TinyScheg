@@ -53,6 +53,11 @@ penalty 2.16 (likes 1.80, workload 3.32, rest 0.22), the best possible
 The penalty and each part lie between 0 and the number of workers, shown to `PENALTY_DECIMALS` (2) decimals; the
 seconds in progress lines to `ELAPSED_DECIMALS` (0).
 
+With a [history](input-format.md#history), the schedule is searched as the continuation of the previous ones
+([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): the file written holds the new period
+only, and the counts are the new period's, but the penalty is that of the whole schedule, history included, so it
+isn't comparable with a run without one.
+
 ## Errors
 
 Every problem is reported on standard error, prefixed with `tinyscheg:`, and nothing is written.

@@ -9,7 +9,7 @@ The scheduling problem as a CSP (see [CSP formulation](../../explanation/csp-for
 variables and workers the values. Workers and slots are referred to **by index**: a worker's index is its position in
 the input, and a slot's index is its position in the stable slot order (`slot.index`).
 
-## `class Problem(workers, shifts, slots, domains, neighbours, min_rest, interchangeable=())`
+## `class Problem(workers, shifts, slots, domains, neighbours, min_rest, interchangeable=(), fixed=(), settings=None)`
 
 The fixed description of a scheduling CSP. It's immutable and doesn't change during the search, which keeps its own
 state, starting from `domains`.
@@ -26,12 +26,36 @@ state, starting from `domains`.
 * `interchangeable` — `tuple[tuple[int, ...], ...]`: for each slot, the indexes of the other slots of its shift that
   need the same role, ascending; the search fills them in ascending worker order
   ([ADR 0025](../../decisions/0025-order-interchangeable-slots.md)). Empty (the default) for none.
+* `fixed` — `tuple[int | None, ...]`: with a [history](../input-format.md#history), the worker of each history slot,
+  and `None` for each new one; empty (the default) without a history. The search starts with the fixed slots filled.
+* `settings` — the [`Settings`](schedule-input.md) of the whole schedule, whose period runs from the history's start
+  to the new period's end; the input's own without a history. The scoring constants are built from it. `None` only
+  for problems built by hand.
+
+Properties and methods:
+
+* `is_fixed(slot_index)` — whether the slot is a history slot.
+* `new_shifts`, `new_slots` — the new period's shifts and slots, the ones the search fills and the output shows:
+  all of them without a history.
 
 ## `build_problem(schedule_input) -> Problem`
 
 Sets up the CSP for a validated `ScheduleInput`: generates its shifts and slots
 ([`generate_shifts`](post-and-slot.md#generate_shiftsposts-period-tupleshift)), then their domains and difference
 constraints.
+
+With a history, it sets up one schedule from the history's start to the new period's end, already filled up to the
+new period ([ADR 0031](../../decisions/0031-history-as-the-filled-part-of-one-schedule.md)):
+
+* the history's shifts come first, generated from each previous input (in order of their periods) with their
+  workers, matched by name; slots of workers who have left are dropped, and so are shifts left with none;
+* history slots have their worker as their only value, whatever the current rules, and aren't constrained with each
+  other;
+* each new slot's domain leaves out the workers of the history slots it's constrained with (overlap or minimum
+  rest), as forward checking from them would;
+* `workers` are the input's, each with the unavailability they had over the whole schedule: as in each history
+  input during its period (all of it if they weren't in that input), as in this input during the new period, and
+  all the time between periods, so that availability counts only the periods themselves.
 
 ## `initial_domain(slot, workers) -> tuple[int, ...]`
 

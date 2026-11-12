@@ -17,7 +17,7 @@ experience in the terms workers actually use. Comparing the two shows where the 
 To keep the comparison meaningful, the audit is **independent**: it uses `tinyscheg.model` and `tinyscheg.parsing`
 to read the input and list the shifts, the written schedule file for the assignment
 ([`tinyscheg.parsing.schedule_reader`](../reference/api/parsing.md#schedule_reader-module), in any of the output formats),
-and the independent hard-constraint checker
+and the independent hard-constraint checker, which also checks the minimum rest after each worker's history shifts
 ([`tools/schedule_checker.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/tools/schedule_checker.py))
 for legality — and nothing from `csp/` or `scoring/`. A bug or blind spot there can't hide the same one here.
 

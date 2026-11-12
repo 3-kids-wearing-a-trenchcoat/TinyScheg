@@ -1,6 +1,7 @@
 # 0029. Schedule history: previous inputs and their schedules, read back as fixed history
 
-**Status:** Accepted.
+**Status:** Accepted. Amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) (point 6: history is
+assigned time, not unavailability).
 
 ## Context
 

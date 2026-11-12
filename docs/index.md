@@ -80,4 +80,5 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Output (CSV grid)                   | Implemented and tested    |
 | Output (XLSX, ODS)                  | Implemented and tested    |
 | Command-line interface              | Implemented and tested    |
+| Schedule history                    | Implemented and tested    |
 | Schedule audit (development tool)   | Implemented and tested    |
