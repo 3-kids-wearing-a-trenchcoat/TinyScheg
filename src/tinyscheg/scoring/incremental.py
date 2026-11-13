@@ -7,7 +7,6 @@ also defines what these totals must equal, up to rounding.
 from __future__ import annotations
 
 import bisect
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -27,7 +26,7 @@ class _Saved:
     remaining: float
     worker: int                                  # the worker assigned
     load: float                                  # their load before
-    slots: list[int]                             # their slots before
+    position: int                                # where the slot went among their slots
     caps: tuple[tuple[int, float], ...]          # (worker, cap before), for every cap changed
     shift_bounds: tuple[tuple[int, float], ...]  # (shift index, its likes look-ahead before), for every one changed
 
@@ -59,7 +58,9 @@ class IncrementalScore:
         self.slots: list[list[int]] = _slots_by_worker(constants, assignment)
         self.shift_bounds = [shift_likes_lower_bound(constants, shift, assignment, domains)
                              for shift in constants.shifts]
-        self.likes_bound = math.fsum(self.shift_bounds)
+        self.likes_bound = 0.0
+        for shift_bound in self.shift_bounds:  # a plain loop rounds the same on every interpreter, like fsum
+            self.likes_bound += shift_bound
         self.caps = [0.0] * len(constants.workers)
         self.remaining = 0.0
         for slot, domain in enumerate(domains):
@@ -107,8 +108,9 @@ class IncrementalScore:
                  (self.load[index] + self.caps[index]) / worker.availability)
                 for index, worker in enumerate(constants.workers) if worker.availability > 0]
         level = _water_level(pool, self.remaining)
-        filled = math.fsum(availability * min(max(ratio, level), highest) ** power
-                           for ratio, availability, highest in pool)
+        filled = 0.0
+        for ratio, availability, highest in pool:  # a plain loop rounds the same on every interpreter, like fsum
+            filled += availability * min(max(ratio, level), highest) ** power
         return filled / constants.workload_unit
 
     # --- assigning and undoing ---
@@ -128,8 +130,7 @@ class IncrementalScore:
         changed_shifts = sorted({constants.slots[slot].shift_index}
                                 | {constants.slots[other].shift_index for other in before})
         old_shift_bounds = tuple((shift, self.shift_bounds[shift]) for shift in changed_shifts)
-        old = (self.likes, self.workload, self.rest, self.likes_bound, self.remaining, self.load[worker],
-               list(self.slots[worker]))
+        old = (self.likes, self.workload, self.rest, self.likes_bound, self.remaining, self.load[worker])
         # the scores, from the deltas, taken before the worker's load and slots change
         rest_delta, position = self._rest_delta(worker, slot)
         self.likes += self._likes_delta(slot, worker)
@@ -155,8 +156,8 @@ class IncrementalScore:
             new = shift_likes_lower_bound(constants, constants.shifts[shift], self.assignment, self.domains)
             self.likes_bound += new - self.shift_bounds[shift]
             self.shift_bounds[shift] = new
-        likes, workload, rest, likes_bound, remaining, load, slots = old
-        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, worker, load, slots,
+        likes, workload, rest, likes_bound, remaining, load = old
+        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, worker, load, position,
                                   tuple(caps_before.items()), old_shift_bounds))
 
     def undo(self) -> None:
@@ -165,7 +166,7 @@ class IncrementalScore:
         self.likes, self.workload, self.rest = saved.likes, saved.workload, saved.rest
         self.likes_bound, self.remaining = saved.likes_bound, saved.remaining
         self.load[saved.worker] = saved.load
-        self.slots[saved.worker] = saved.slots
+        del self.slots[saved.worker][saved.position]
         for capped, cap in saved.caps:
             self.caps[capped] = cap
         for shift, value in saved.shift_bounds:

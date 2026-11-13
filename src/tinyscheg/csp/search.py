@@ -42,11 +42,19 @@ def choose_slot(state: SearchState) -> int | None:
     :param state: SearchState, the current domains and assignments
     :return: the index of the slot to fill next, or None if every slot is assigned
     """
-    unassigned = [index for index, worker in enumerate(state.assigned) if worker is None]
-    if not unassigned:
+    domains = state.domains
+    smallest = -1
+    tied: list[int] = []  # the unassigned slots with the smallest domain so far, ascending, so in stable order
+    for index, worker in enumerate(state.assigned):
+        if worker is not None:
+            continue
+        size = len(domains[index])
+        if size < smallest or smallest < 0:
+            smallest, tied = size, [index]
+        elif size == smallest:
+            tied.append(index)
+    if not tied:
         return None
-    smallest = min(len(state.domains[index]) for index in unassigned)
-    tied = [index for index in unassigned if len(state.domains[index]) == smallest]  # ascending, so stable order
     if len(tied) == 1:
         return tied[0]
     return max(tied, key=lambda index: _unassigned_neighbours(state, index))  # max keeps the first of equals

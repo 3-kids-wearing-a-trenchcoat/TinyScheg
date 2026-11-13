@@ -59,7 +59,8 @@ class SearchState:
             if self.assigned[neighbour] is not None or worker not in domain:
                 continue
             saved.append((neighbour, domain))
-            self.domains[neighbour] = tuple(other for other in domain if other != worker)
+            position = domain.index(worker)  # domains hold each worker once
+            self.domains[neighbour] = domain[:position] + domain[position + 1:]
             if not self.domains[neighbour]:
                 emptied = neighbour
                 break  # this assignment is a dead end; there's no point in checking further
