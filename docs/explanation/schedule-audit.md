@@ -64,18 +64,33 @@ both during the day and in the schedule overall.
 
 * **A day is any 24 hours** (`DAY_LENGTH`) within the period, wherever it starts. Midnight means nothing special, as
   the schedule makes no distinction between day and night: two shifts two hours apart are on the same day even if
-  midnight falls between them. A shift counts in the days it starts in.
-* In practice, the windows compared start at each shift's start, plus one ending at the period's end; whatever shifts
-  start within some 24 hours also start within one of those.
+  midnight falls between them. A shift counts in **every day it overlaps**, with the hours of it that fall in that
+  day: a 14:00–20:00 shift counts in the day from 17:00, with 3 hours.
+* In practice, the windows compared start at each shift's start, end at each shift's end, and start and end at the
+  period's ends; whatever shifts overlap some 24 hours also overlap one of those.
 * A worker complains about a peer **once** for the day, over the window where the gap is widest, so overlapping
   windows don't count the same extra load several times. Peers are found per window, as usual.
 * A period of 24 hours or less has no separate day comparison: the whole period is the day.
-* Load is measured both in **shifts** and in **hours**, and the gap is taken in shifts: the larger of the difference
-  in shifts and the difference in hours divided by the longest shift in the window. That keeps "one extra shift"
-  tolerated even when posts have different shift lengths.
+* Load is measured both in **shifts** and in **hours**, with **no exchange rate** between the two: A did more than B
+  only if A did more by one measure and **no less by the other**. More shifts but fewer hours, or the reverse, isn't
+  more load, and there's no complaint either way.
+* The gap is then the larger of the difference in shifts and the difference in hours divided by **A's own shortest
+  shift** in the window, with the same tolerance of one. Moving a shift of h hours from A to B turns a gap of g hours
+  into g − 2h, which is narrower only if h is less than g: so a gap in hours no larger than A's shortest shift can't
+  be narrowed by moving one of A's shifts, just as a gap of one shift can't. With equal shift lengths, the two
+  measures agree.
 
 For example, if A did 4 shifts of 4 hours within some 24 hours and B, available all that time, did 2, the gap is 2
-and A has a complaint of severity 1 against B.
+and A has a complaint of severity 1 against B. If A did two 6-hour shifts and B a 6-hour and a 2-hour shift (12
+hours against 8, as many shifts), the gap of 4 hours is less than A's shortest shift: tolerated, since giving B
+either of A's shifts would leave them further apart. If instead A did a 2-hour and a 12-hour shift and B two 4-hour
+shifts (14 hours against 8), the gap is 6 / 2 = 3, severity 2: A's 2-hour shift could have gone to B.
+
+(Decided 2026-11-13, with the user aspiring not to decide how much an extra shift is worth. It used to be the larger
+of the difference in shifts and the difference in hours over the window's longest shift: an exchange rate, which in
+the day-2 checks let a fix give a worker who did fewer but longer shifts another one and leave them 4-6 hours above
+everyone, as "within the tolerance". Counting a shift only in the days it started in let a 6-hour shift that began
+3 hours before a window count for nothing in it.)
 
 (Decided 2026-11-12. Days used to be calendar days, from midnight, with a shift belonging to the day it starts on.
 In the tuning checks, almost every per-day complaint came from that split alone: in a schedule starting at 16:00,
@@ -92,6 +107,10 @@ peers (available at least as long over the whole period) with the same tolerance
   than the schedule's **typical rest**: the median of all the rests between shifts in the schedule, everyone's
   together. (Decided 2026-11-12; it used to be any rest under `min_rest + SHORT_REST_MARGIN`, close to the legal
   minimum, but in the tuning benchmarks most rests were that short, so it counted the norm as a straw.)
+  The norm is the **audited schedule's**: [easy fixes](#easy-fixes) are judged against it, not against a norm of
+  their own. (Decided 2026-11-13: otherwise a fix that shortens rests lowers the median, and with it the threshold,
+  so that short rests stop counting; in a day-2 check, a fix cut the most crammed worker's rest from 10 hours to 6
+  and the audit counted fewer short straws.)
 * **Disliked partner** — each shift shared with a worker they dislike.
 
 Having the most shifts in a day isn't a short straw: [load](#load) already compares load in any day, with the same
@@ -119,8 +138,12 @@ A chain has at most `MAX_CHANGES` (3) changes. Each must be **legal** and **harm
 is checked once by the independent hard-constraint checker; after that, a change can only break a rule through what
 it changes, so only that is checked: the roles and availability of the slots it gives away, and the rests of the
 workers receiving them (a rest below zero is an overlap). A test confirms this always agrees with the full checker.
-Harmless means: compared with the audited schedule, it creates no new complaint and makes no existing complaint more
-severe, for anyone. Otherwise the fix only moves the problem around.
+Harmless means: compared with the audited schedule, it creates no new complaint, makes no existing complaint more
+severe, for anyone, and gives **nobody a short straw** of any kind they didn't have (a short rest by the audited
+schedule's norm, or a disliked partner). Otherwise the fix only moves the problem around. A straw happens to a worker
+whatever the others have, so it counts even when the worker stays within the tolerance and nobody would complain.
+(Decided 2026-11-13: in a day-2 check, a fix gave a worker a new 6-hour rest, allowed because their count of straws
+stayed within one of the others'.)
 
 Chains are found greedily, which keeps the search quick:
 

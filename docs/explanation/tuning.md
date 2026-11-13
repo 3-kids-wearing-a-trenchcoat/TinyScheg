@@ -9,6 +9,13 @@ point, not final, but they shape how every later output is read, so the method i
 > (`tools/tune.py`) exist and are tested. The first round is done: the default rest factor became 2.5
 > ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)). Longer schedules are still to be checked.
 
+> [!WARNING]
+> **The audit changed on 2026-11-13** (load compared with no exchange rate between shifts and hours, shifts counted in
+> every day they overlap, short rests judged by the audited schedule's norm, and no fix that hands out a new short
+> straw; see [the audit](schedule-audit.md#load)). Every result on this page from before then was measured with the
+> old audit, so its numbers aren't comparable with later ones, and the conclusions drawn from them (the rest factor,
+> the weights) may need checking again.
+
 ## What's tuned, against what
 
 The six independent parameters: the weights of likes, workload and rest (two independent values, since only their
