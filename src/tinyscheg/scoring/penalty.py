@@ -5,10 +5,14 @@ same whatever the schedule's length. Lower is better, and filling another slot n
 
 An assignment holds a worker index per slot, in stable slot order, or None for a slot that isn't filled yet. Every
 penalty is computed from scratch, with sums always taken in the same order (shifts, slots and workers in their stable
-order), so the same assignment always gets exactly the same penalty, however it was reached (ADR 0012).
+order), so the same assignment always gets exactly the same penalty, however it was reached (ADR 0012). Lists of
+floats are added with math.fsum, which rounds only once, rather than sum(), whose rounding differs between Python
+versions and interpreters (CPython 3.12+ compensates, 3.11 and PyPy don't): so the penalty, and which of equally
+good schedules is kept, is the same on all of them.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -63,7 +67,7 @@ def likes_total(constants: ScoringConstants, assignment: Sequence[int | None]) -
         for position, worker in enumerate(workers):
             if worker is None:
                 continue
-            total += sum(_like_value(constants, worker, partner)
+            total += math.fsum(_like_value(constants, worker, partner)
                          for partner_position, partner in enumerate(workers)
                          if partner_position != position and partner is not None) / others
     return total
@@ -91,7 +95,7 @@ def workload_total(constants: ScoringConstants, assignment: Sequence[int | None]
     """The workload penalty before normalizing: the sum of av * (assigned load / av) ** p."""
     power = constants.parameters.workload_power
     assigned_load = _assigned_load(constants, assignment)
-    return sum(worker.availability * (assigned_load[index] / worker.availability) ** power
+    return math.fsum(worker.availability * (assigned_load[index] / worker.availability) ** power
                for index, worker in enumerate(constants.workers) if worker.availability > 0)
 
 
@@ -125,7 +129,7 @@ def likes_lower_bound(constants: ScoringConstants, assignment: Sequence[int | No
     :param domains: for each slot, the workers who can still fill it
     :return: at least likes_penalty(assignment); 0 if no shift has more than one slot
     """
-    total = sum(shift_likes_lower_bound(constants, shift, assignment, domains) for shift in constants.shifts)
+    total = math.fsum(shift_likes_lower_bound(constants, shift, assignment, domains) for shift in constants.shifts)
     return normalized_likes(constants, total)
 
 
@@ -198,7 +202,7 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
             pool.append((assigned_load[index] / worker.availability, worker.availability,
                          (assigned_load[index] + caps[index]) / worker.availability))
     level = _water_level(pool, remaining)
-    filled = sum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
+    filled = math.fsum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
     return filled / constants.workload_unit
 
 

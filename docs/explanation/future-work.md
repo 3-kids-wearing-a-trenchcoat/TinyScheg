@@ -126,6 +126,13 @@ pair's like value, computed once instead of at every step of the likes look-ahea
 the example and the 15 benchmark inputs, the same nodes, penalties and schedules, 1.12 times faster in total
 (568 s to 508 s; 1.0–1.5 times per input).
 
+PyPy, tried on 2026-11-13 (PyPy 3.11, v7.3.23, from pypy.org; conda-forge's stops at Python 3.9, which the code can't
+run on): the code and its libraries run unchanged, and the search is about 3 times faster on the same inputs. Its
+results first differed in the last digits, and on 3 inputs it kept a different one of two exactly tied schedules:
+`sum()` rounds differently on CPython 3.12+ (which compensates) than on 3.11 and PyPy. The scoring now adds lists of
+floats with `math.fsum`, which rounds only once: CPython's results stayed exactly the same, its time too (513 s), and
+PyPy's became identical to CPython's, in 190 s (2.7 times faster; `fsum` costs PyPy about a tenth).
+
 ## Incremental scoring
 
 > [!NOTE]

@@ -7,6 +7,7 @@ also defines what these totals must equal, up to rounding.
 from __future__ import annotations
 
 import bisect
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -58,7 +59,7 @@ class IncrementalScore:
         self.slots: list[list[int]] = _slots_by_worker(constants, assignment)
         self.shift_bounds = [shift_likes_lower_bound(constants, shift, assignment, domains)
                              for shift in constants.shifts]
-        self.likes_bound = sum(self.shift_bounds)
+        self.likes_bound = math.fsum(self.shift_bounds)
         self.caps = [0.0] * len(constants.workers)
         self.remaining = 0.0
         for slot, domain in enumerate(domains):
@@ -106,7 +107,8 @@ class IncrementalScore:
                  (self.load[index] + self.caps[index]) / worker.availability)
                 for index, worker in enumerate(constants.workers) if worker.availability > 0]
         level = _water_level(pool, self.remaining)
-        filled = sum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
+        filled = math.fsum(availability * min(max(ratio, level), highest) ** power
+                           for ratio, availability, highest in pool)
         return filled / constants.workload_unit
 
     # --- assigning and undoing ---

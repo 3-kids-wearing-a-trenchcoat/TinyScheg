@@ -48,7 +48,7 @@ class ScoringParameters:
             _check_number(f"the {name} weight", weight)
             if weight < 0:
                 raise ValueError(f"the {name} weight must be at least 0, got {weight!r}")
-        total = sum(weights.values())
+        total = math.fsum(weights.values())
         if total == 0:
             raise ValueError("the weights must not all be 0")
         object.__setattr__(self, "likes_weight", self.likes_weight / total)

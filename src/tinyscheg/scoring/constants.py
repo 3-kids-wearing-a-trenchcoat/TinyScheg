@@ -5,6 +5,7 @@ The constants the penalty score is computed from, calculated once per run, befor
 from __future__ import annotations
 
 import datetime as dt
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -80,7 +81,7 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
     min_rest = hours(settings.min_rest)
     index_of = {worker.name: index for index, worker in enumerate(workers)}
     slot_hours = tuple(hours(slot.time.duration) for slot in slots)
-    mean_hours = sum(slot_hours) / len(slot_hours) if slot_hours else 0.0
+    mean_hours = math.fsum(slot_hours) / len(slot_hours) if slot_hours else 0.0
 
     def load(time: DateTimeRange) -> float:
         """A slot's load: its hours and one average slot, blended by the shift share (ADR 0026)."""
@@ -200,7 +201,7 @@ def workload_unit(workers: Sequence[WorkerConstants], loads: Sequence[float], po
     available = [worker.availability for worker in workers if worker.availability > 0]
     if not available or not loads:
         return 0.0
-    return (sum(loads) / len(loads)) ** power / (sum(available) / len(available)) ** (power - 1)
+    return (math.fsum(loads) / len(loads)) ** power / (math.fsum(available) / len(available)) ** (power - 1)
 
 
 def rest_unit(workers: Sequence[WorkerConstants]) -> float:
@@ -212,4 +213,4 @@ def rest_unit(workers: Sequence[WorkerConstants]) -> float:
     :return: the mean M_w; 0 if no worker can have a deficit
     """
     worst = [worker.worst_deficit for worker in workers if worker.worst_deficit > 0]
-    return sum(worst) / len(worst) if worst else 0.0
+    return math.fsum(worst) / len(worst) if worst else 0.0
