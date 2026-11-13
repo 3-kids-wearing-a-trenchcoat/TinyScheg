@@ -5,7 +5,7 @@ import pathlib
 import pytest
 
 from audit import (ANY_DAY, EXIT_ILLEGAL, EXIT_SUCCESS, LIKED_PARTNERS, LOAD, MAX_CHANGES, SHORT_STRAWS, WHOLE_PERIOD,
-                   Audit, AuditContext, Complaint,
+                   Audit, AuditContext, Baseline, Complaint, WorkerStats,
                    available_hours, build_context, candidate_changes, day_windows, evaluate, find_fixes, is_harmless,
                    is_legal_change, is_peer, main, slots_by_worker, summarize, with_history)
 from schedule_checker import hard_constraint_violations
@@ -84,18 +84,47 @@ def test_a_day_is_any_24_hours_whatever_midnight_and_counts_once_per_pair() -> N
     assert sorted(complaints_of(audit, LOAD)) == [(0, 1, ANY_DAY, 2), (2, 0, ANY_DAY, 1), (2, 1, ANY_DAY, 2)]
 
 
-def test_hours_count_in_units_of_the_longest_shift() -> None:
-    # a 4-hour post and a 12-hour post over 12 hours: Bob's one 12-hour shift is 8 hours more than Cy's one 4-hour
-    # shift, but less than one longest shift's worth, so the gap is 8 / 12, within the tolerance
-    settings = Settings(DateTimeRange(START, at(12)))
+def mixed_lengths_context(period_hours: int) -> AuditContext:
+    """Anne, Bob and Cy, a gate post of 4-hour shifts and a desk post of 12-hour shifts, from the start of 2025."""
+    settings = Settings(DateTimeRange(START, at(period_hours)))
     posts = (Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 1),))),
              Post("desk", ShiftRules(dt.timedelta(hours=12), (("any", 1),))))
     schedule_input = ScheduleInput(settings, (Worker("Anne"), Worker("Bob"), Worker("Cy")), posts)
     shifts = generate_shifts(posts, settings.period)
-    context = build_context(schedule_input, shifts, all_slots(shifts))
-    assert context.longest[WHOLE_PERIOD] == 12
-    # stable order: gate 0-4 (Cy), desk 0-12 (Bob), gate 4-8 and 8-12 (Anne)
-    assert complaints_of(evaluate(context, (2, 1, 0, 0)), LOAD) == []
+    return build_context(schedule_input, shifts, all_slots(shifts))
+
+
+def test_load_is_more_only_by_one_measure_and_no_less_by_the_other() -> None:
+    # over 12 hours, stable order: gate 0-4 (Cy), desk 0-12 (Bob), gate 4-8 and 8-12 (Anne)
+    context = mixed_lengths_context(12)
+    # Bob's one 12-hour shift is 8 hours more than Cy's one 4-hour shift, with as many shifts; but Bob's only shift is
+    # longer than the gap, so giving it to Cy wouldn't narrow it: within the tolerance. Anne's two shifts (8 hours)
+    # against Bob's one (12 hours) is more shifts but fewer hours: without an exchange rate between the two, neither
+    # did more, so neither complains; Anne against Cy, one shift and 4 hours (one of her shifts) more, is tolerated
+    audit = evaluate(context, (2, 1, 0, 0))
+    assert complaints_of(audit, LOAD) == []
+    assert audit.stats[1].shortest_held[WHOLE_PERIOD] == 12
+
+
+def test_an_hours_gap_counts_in_the_workers_own_shortest_shift() -> None:
+    # over 24 hours: Anne has the desk 0-12 and the gate 12-16, 16 hours in 2 shifts; Bob has the gate 0-4 and 4-8,
+    # 8 hours in 2 shifts. Anne's 4-hour shift could go to Bob and narrow the 8-hour gap: 8 / 4 = 2, a complaint
+    context = mixed_lengths_context(24)
+    owners = {("desk", at(0)): 0, ("gate", at(12)): 0, ("gate", at(0)): 1, ("gate", at(4)): 1}  # Cy has the rest
+    assignment = tuple(owners.get((context.shifts[slot.shift_index].post.name, slot.time.start), 2)
+                       for slot in context.slots)
+    assert (0, 1, WHOLE_PERIOD, 1) in complaints_of(evaluate(context, assignment), LOAD)
+
+
+def test_a_shift_counts_in_every_window_it_overlaps_with_the_hours_inside_it() -> None:
+    # over 48 hours, the desk shift 12:00-24:00 started before the window from 16:00, and still counts in it, with
+    # the 8 of its hours inside; it doesn't overlap the window from 24:00 at all
+    context = mixed_lengths_context(48)
+    desk = next(index for index, shift in enumerate(context.shifts)
+                if shift.post.name == "desk" and shift.time.start == at(12))
+    overlap = dict(zip(context.shift_windows[desk], context.shift_overlap[desk]))
+    assert overlap["2025-01-01 04:00"] == 12 and overlap["2025-01-01 16:00"] == 8
+    assert "2025-01-02 00:00" not in overlap and overlap[WHOLE_PERIOD] == 12
 
 
 def test_a_worker_who_was_away_longer_is_not_a_peer() -> None:
@@ -179,11 +208,34 @@ def test_extra_load_forced_by_roles_has_no_easy_fix() -> None:
 
 def test_a_change_that_creates_or_worsens_a_complaint_is_not_harmless() -> None:
     complaint = Complaint(LOAD, 0, 1, WHOLE_PERIOD, 2)
-    before = {complaint.key: complaint.severity}
+    before = Baseline({complaint.key: complaint.severity}, (), 6.0)
     assert is_harmless(before, Audit((), ()))
     assert is_harmless(before, Audit((), (complaint,)))
     assert not is_harmless(before, Audit((), (Complaint(LOAD, 0, 1, WHOLE_PERIOD, 3),)))      # more severe
     assert not is_harmless(before, Audit((), (Complaint(LOAD, 1, 0, WHOLE_PERIOD, 2),)))      # new
+
+
+def straws_only(short_rests: int) -> WorkerStats:
+    """A worker's statistics with nothing but the given number of short rests."""
+    return WorkerStats((), {}, {}, {}, (), {}, 0, 0, {"short rest": short_rests, "disliked partner": 0})
+
+
+def test_a_change_that_gives_anyone_a_new_short_straw_is_not_harmless() -> None:
+    # even when the straw stays within the tolerance, so that nobody complains
+    before = Baseline({}, ({"short rest": 0, "disliked partner": 0},) * 2, 6.0)
+    assert is_harmless(before, Audit((straws_only(0), straws_only(0)), ()))
+    assert not is_harmless(before, Audit((straws_only(1), straws_only(0)), ()))
+
+
+def test_changes_are_judged_by_the_audited_schedules_norm() -> None:
+    # everyone rests 8 hours: the norm makes nothing short (8 - 2 = 6), but against a norm of 9 every rest is short
+    workers = [Worker(name) for name in ("Anne", "Bob", "Cy", "Dan", "Eve", "Fay")]
+    context = context_for(workers, {"gate": {"any": 1}}, 48)
+    assignment = (0, 1, 2) * 4
+    own_norm = evaluate(context, assignment)
+    assert own_norm.short_rest == 6 and all(stats.straws["short rest"] == 0 for stats in own_norm.stats)
+    against_nine = evaluate(context, assignment, short_rest=9)
+    assert against_nine.short_rest == 9 and against_nine.stats[0].straws["short rest"] == 3
 
 
 def test_the_quick_legality_check_agrees_with_the_full_checker() -> None:
