@@ -181,4 +181,4 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Right-to-left spreadsheets
 - [ ] Docs: tutorials, generated API reference, publishing the site
 - [ ] An optional graphical interface, for people who don't use the command line
-- [ ] Distribution as a single executable (command line or GUI) for Windows and Linux, possibly macOS
+- [ ] Distribution needing no installation, run by clicking one obvious file (command line or GUI), for Windows and Linux, possibly macOS

@@ -234,6 +234,9 @@ check: generate the tier, run the defaults on it, and see whether day-load compl
 
 * **An optional graphical interface.** A GUI for people put off by the command line, alongside the command-line
   interface rather than replacing it.
-* **Simple distribution.** A single executable file per platform that needs no installation of Python or other
-  dependencies, and can be used either from the command line or through the GUI. Windows and Linux versions, and
-  possibly a macOS version.
+* **Simple distribution.** Per platform, something that needs no installation of Python or other dependencies, and
+  can be used either from the command line or through the GUI. Windows and Linux versions, and possibly a macOS
+  version. It needn't be a single file (the user, 2026-11-13), but a non-technical user must be able to just click one
+  obvious file to run it. One option is a folder with a portable PyPy inside (about 3 times faster than CPython on
+  the search, measured 2026-11-13) and a launcher; another is a CPython bundle (PyInstaller, Nuitka, or the Windows
+  embeddable Python), which those tools support and PyPy doesn't.
