@@ -65,8 +65,9 @@ or end doesn't count, since ranges are half-open.
 
 ## `must_differ(first, second, min_rest) -> bool`
 
-`True` if the two slots overlap, or are less than `min_rest` apart, so one worker can't fill both. A rest of exactly
-`min_rest` is allowed.
+`True` if the two slots overlap, are back to back, or are less than `min_rest` apart, so one worker can't fill both.
+A rest of exactly `min_rest` is allowed; back to back never is, even with a `min_rest` of 0
+([ADR 0034](../../decisions/0034-never-back-to-back.md)).
 
 ## `difference_constraints(slots, min_rest) -> tuple[tuple[int, ...], ...]`
 
@@ -75,8 +76,8 @@ Finds every pair of slots that `must_differ`, as the `neighbours` of `Problem`.
 * `slots` — all slots, in stable order (which is sorted by start time).
 * `min_rest` — `datetime.timedelta`.
 
-Each slot is compared with the slots after it, stopping at the first one that starts at or after this slot's end plus
-`min_rest`: every slot after that starts later still, so none of them can be constrained with this one.
+Each slot is compared with the slots after it, stopping at the first one that starts after this slot's end, by at
+least `min_rest`: every slot after that starts later still, so none of them can be constrained with this one.
 
 ## `interchangeable_slots(slots) -> tuple[tuple[int, ...], ...]`
 

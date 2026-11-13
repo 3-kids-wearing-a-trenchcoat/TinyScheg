@@ -91,6 +91,7 @@ nav:
       - 0031 History as a filled part: decisions/0031-history-as-the-filled-part-of-one-schedule.md
       - 0032 Flat penalty parts: decisions/0032-flat-penalty-parts.md
       - 0033 PyPy for development runs: decisions/0033-pypy-for-development-runs.md
+      - 0034 Never back to back: decisions/0034-never-back-to-back.md
 
 markdown_extensions:
   - admonition

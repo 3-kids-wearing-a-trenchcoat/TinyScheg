@@ -55,6 +55,7 @@ ADR that supersedes the old one.
 | [0031](0031-history-as-the-filled-part-of-one-schedule.md) | History as the already-filled part of one schedule | Accepted |
 | [0032](0032-flat-penalty-parts.md) | Flat penalty parts: one event costs the same at any schedule length | Accepted |
 | [0033](0033-pypy-for-development-runs.md) | PyPy for development runs; the code stays Python 3.11-compatible | Accepted |
+| [0034](0034-never-back-to-back.md) | A worker is never assigned back-to-back shifts, whatever the minimum rest | Accepted |
 
 ## Template
 

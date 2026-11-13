@@ -64,11 +64,13 @@ are therefore node consistent from the start.
 
 A worker can't take a shift during, immediately before or immediately after a shift they're already assigned to.
 More precisely, two slots get a **difference constraint** (they must be assigned different workers) if they overlap
-in time or are less than the **minimum rest period** apart. The minimum rest period comes from the input settings
-and defaults to 6 hours. A rest of exactly the minimum rest period is allowed, so with a minimum rest of 0,
-back-to-back shifts can go to the same worker.
+in time, are **back to back** (one ends as the other starts), or are less than the **minimum rest period** apart.
+The minimum rest period comes from the input settings and defaults to 6 hours. A rest of exactly the minimum rest
+period is allowed; back to back never is, even with a minimum rest of 0, when any rest at all is enough
+([ADR 0034](../decisions/0034-never-back-to-back.md)).
 
 This also covers slots of the same shift, since they overlap entirely.
 
 Constraints are generated after all slots exist: slots are sorted by time, and each slot is compared with the slots
-that follow it until the first one that starts far enough after it ends. Each constraint is recorded for both slots.
+that follow it until the first one that starts far enough after it ends (after its end, and by at least the minimum
+rest period). Each constraint is recorded for both slots.

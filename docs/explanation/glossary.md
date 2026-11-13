@@ -18,7 +18,8 @@ See [CSP formulation](csp-formulation.md#binary-difference-constraints).
 cell. See [Output format](../reference/output-format.md).
 
 **Minimum rest period** — The least amount of time, in hours, that must separate two shifts assigned to the same
-worker. A hard constraint, set in the input (`min_rest`) and defaulting to 6 hours.
+worker. A hard constraint, set in the input (`min_rest`) and defaulting to 6 hours. Even at 0, a worker's shifts
+can't be back to back ([ADR 0034](../decisions/0034-never-back-to-back.md)).
 
 **MRV (Minimum Remaining Values)** — The heuristic of assigning the slot with the smallest domain next. Ties are
 broken by the **degree heuristic**: the slot with the most constraints with unassigned slots.
