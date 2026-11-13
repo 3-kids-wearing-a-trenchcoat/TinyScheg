@@ -13,12 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tinyscheg.model.shift import Shift
-from tinyscheg.scoring.constants import ScoringConstants, hours
-
-# The like function l(x), with beta (a disliked partner) as the unit. Only the ratio alpha / beta matters, since the
-# likes penalty is measured in units of beta; alpha is the neutral_partner parameter.
-LIKED_PARTNER = 0.0
-DISLIKED_PARTNER = 1.0
+from tinyscheg.scoring.constants import DISLIKED_PARTNER, ScoringConstants, hours, like_value
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,12 +71,7 @@ def likes_total(constants: ScoringConstants, assignment: Sequence[int | None]) -
 
 def _like_value(constants: ScoringConstants, worker: int, partner: int) -> float:
     """l(partner) for worker: nothing for a liked partner, alpha for a neutral one, beta for a disliked one."""
-    worker_constants = constants.workers[worker]
-    if partner in worker_constants.likes:
-        return LIKED_PARTNER
-    if partner in worker_constants.dislikes:
-        return DISLIKED_PARTNER
-    return constants.parameters.neutral_partner * DISLIKED_PARTNER
+    return like_value(constants.workers[worker], partner, constants.parameters.neutral_partner)
 
 
 def workload_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
@@ -156,12 +146,13 @@ def shift_likes_lower_bound(constants: ScoringConstants, shift: Shift, assignmen
         return 0.0
     candidates = [(assignment[slot.index],) if assignment[slot.index] is not None else domains[slot.index]
                   for slot in shift.slots]
+    values = constants.pair_values
     total = 0.0
     for first in range(len(candidates)):
         for second in range(first + 1, len(candidates)):
             if not candidates[first] or not candidates[second]:
                 continue  # an empty domain: there's no completion at all, so any value bounds it; 0 is the lowest
-            total += min(pair_like_value(constants, worker, partner)
+            total += min(values[worker][partner]
                          for worker in candidates[first] for partner in candidates[second]) / others
     return total
 
@@ -169,7 +160,7 @@ def shift_likes_lower_bound(constants: ScoringConstants, shift: Shift, assignmen
 def pair_like_value(constants: ScoringConstants, worker: int, partner: int) -> float:
     """What a pair adds to the likes penalty, before dividing by the other slots: both workers' like values of each
     other."""
-    return _like_value(constants, worker, partner) + _like_value(constants, partner, worker)
+    return constants.pair_values[worker][partner]
 
 
 def normalized_likes(constants: ScoringConstants, total: float) -> float:

@@ -120,6 +120,12 @@ among equally good ones, or a rule for which one is kept), and adding a library 
 (see the project's working rules). Profiling first would show where the time actually goes: most of it is probably
 the penalty and bound, computed from scratch at every node (see [Incremental scoring](#incremental-scoring)).
 
+Profiled on 2026-11-13: on the slower inputs, the search finds its best schedule within the first 10% of the run
+(59% at most); the rest is proving that nothing beats it, so a better first pocket would hardly help. A table of every
+pair's like value, computed once instead of at every step of the likes look-ahead, was then done in plain Python: on
+the example and the 15 benchmark inputs, the same nodes, penalties and schedules, 1.12 times faster in total
+(568 s to 508 s; 1.0–1.5 times per input).
+
 ## Incremental scoring
 
 > [!NOTE]

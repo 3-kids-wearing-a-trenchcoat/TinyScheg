@@ -15,6 +15,11 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 
 _ONE_HOUR = dt.timedelta(hours=1)
 
+# The like function l(x), with beta (a disliked partner) as the unit. Only the ratio alpha / beta matters, since the
+# likes penalty is measured in units of beta; alpha is the neutral_partner parameter.
+LIKED_PARTNER = 0.0
+DISLIKED_PARTNER = 1.0
+
 
 @dataclass(frozen=True, slots=True)
 class WorkerConstants:
@@ -38,7 +43,9 @@ class ScoringConstants:
     (n_shared). The penalty's parts are flat (ADR 0032): workload_unit is what the workload penalty is measured in,
     mean slot load ** p / mean availability ** (p - 1), so that one shift of imbalance costs the same at any length;
     rest_unit is the mean M_w of the workers who could have a deficit, which keeps the average hour short costing the
-    same at any length.
+    same at any length. pair_values[w][p] is what workers w and p add to the likes total as a pair, before dividing by
+    the shift's other slots: both workers' like values of each other, computed once since the search asks for them at
+    every step.
     """
     parameters: ScoringParameters
     min_rest: float
@@ -50,6 +57,7 @@ class ScoringConstants:
     shared_slots: int
     workload_unit: float
     rest_unit: float
+    pair_values: tuple[tuple[float, ...], ...]
 
 
 def hours(length: dt.timedelta) -> float:
@@ -96,7 +104,35 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         workers=tuple(worker_constants),
         shared_slots=sum(len(shift.slots) for shift in shifts if len(shift.slots) > 1),
         workload_unit=workload_unit(worker_constants, [load(slot.time) for slot in slots], parameters.workload_power),
-        rest_unit=rest_unit(worker_constants))
+        rest_unit=rest_unit(worker_constants),
+        pair_values=pair_values(worker_constants, parameters.neutral_partner))
+
+
+def like_value(worker: WorkerConstants, partner: int, neutral_partner: float) -> float:
+    """
+    l(partner) for a worker: nothing for a liked partner, alpha for a neutral one, beta for a disliked one
+    :param worker: WorkerConstants of the worker
+    :param partner: int, the partner's index
+    :param neutral_partner: float, alpha / beta
+    :return: the like value, in units of beta
+    """
+    if partner in worker.likes:
+        return LIKED_PARTNER
+    if partner in worker.dislikes:
+        return DISLIKED_PARTNER
+    return neutral_partner * DISLIKED_PARTNER
+
+
+def pair_values(workers: Sequence[WorkerConstants], neutral_partner: float) -> tuple[tuple[float, ...], ...]:
+    """
+    Every pair's value: what the two workers add to the likes total together, both their like values of each other
+    :param workers: WorkerConstants of every worker, in input order
+    :param neutral_partner: float, alpha / beta
+    :return: values[w][p] for every pair of worker indexes (w == p included, as the likes bound may ask for it)
+    """
+    return tuple(tuple(like_value(workers[worker], partner, neutral_partner)
+                       + like_value(workers[partner], worker, neutral_partner) for partner in range(len(workers)))
+                 for worker in range(len(workers)))
 
 
 def availability(worker: Worker, period: DateTimeRange) -> float:

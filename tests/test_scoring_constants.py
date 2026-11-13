@@ -11,8 +11,8 @@ from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.scoring.constants import (availability, build_constants, hours, rest_unit, slot_load, workload_unit,
-                                         worst_deficit)
+from tinyscheg.scoring.constants import (DISLIKED_PARTNER, LIKED_PARTNER, availability, build_constants, hours,
+                                         like_value, rest_unit, slot_load, workload_unit, worst_deficit)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -104,6 +104,21 @@ def test_example_constants() -> None:
     mean_load = sum(constants.slot_load) / len(constants.slot_load)
     assert constants.workload_unit == pytest.approx(mean_load ** 2 / mean_availability)
     assert constants.rest_unit == pytest.approx(rest_unit(constants.workers))
+
+
+def test_pair_values_are_both_workers_like_values_of_each_other() -> None:
+    schedule_input = read_input(EXAMPLE_INPUT)
+    problem = build_problem(schedule_input)
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.domains)
+    neutral = constants.parameters.neutral_partner
+    count = len(constants.workers)
+    for worker, partner in itertools.product(range(count), repeat=2):  # the same worker twice included
+        assert constants.pair_values[worker][partner] == (like_value(constants.workers[worker], partner, neutral)
+                                                          + like_value(constants.workers[partner], worker, neutral))
+    # Jack likes Jill and is neutral to Jeff, who dislikes him
+    assert constants.pair_values[0][2] == neutral + DISLIKED_PARTNER
+    assert like_value(constants.workers[0], 1, neutral) == LIKED_PARTNER
 
 
 def test_workers_with_no_availability_or_deficit_are_left_out_of_the_units() -> None:

@@ -38,6 +38,9 @@ Immutable.
   ([ADR 0032](../../decisions/0032-flat-penalty-parts.md)): (mean slot load)$^p$ / (mean availability)$^{p-1}$, over
   the workers with some availability; 0 if there are none.
 * `rest_unit` — $\bar{M}$, the mean `worst_deficit` of the workers who could have one; 0 if none can.
+* `pair_values` — `tuple[tuple[float, ...], ...]`: `pair_values[w][p]` is what workers `w` and `p` add to the likes
+  total as a pair, before dividing by the shift's other slots: both their like values of each other, from
+  `pair_values`. Computed once, since the search asks for them at every step.
 
 ### `class WorkerConstants`
 
@@ -75,6 +78,13 @@ It takes $O(n^2)$ time for $n$ ranges. Tests check it against trying every legal
 
 The two units above ([ADR 0032](../../decisions/0032-flat-penalty-parts.md)). Measured in them, one shift of imbalance
 and the average hour short cost the same at any schedule length.
+
+### `like_value(worker, partner, neutral_partner) -> float` and `pair_values(workers, neutral_partner)`
+
+`like_value` is $l(\text{partner})$ for a worker (a `WorkerConstants`): `LIKED_PARTNER` for a liked partner,
+`DISLIKED_PARTNER` for a disliked one, and `neutral_partner` times `DISLIKED_PARTNER` for anyone else. The like values
+are named constants with $\beta$ as the unit: `LIKED_PARTNER = 0.0`, `DISLIKED_PARTNER = 1.0`. `pair_values` gives
+the table of every pair's value, the same worker twice included (the likes look-ahead may ask for it).
 
 ### `hours(length) -> float`
 
@@ -136,9 +146,8 @@ reachable. At least $\mathcal{W}^*(\text{partial})$.
 ### `likes_penalty(constants, assignment) -> float`
 
 $\mathcal{L}^{**}$: for each filled slot in a shift of more than one slot, its worker's like value of the workers in
-the shift's other slots, averaged over those other slots; in units of $\beta$, a disliked partner. The like values are named constants with $\beta$ as the unit: `LIKED_PARTNER = 0.0`,
-`DISLIKED_PARTNER = 1.0`, and a neutral partner is `neutral_partner` times `DISLIKED_PARTNER`. 0 if every shift has
-one slot.
+the shift's other slots, averaged over those other slots; in units of $\beta$, a disliked partner. The like values are those of `like_value`
+in the `constants` module. 0 if every shift has one slot.
 
 ### `workload_penalty(constants, assignment) -> float`
 
@@ -157,7 +166,7 @@ have one, and count 0.
 `likes_total(constants, assignment)` and `workload_total(constants, assignment)` (the likes and workload penalties
 before dividing by their units), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
 look-ahead),
-`pair_like_value(constants, worker, partner)` (both workers' like values of each other), `normalized_likes(constants,
+`pair_like_value(constants, worker, partner)` (both workers' like values of each other, from `pair_values`), `normalized_likes(constants,
 total)` and `rest_deficit(constants, earlier, later)` (one rest's deficit). Both modules use them, so that they do the
 same arithmetic.
 
