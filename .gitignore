@@ -2,6 +2,8 @@
 /Algorithms/
 /site/
 __pycache__/
+# The project's PyPy, set up by tools/setup_pypy.py (ADR 0033)
+/.pypy/
 # Schedules written by TinyScheg next to their input (python src/main.py <input>.yml)
 *_schedule.csv
 
