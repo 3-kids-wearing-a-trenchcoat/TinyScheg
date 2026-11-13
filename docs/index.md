@@ -24,6 +24,7 @@ Architecture Decision Records (ADRs).
 * **How-to guides** — steps for accomplishing a specific task.
   * [Development setup](how-to/development-setup.md)
   * [Auditing a schedule](how-to/audit-a-schedule.md) (development tool)
+  * [Using PyPy for development runs](how-to/use-pypy.md)
 * **Reference** — exact technical descriptions of formats and code.
   * [Input format](reference/input-format.md)
   * [Output format](reference/output-format.md)

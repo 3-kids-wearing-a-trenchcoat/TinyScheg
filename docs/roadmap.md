@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–7 complete; the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)).
+Progress: Phases 1–7 complete; the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)).
 
 ## Phase 1: Walking skeleton
 
@@ -169,7 +169,7 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Faster search: symmetry between identical workers, a rest look-ahead, workload caps that account for overlaps
-- [ ] Faster search by non-heuristic means: libraries, parallelization, rewriting hot modules in another language
+- [ ] Faster search by non-heuristic means: parallelization, a compiled core (PyPy adopted for development runs, ADR 0033)
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them

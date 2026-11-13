@@ -55,6 +55,9 @@ python -m pytest
 `pyproject.toml` puts `src/` and `tools/` (the development tools the tests share, such as the independent
 hard-constraint checker) on pytest's import path, so no `PYTHONPATH` is needed.
 
+The tests are also run under PyPy, which development runs use since it's about 3 times faster; see
+[Using PyPy for development runs](use-pypy.md).
+
 ## Updating dependencies
 
 Dependencies are listed in `environment.yml`. After changing it, update the environment with:

@@ -4,6 +4,8 @@ channels:
   - conda-forge
 
 dependencies:
+  # The reference interpreter. Development runs also use PyPy 3.11 (ADR 0033: python tools/setup_pypy.py), so the
+  # code must stay Python 3.11-compatible; tools/setup_pypy.py pins the same library versions for it.
   - python=3.13
 
   # YAML input parsing

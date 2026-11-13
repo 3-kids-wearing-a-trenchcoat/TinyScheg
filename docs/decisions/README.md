@@ -54,6 +54,7 @@ ADR that supersedes the old one.
 | [0030](0030-history-in-scoring.md) | History in scoring: the history and the new schedule scored as one | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
 | [0031](0031-history-as-the-filled-part-of-one-schedule.md) | History as the already-filled part of one schedule | Accepted |
 | [0032](0032-flat-penalty-parts.md) | Flat penalty parts: one event costs the same at any schedule length | Accepted |
+| [0033](0033-pypy-for-development-runs.md) | PyPy for development runs; the code stays Python 3.11-compatible | Accepted |
 
 ## Template
 

@@ -30,6 +30,7 @@ nav:
   - How-to guides:
       - Development setup: how-to/development-setup.md
       - Auditing a schedule: how-to/audit-a-schedule.md
+      - Using PyPy: how-to/use-pypy.md
   - Reference:
       - Command line: reference/command-line.md
       - Input format: reference/input-format.md
@@ -89,6 +90,7 @@ nav:
       - 0030 History in scoring: decisions/0030-history-in-scoring.md
       - 0031 History as a filled part: decisions/0031-history-as-the-filled-part-of-one-schedule.md
       - 0032 Flat penalty parts: decisions/0032-flat-penalty-parts.md
+      - 0033 PyPy for development runs: decisions/0033-pypy-for-development-runs.md
 
 markdown_extensions:
   - admonition

@@ -103,8 +103,9 @@ schedule. Still deferred:
 
 ## Faster search by non-heuristic means
 
-> [!WARNING]
-> **Not yet implemented.** Deferred 2026-11-12.
+> [!NOTE]
+> **Partially implemented.** Deferred 2026-11-12; PyPy adopted for development runs on 2026-11-13
+> ([ADR 0033](../decisions/0033-pypy-for-development-runs.md)). Parallelization and a compiled core are still open.
 
 Everything under [Search performance](#search-performance) speeds the search up by searching smarter: finding a good
 pocket sooner, or pruning more. The other way is to run the same search faster, without changing what it explores:
@@ -132,6 +133,25 @@ results first differed in the last digits, and on 3 inputs it kept a different o
 `sum()` rounds differently on CPython 3.12+ (which compensates) than on 3.11 and PyPy. The scoring now adds lists of
 floats with `math.fsum`, which rounds only once: CPython's results stayed exactly the same, its time too (513 s), and
 PyPy's became identical to CPython's, in 190 s (2.7 times faster; `fsum` costs PyPy about a tenth).
+
+Experiments on 2026-11-13, each checked for exactly the same nodes, penalties and schedules on the example and the 15
+benchmark inputs, under CPython and PyPy:
+
+* **Kept:** cheaper bookkeeping per node (the next slot chosen in one pass, a worker dropped from a domain by slicing,
+  the undo record keeping a position instead of a copy of the worker's slots) and plain loops instead of `fsum` in the
+  incremental totals, which only steer: 1.08 times faster on CPython, 1.22 on PyPy.
+* **mypyc** (compiling `csp/` and `scoring/` to C extensions): 2.34 times faster than CPython, after small
+  type-annotation edits; compiling `model/` too broke input validation (compiled classes check argument types
+  strictly). Slower than PyPy and a build step after every change, so not adopted; an option for a CPython
+  distribution.
+* **No gain:** stopping the likes look-ahead's minimum at the lowest possible value (1.02 times); recomputing only the
+  look-ahead's pairs that touch the changed slot (nothing to gain: every shared shift in the benchmark has two slots,
+  so one pair); workload caps that account for overlapping slots (up to 23% fewer nodes, but 0.94 times on CPython,
+  since the caps rarely bind: the workload bound's looseness is elsewhere); symmetry between identical workers (only
+  3 of the 16 inputs have even one identical pair).
+
+Final comparison (3 rounds, per-input medians): CPython 509 s, CPython with mypyc 218 s, PyPy 156 s, all with the
+kept changes but the first, which is CPython before them.
 
 ## Incremental scoring
 
