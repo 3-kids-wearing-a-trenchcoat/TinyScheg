@@ -3,6 +3,7 @@ An independent check of a schedule's hard constraints, for the tests and the sch
 It works from the input and the slots alone and reuses nothing from tinyscheg.csp, so that a bug there can't hide
 the same bug here.
 """
+import datetime as dt
 import itertools
 from collections.abc import Sequence
 
@@ -39,17 +40,22 @@ def hard_constraint_violations(schedule_input: ScheduleInput, slots: Sequence[Sl
         if assignment[first] is None or assignment[first] != assignment[second]:
             continue
         earlier, later = sorted((slots[first].time, slots[second].time))
-        if later.start - earlier.end < min_rest:  # negative when they overlap
+        if not rest_is_enough(later.start - earlier.end, min_rest):
             violations.append(f"slots {first} and {second}: {workers[assignment[first]].name} rests less than "
-                              f"{min_rest} between them")
+                              f"{min_rest} between them, or not at all")
     for time, name in history_shifts(schedule_input):
         for slot, worker_index in zip(slots, assignment):
             if worker_index is not None and workers[worker_index].name == name:
                 earlier, later = sorted((time, slot.time))
-                if later.start - earlier.end < min_rest:
+                if not rest_is_enough(later.start - earlier.end, min_rest):
                     violations.append(f"slot {slot.index}: {name} rests less than {min_rest} after their history "
                                       f"shift ending {time.end.isoformat()}")
     return violations
+
+
+def rest_is_enough(rest: dt.timedelta, min_rest: dt.timedelta) -> bool:
+    """True if a rest between two shifts is legal: more than none (negative is an overlap), and at least min_rest."""
+    return rest > dt.timedelta(0) and rest >= min_rest
 
 
 def history_shifts(schedule_input: ScheduleInput) -> list[tuple[DateTimeRange, str]]:

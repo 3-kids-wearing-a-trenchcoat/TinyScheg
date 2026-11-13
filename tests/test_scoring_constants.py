@@ -53,7 +53,7 @@ def brute_force(ranges: list[DateTimeRange], min_rest: float, rest_factor: float
     for size in range(1, len(ranges) + 1):
         for sequence in itertools.combinations(ranges, size):  # ranges are sorted, so combinations are in time order
             gaps = [hours(later.start - earlier.end) for earlier, later in zip(sequence, sequence[1:])]
-            if any(gap < min_rest for gap in gaps):
+            if any(gap <= 0 or gap < min_rest for gap in gaps):  # never back to back
                 continue
             deficit = sum(max(0.0, rest_factor * hours(earlier.duration) - gap)
                           for earlier, gap in zip(sequence, gaps))

@@ -63,9 +63,11 @@ def test_rest_of_exactly_min_rest_is_allowed() -> None:
     assert not must_differ(first, slot(1, 17, 20), hours(5))     # exactly 5 hours apart
 
 
-def test_back_to_back_slots_with_no_minimum_rest() -> None:
-    assert difference_constraints([slot(0, 8, 12), slot(1, 12, 16)], hours(0)) == ((), ())
+def test_back_to_back_slots_are_constrained_even_with_no_minimum_rest() -> None:
+    assert difference_constraints([slot(0, 8, 12), slot(1, 12, 16)], hours(0)) == ((1,), (0,))
     assert difference_constraints([slot(0, 8, 12), slot(1, 12, 16)], hours(1)) == ((1,), (0,))
+    # any rest at all is enough with no minimum rest
+    assert difference_constraints([slot(0, 8, 12), slot(1, 13, 16)], hours(0)) == ((), ())
 
 
 def test_slots_of_the_same_shift_are_constrained() -> None:

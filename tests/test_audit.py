@@ -161,10 +161,12 @@ def test_a_rest_is_short_only_against_the_schedules_own_norm() -> None:
 
 
 def test_a_disliked_pairing_has_an_easy_fix_by_swapping_posts_in_the_same_hour() -> None:
-    # two posts of two, two 4-hour blocks; Anne is with Bob, whom she dislikes, both times
-    workers = [Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob"), Worker("Cy"), Worker("Dan")]
-    context = context_for(workers, {"gate": {"any": 2}, "desk": {"any": 2}}, 8)
-    assignment = (0, 1, 2, 3, 0, 1, 2, 3)
+    # two posts of two, three 4-hour blocks; Anne is with Bob, whom she dislikes, in the first and the last (the
+    # middle block goes to others, since nobody may work back to back)
+    workers = [Worker("Anne", dislikes=frozenset({"Bob"}))] + [Worker(name) for name in ("Bob", "Cy", "Dan", "Eve",
+                                                                                        "Fay", "Gus", "Hal")]
+    context = context_for(workers, {"gate": {"any": 2}, "desk": {"any": 2}}, 12)
+    assignment = (0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3)
     audit = evaluate(context, assignment)
     assert audit.stats[0].straws["disliked partner"] == 2
     straws = complaints_of(audit, SHORT_STRAWS)
@@ -176,8 +178,9 @@ def test_a_disliked_pairing_has_an_easy_fix_by_swapping_posts_in_the_same_hour()
 # --- easy fixes ---
 
 def test_extra_load_a_move_can_fix_has_an_easy_fix() -> None:
-    context = context_for([Worker("Anne"), Worker("Bob")], {"gate": {"any": 1}}, 24)
-    assignment = (0, 0, 0, 0, 1, 1)
+    # Anne works every other shift, 3 of 6; the others one each
+    context = context_for([Worker("Anne"), Worker("Bob"), Worker("Cy"), Worker("Dan")], {"gate": {"any": 1}}, 24)
+    assignment = (0, 1, 0, 2, 0, 3)
     audit = evaluate(context, assignment)
     fixes = find_fixes(context, assignment, audit)
     assert {c.key for c in audit.complaints if c.kind == LOAD} <= fixes.keys()
@@ -315,14 +318,14 @@ def test_command_line(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 
 def history_input(new_workers: tuple[str, ...] = ("Anne", "Bob", "Cy")) -> ScheduleInput:
     """
-    4-hour gate shifts with no minimum rest: a history over hours 0-24 in which Anne took four shifts, Bob two and
-    Cy none, then a new period over hours 24-48
+    4-hour gate shifts with no minimum rest (but never back to back): a history over hours 0-24 in which Anne took
+    three shifts, Bob two and Cy one, then a new period over hours 24-48
     """
     no_rest = dt.timedelta(0)
     post = Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 1),)))
     then = ScheduleInput(Settings(DateTimeRange(at(0), at(24)), no_rest),
                          (Worker("Anne"), Worker("Bob"), Worker("Cy")), (post,))
-    previous = PreviousSchedule("day1.yml", then, (0, 1, 0, 1, 0, 0))
+    previous = PreviousSchedule("day1.yml", then, (0, 1, 0, 1, 0, 2))
     return ScheduleInput(Settings(DateTimeRange(at(24), at(48)), no_rest), tuple(Worker(name) for name in new_workers),
                          (post,), (previous,))
 
@@ -330,13 +333,14 @@ def history_input(new_workers: tuple[str, ...] = ("Anne", "Bob", "Cy")) -> Sched
 def test_a_schedule_is_audited_together_with_its_history() -> None:
     schedule_input = history_input()
     shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
-    new = (0, 1, 2, 0, 1, 2)  # even on its own
+    new = (0, 2, 0, 2, 0, 1)  # Anne works every other shift again
     context, assignment = with_history(schedule_input, shifts, new)
-    assert context.fixed_slots == 6 and assignment == (0, 1, 0, 1, 0, 0) + new
+    assert context.fixed_slots == 6 and assignment == (0, 1, 0, 1, 0, 2) + new
     assert context.availability[2][WHOLE_PERIOD] == 48
     audit = evaluate(context, assignment)
-    # Anne's 6 shifts against Cy's 2 overall: the history's imbalance, which the new period could have made up for
-    assert (0, 2, WHOLE_PERIOD, 3) in complaints_of(audit, LOAD)
+    # Anne's 6 shifts against Cy's 3 overall: the new period added to the history's imbalance instead of making up
+    # for it
+    assert (0, 2, WHOLE_PERIOD, 2) in complaints_of(audit, LOAD)
     fixes = find_fixes(context, assignment, audit)
     assert fixes and all(slot >= context.fixed_slots for fix in fixes.values() for change in fix.changes
                          for slot in change.changed_slots)  # no fix changes the history

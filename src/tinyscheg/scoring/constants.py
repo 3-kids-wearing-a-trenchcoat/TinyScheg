@@ -183,9 +183,12 @@ def worst_deficit(ranges: Sequence[DateTimeRange], min_rest: float, rest_factor:
 
 
 def _followers(ranges: Sequence[DateTimeRange], first: int, min_rest: float) -> list[int]:
-    """The indexes of the ranges a worker could work next after ranges[first]: those starting min_rest after its end."""
+    """
+    The indexes of the ranges a worker could work next after ranges[first]: those starting after its end, by at least
+    min_rest (never back to back)
+    """
     return [later for later in range(first + 1, len(ranges))
-            if hours(ranges[later].start - ranges[first].end) >= min_rest]
+            if (rest := hours(ranges[later].start - ranges[first].end)) > 0 and rest >= min_rest]
 
 
 def workload_unit(workers: Sequence[WorkerConstants], loads: Sequence[float], power: int) -> float:

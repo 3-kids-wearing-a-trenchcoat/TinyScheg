@@ -180,8 +180,12 @@ def initial_domain(slot: Slot, workers: Sequence[Worker]) -> tuple[int, ...]:
 
 
 def must_differ(first: Slot, second: Slot, min_rest: dt.timedelta) -> bool:
-    """True if the two slots overlap or are less than min_rest apart, so one worker can't fill both."""
-    return first.time.overlaps(second.time) or first.time.gap(second.time) < min_rest
+    """
+    True if one worker can't fill both slots: they overlap, are back to back (one ends as the other starts), or are
+    less than min_rest apart. Back to back is never allowed, even with a min_rest of 0.
+    """
+    rest = first.time.gap(second.time)  # zero if they overlap or touch
+    return rest <= dt.timedelta(0) or rest < min_rest
 
 
 def difference_constraints(slots: Sequence[Slot], min_rest: dt.timedelta) -> tuple[tuple[int, ...], ...]:
@@ -196,9 +200,9 @@ def difference_constraints(slots: Sequence[Slot], min_rest: dt.timedelta) -> tup
         rest_ends = first.time.end + min_rest
         for second_index in range(first_index + 1, len(slots)):
             second = slots[second_index]
-            # Later slots start no earlier than this one, so once one starts after this slot's end plus the rest
-            # period, every slot after it does too, and none of them can be constrained with this slot.
-            if second.time.start >= rest_ends:
+            # Later slots start no earlier than this one, so once one starts after this slot's end, by at least the
+            # rest period, every slot after it does too, and none of them can be constrained with this slot.
+            if second.time.start >= rest_ends and second.time.start > first.time.end:
                 break
             if must_differ(first, second, min_rest):
                 neighbours[first_index].append(second_index)

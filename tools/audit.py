@@ -500,7 +500,8 @@ def is_legal_change(context: AuditContext, own_slots: list[list[int]], change: C
         slot_indexes = [index for index in own_slots[worker] if change.assignment[index] == worker]
         slot_indexes += [index for index in change.changed_slots if change.assignment[index] == worker]
         times = sorted(context.slots[index].time for index in slot_indexes)
-        if any(later.start - earlier.end < min_rest for earlier, later in zip(times, times[1:])):
+        if any(rest <= dt.timedelta(0) or rest < min_rest  # back to back is never legal, even with min_rest 0
+               for rest in (later.start - earlier.end for earlier, later in zip(times, times[1:]))):
             return False
     return True
 
