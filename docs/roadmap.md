@@ -197,6 +197,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
       wrong (see `explanation/future-work.md`)
+- [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one
+      convex function, so that a liked shift makes up for a short straw (after the weight re-check)
+- [ ] A schedule that leaves the next period with no legal schedule: check or avoid it (found 2026-11-14)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Forcing a specific worker into a specific shift (low priority)

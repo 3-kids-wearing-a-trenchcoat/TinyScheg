@@ -34,6 +34,20 @@ and which is scored as a whole, from scratch, so the algorithm effectively *exte
 Past short straws (disliked pairings, short rests) aren't compensated by this; whether they need to be is for the
 audit across schedules to show (ADR 0030).
 
+### A schedule that leaves the next one with no legal schedule
+
+> [!WARNING]
+> **Not yet implemented.** Found and deferred on 2026-11-14.
+
+The search finds the best schedule for its own period, with no regard for the period after it. On the benchmark,
+continued for a second day with the first as history, 4 of the 15 inputs (at minimum staffing) had no legal second day
+whatever scored the first, and for 2 more, whether the second day had a legal schedule depended on which scoring had
+chosen the first (`sweep_08`, `sweep_09`). In real use, that's a schedule after which the next one can't be made.
+Ways to look at it: checking, before writing a schedule, that the period after it could still be filled; keeping the
+end of a period from leaning on the workers the next one will need first; or leaving it to the scheduler, who can see
+the warning and add workers. Until then, the tuning counts a setting whose first day leaves no legal second day as a
+failure.
+
 ## Explaining infeasibility
 
 > [!WARNING]
@@ -234,6 +248,30 @@ worker never sharing a shift with anyone they like while a pair of friends share
 liked-partner complaints apart instead of fixing them through tuning. If they turn out to matter, the fix is in the
 formula: each worker's shortfall of liked pairings through a convex function, as workload does, which needs an ADR,
 a check that the penalty stays monotone along the search, and new tuning runs.
+
+## Compensation across the parts of the penalty
+
+> [!WARNING]
+> **Not yet implemented.** Deferred on 2026-11-14, until the weights have been checked again.
+
+The user (2026-11-14): a shift with someone a worker likes "is in and of itself making up for drawing the short
+straw": a liked pairing can make up for one short rest, or for being the one who has to take the extra shift in an
+unavoidable 2-2-3, and a dislike likewise justifies being screwed over once, but no more. The user hoped this would
+arise from the penalties' convexity.
+
+It arises only *within* a part: each worker's workload, and each worker's rest shortfall, go through their own convex
+function, so a worker who already has more of either is spared more of the same. *Across* parts it doesn't: each part
+is convex separately, and the likes part is a plain sum over pairings, so a like is worth the same whoever gets it,
+and the model has no reason to give it to the worker who drew the short straw. Where the extra shift can itself be the
+one with a friend, the model picks that; where the liked pairing is elsewhere, it doesn't care who gets it.
+
+For compensation to arise naturally, each worker's parts would go through **one** convex function: their rest
+shortfall and the cost of their pairings (and perhaps their workload) added up per worker first, then made convex,
+so that sparing a worker whose total is already high is worth more. It stays monotone, as branch and bound needs,
+since a liked partner adds nothing where a neutral or disliked one adds a cost. The parts' units would have to be made
+commensurate within each worker's total, rather than only weighed against each other in the sum, and the workload's
+availability-relative form fitted in. It needs an ADR, new provable properties and tuning again. Related:
+[a fairness term for liked pairings](#a-fairness-term-for-liked-pairings), the likes-only version of the same idea.
 
 ## Tuning on longer schedules
 
