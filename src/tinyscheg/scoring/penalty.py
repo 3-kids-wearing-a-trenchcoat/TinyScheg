@@ -20,6 +20,11 @@ from tinyscheg.model.shift import Shift
 from tinyscheg.scoring.constants import DISLIKED_PARTNER, ScoringConstants, hours, like_value, rest_target
 
 
+# Each worker's rest shortfall goes through deficit ** REST_POWER (ADR 0036): squared, so that the same shortfall
+# costs more on a worker who already has some
+REST_POWER = 2
+
+
 @dataclass(frozen=True, slots=True)
 class Penalty:
     """A schedule's penalty: the weighted total, and each part before weighting, in its own units (ADR 0032)."""
@@ -278,16 +283,21 @@ def worker_deficits(constants: ScoringConstants, assignment: Sequence[int | None
 
 def rest_term(constants: ScoringConstants, worker: int, deficit: float) -> float:
     """
-    A worker's term of the rest penalty, convex in their deficit (ADR 0036)
+    A worker's term of the rest penalty, convex in their deficit (ADR 0036). The power is multiplied out one factor
+    at a time, which rounds the same on every interpreter: float ** int doesn't (CPython's pow can differ from
+    repeated multiplication in the last digit).
     :param constants: ScoringConstants
     :param worker: int, the worker's index
     :param deficit: float, their deficit in hours
-    :return: rest_unit / M_w * deficit ** 2 / rest_scale; 0 if they can never have a deficit
+    :return: rest_unit / M_w * deficit ** REST_POWER / rest_scale; 0 if they can never have a deficit
     """
     worst = constants.workers[worker].worst_deficit
     if worst == 0 or constants.rest_scale <= 0:
         return 0.0
-    return constants.rest_unit / worst * deficit * deficit / constants.rest_scale
+    term = constants.rest_unit / worst
+    for _ in range(REST_POWER):
+        term *= deficit
+    return term / constants.rest_scale
 
 
 def rest_deficit(constants: ScoringConstants, worker: int, earlier: int, later: int) -> float:

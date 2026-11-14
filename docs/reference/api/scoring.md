@@ -180,8 +180,9 @@ availability, divided by `workload_unit`. 0 if no worker can be assigned anythin
 ### `rest_penalty(constants, assignment) -> float`
 
 $\mathcal{R}^{**}$ ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)): for each worker, their deficit $D_w$, the sum over their consecutive shifts of
-$\max(0, \text{rest target} - \text{rest})$, and their term `rest_unit` / `worst_deficit` $\cdot D_w^2 /$
-`rest_scale`: squared, so the same shortfall costs more on a worker who already has some, and weighing more for a
+$\max(0, \text{rest target} - \text{rest})$, and their term `rest_unit` / `worst_deficit` $\cdot D_w^{p_R} /$
+`rest_scale`, with $p_R$ = `REST_POWER` (2, so squared; multiplied out one factor at a time, which rounds the same on
+every interpreter): squared, so the same shortfall costs more on a worker who already has some, and weighing more for a
 worker who could rarely be short. Workers whose worst deficit is 0 can never have one, and count 0.
 
 `worker_deficits(constants, assignment)` gives each worker's $D_w$, and `rest_term(constants, worker, deficit)` one
