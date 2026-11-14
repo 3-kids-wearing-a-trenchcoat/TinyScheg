@@ -35,9 +35,9 @@ from typing import Any
 from audit import build_context, evaluate, find_fixes, summarize
 from tinyscheg.csp.problem import Problem, build_problem
 from tinyscheg.csp.search import find_best_schedule
-from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_NEUTRAL_PARTNER, DEFAULT_REST_FACTOR,
-                                            DEFAULT_REST_WEIGHT, DEFAULT_SHIFT_SHARE, DEFAULT_WORKLOAD_POWER,
-                                            DEFAULT_WORKLOAD_WEIGHT, ScheduleInput, ScoringParameters)
+from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_NEUTRAL_PARTNER, DEFAULT_REST_WEIGHT,
+                                            DEFAULT_SHIFT_SHARE, DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT,
+                                            ScheduleInput, ScoringParameters)
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import build_constants
 
@@ -54,12 +54,11 @@ INPUT_GROUPS = ("tuning", "holdout", "confirm")   # the inputs a round can run o
 LIKES_SHARES = (0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6)   # the likes weight's share; workload and rest keep their ratio
 REST_SHARES = (0.1, 0.2, 0.25, 0.3, 0.4, 0.5)         # the rest weight's share; likes and workload keep theirs
 WORKLOAD_POWERS = (2, 3, 4)
-REST_FACTORS = (1.5, 2.0, 2.5, 3.0, 4.0, 5.0)
 NEUTRAL_PARTNERS = (0.1, 0.2, 0.25, 1 / 3, 0.4, 0.45)  # all below 1/2: a dislike outweighs a like (ADR 0023)
 SHIFT_SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)            # 0 is hours only, as before ADR 0026
 
 RESULT_FIELDS = ("stage", "setting", "input", "tier", "holdout", "likes_weight", "workload_weight", "rest_weight",
-                 "workload_power", "rest_factor", "neutral_partner", "shift_share", "status", "seconds", "nodes",
+                 "workload_power", "neutral_partner", "shift_share", "status", "seconds", "nodes",
                  "penalty", "likes", "workload", "rest", "complaints", "easy_fixes", "easy_fix_severity",
                  "no_fix_severity", "aggrieved", "concentration", "separate_complaints", "separate_severity",
                  "assignment")
@@ -73,14 +72,13 @@ class Setting:
     workload_weight: float = DEFAULT_WORKLOAD_WEIGHT
     rest_weight: float = DEFAULT_REST_WEIGHT
     workload_power: int = DEFAULT_WORKLOAD_POWER
-    rest_factor: float = DEFAULT_REST_FACTOR
     neutral_partner: float = DEFAULT_NEUTRAL_PARTNER
     shift_share: float = DEFAULT_SHIFT_SHARE
 
     def parameters(self) -> ScoringParameters:
         """The ScoringParameters for this setting."""
         return ScoringParameters(self.likes_weight, self.workload_weight, self.rest_weight, self.workload_power,
-                                 self.rest_factor, self.neutral_partner, self.shift_share)
+                                 self.neutral_partner, self.shift_share)
 
 
 DEFAULTS = Setting("defaults")
@@ -99,7 +97,6 @@ def sensitivity_settings() -> list[Setting]:
     settings = [Setting(f"likes share {share:g}", **_with_share(share, "likes_weight")) for share in LIKES_SHARES]
     settings += [Setting(f"rest share {share:g}", **_with_share(share, "rest_weight")) for share in REST_SHARES]
     settings += [Setting(f"workload power {power}", workload_power=power) for power in WORKLOAD_POWERS]
-    settings += [Setting(f"rest factor {factor:g}", rest_factor=factor) for factor in REST_FACTORS]
     settings += [Setting(f"neutral partner {value:.3g}", neutral_partner=value) for value in NEUTRAL_PARTNERS]
     settings += [Setting(f"shift share {value:g}", shift_share=value) for value in SHIFT_SHARES]
     return settings
@@ -157,7 +154,7 @@ def parse_setting(text: str) -> Setting:
     """
     A setting from the command line: comma-separated PARAM=VALUE pairs, each PARAM a ScoringParameters field, the
     others at their defaults; named by its pairs in field order, so that the same setting always gets the same name
-    :param text: str, e.g. "rest_factor=2.5,shift_share=0.5"
+    :param text: str, e.g. "neutral_partner=0.25,shift_share=0.5"
     :return: Setting
     :raise ValueError: on an unknown parameter, a value of the wrong type or out of range, or a parameter given twice
     """

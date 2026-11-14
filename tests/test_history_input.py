@@ -162,14 +162,12 @@ def test_the_audit_judges_a_schedule_together_with_its_history(tmp_path: pathlib
 
 def consecutive_text(start: str, end: str, away: str = "", history: str = "") -> str:
     """
-    An input for consecutive schedules: 2-hour desk shifts, 2 hours' minimum rest and a rest target of one shift, so
-    that no rest falls short and workload alone decides; Cy may be away
+    An input for consecutive schedules: 2-hour desk shifts and 2 hours' minimum rest; Cy may be away
     """
     return textwrap.dedent(f"""\
         settings:
           time: ["{start}", "{end}"]
           min_rest: 2
-          scoring: {{rest_factor: 1}}
         workers:
           - name: "Anne"
           - name: "Bob"

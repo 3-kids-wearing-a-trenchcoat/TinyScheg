@@ -12,7 +12,7 @@ from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Set
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import (DISLIKED_PARTNER, LIKED_PARTNER, availability, build_constants, hours,
-                                         like_value, rest_unit, slot_load, workload_unit, worst_deficit)
+                                         like_value, rest_factor, rest_unit, slot_load, workload_unit, worst_deficit)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -47,7 +47,7 @@ def test_fully_available_and_never_available() -> None:
 
 # --- worst deficit ---
 
-def brute_force(ranges: list[DateTimeRange], min_rest: float, rest_factor: float) -> float:
+def brute_force(ranges: list[DateTimeRange], min_rest: float, factor: float) -> float:
     """The largest deficit over every legal sequence of the ranges, by trying them all."""
     largest_deficit = 0.0
     for size in range(1, len(ranges) + 1):
@@ -55,8 +55,8 @@ def brute_force(ranges: list[DateTimeRange], min_rest: float, rest_factor: float
             gaps = [hours(later.start - earlier.end) for earlier, later in zip(sequence, sequence[1:])]
             if any(gap <= 0 or gap < min_rest for gap in gaps):  # never back to back
                 continue
-            deficit = sum(max(0.0, rest_factor * hours(earlier.duration) - gap)
-                          for earlier, gap in zip(sequence, gaps))
+            deficit = sum(max(0.0, factor * (hours(earlier.duration) + hours(later.duration)) / 2 - gap)
+                          for earlier, later, gap in zip(sequence, sequence[1:], gaps))
             largest_deficit = max(largest_deficit, deficit)
     return largest_deficit
 
@@ -66,6 +66,14 @@ def test_worst_deficit_by_hand() -> None:
     assert worst_deficit([span(0, 4), span(10, 14)], 6, 3) == 6
     assert worst_deficit([span(0, 4), span(10, 14)], 6, 1.5) == 0  # the target is met by the minimum rest
     assert worst_deficit([span(0, 4)], 6, 3) == 0                 # a single shift has no rest after it
+    # shifts of different lengths: the target is gamma times their mean length, 2 * (2 + 8) / 2 = 10 hours
+    assert worst_deficit([span(0, 2), span(8, 16)], 6, 2) == 4
+
+
+def test_rest_factor_is_the_free_hours_per_hour_of_work() -> None:
+    # ADR 0036: three workers available 24 hours each, 8 hours of slots: (72 - 8) / 8
+    assert rest_factor([24, 24, 24], [4, 4]) == 8
+    assert rest_factor([24], []) == 0  # no slots, no rest to judge
 
 
 def test_empty_domain() -> None:
@@ -77,9 +85,9 @@ def test_worst_deficit_matches_brute_force(seed: int) -> None:
     generator = random.Random(seed)
     starts = sorted(generator.sample(range(0, 40), 9))
     ranges = sorted({span(start, start + generator.choice([2, 3, 4, 6])) for start in starts})
-    min_rest, rest_factor = generator.choice([0, 3, 6]), generator.choice([1, 2, 3])
-    expected_deficit = brute_force(ranges, min_rest, rest_factor)
-    assert worst_deficit(ranges, min_rest, rest_factor) == pytest.approx(expected_deficit)
+    min_rest, factor = generator.choice([0, 3, 6]), generator.choice([1, 2, 3])
+    expected_deficit = brute_force(ranges, min_rest, factor)
+    assert worst_deficit(ranges, min_rest, factor) == pytest.approx(expected_deficit)
 
 
 # --- the constants of a run ---

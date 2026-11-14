@@ -44,9 +44,11 @@ class ScoringConstants:
     (n_shared). The penalty's parts are flat (ADR 0032): workload_unit is what the workload penalty is measured in,
     mean slot load ** p / mean availability ** (p - 1), so that one shift of imbalance costs the same at any length;
     rest_unit is the mean M_w of the workers who could have a deficit, which keeps the average hour short costing the
-    same at any length. pair_values[w][p] is what workers w and p add to the likes total as a pair, before dividing by
-    the shift's other slots: both workers' like values of each other, computed once since the search asks for them at
-    every step.
+    same at any length. rest_factor is gamma, derived from the input (ADR 0036): the schedule's free hours per hour
+    of work; rest_scale is one typical rest target, gamma times the mean slot length, the unit each worker's squared
+    hours short are measured in. pair_values[w][p] is what workers w and p add to the likes total as a pair, before
+    dividing by the shift's other slots: both workers' like values of each other, computed once since the search asks
+    for them at every step.
     """
     parameters: ScoringParameters
     min_rest: float
@@ -58,6 +60,8 @@ class ScoringConstants:
     shared_slots: int
     workload_unit: float
     rest_unit: float
+    rest_factor: float
+    rest_scale: float
     pair_values: tuple[tuple[float, ...], ...]
 
 
@@ -87,12 +91,14 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         """A slot's load: its hours and one average slot, blended by the shift share (ADR 0026)."""
         return slot_load(hours(time.duration), mean_hours, parameters.shift_share)
 
+    available = [availability(worker, settings.period) for worker in workers]
+    factor = rest_factor(available, slot_hours)
     worker_constants = []
     for index, worker in enumerate(workers):
         ranges = sorted({slot.time for slot, domain in zip(slots, domains) if index in domain})
         worker_constants.append(WorkerConstants(
-            availability=availability(worker, settings.period),
-            worst_deficit=worst_deficit(ranges, min_rest, parameters.rest_factor),
+            availability=available[index],
+            worst_deficit=worst_deficit(ranges, min_rest, factor),
             likes=frozenset(index_of[name] for name in worker.likes),
             dislikes=frozenset(index_of[name] for name in worker.dislikes)))
     return ScoringConstants(
@@ -106,6 +112,8 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         shared_slots=sum(len(shift.slots) for shift in shifts if len(shift.slots) > 1),
         workload_unit=workload_unit(worker_constants, [load(slot.time) for slot in slots], parameters.workload_power),
         rest_unit=rest_unit(worker_constants),
+        rest_factor=factor,
+        rest_scale=factor * mean_hours,
         pair_values=pair_values(worker_constants, parameters.neutral_partner))
 
 
@@ -154,6 +162,32 @@ def availability(worker: Worker, period: DateTimeRange) -> float:
     return hours(period.duration) - unavailable
 
 
+def rest_factor(available: Sequence[float], slot_hours: Sequence[float]) -> float:
+    """
+    The rest factor gamma, derived from the input (ADR 0036): the schedule's free hours per hour of work. Fair shares
+    of work being proportional to availability, it's every worker's free time divided by their fair share of hours,
+    so a worker who works their share, spread evenly, gets this many hours of rest per hour of work.
+    :param available: each worker's available hours (over the whole schedule, history included)
+    :param slot_hours: each slot's length in hours
+    :return: (total available hours - total slot hours) / total slot hours; 0 if there are no slots
+    """
+    work = math.fsum(slot_hours)
+    return (math.fsum(available) - work) / work if work > 0 else 0.0
+
+
+def rest_target(rest_factor: float, earlier_hours: float, later_hours: float) -> float:
+    """
+    The rest target between two consecutive shifts of a worker (ADR 0036): gamma times the mean of their lengths, so
+    that each shift sits in the middle of its share of free time, and the same two shifts cost the same in either
+    order
+    :param rest_factor: gamma
+    :param earlier_hours: the earlier shift's length in hours
+    :param later_hours: the later shift's length in hours
+    :return: the target, in hours
+    """
+    return rest_factor * (earlier_hours + later_hours) / 2
+
+
 def slot_load(slot_hours: float, mean_hours: float, shift_share: float) -> float:
     """
     A slot's load for the workload penalty (ADR 0026): (1 - sigma) * its hours + sigma * the schedule's mean slot
@@ -171,13 +205,14 @@ def worst_deficit(ranges: Sequence[DateTimeRange], min_rest: float, rest_factor:
     The largest total rest deficit a worker could have, over any legal sequence of the given time ranges
     :param ranges: the distinct time ranges of the slots in the worker's domain, sorted
     :param min_rest: the minimum rest between two shifts, in hours
-    :param rest_factor: gamma; the rest target after a shift is gamma times its length
+    :param rest_factor: gamma; the target for the rest between two shifts is gamma times their mean length
     :return: M_w: the heaviest path through the ranges, each step weighted by the deficit it causes (ADR 0014)
     """
     best = [0.0] * len(ranges)  # best[i]: the largest total deficit of a legal sequence starting with ranges[i]
     for first in reversed(range(len(ranges))):
-        target = rest_factor * hours(ranges[first].duration)
-        best[first] = max((max(0.0, target - hours(ranges[later].start - ranges[first].end)) + best[later]
+        length = hours(ranges[first].duration)
+        best[first] = max((max(0.0, rest_target(rest_factor, length, hours(ranges[later].duration))
+                                - hours(ranges[later].start - ranges[first].end)) + best[later]
                            for later in _followers(ranges, first, min_rest)), default=0.0)
     return max(best, default=0.0)
 

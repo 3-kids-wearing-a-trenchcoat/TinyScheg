@@ -30,7 +30,10 @@ T = TypeVar("T")
 _TOP_LEVEL_FIELDS = {"settings", "workers", "posts", "history"}
 _HISTORY_FIELDS = {"input", "schedule"}
 _SETTINGS_FIELDS = {"time", "min_rest", "scoring"}
-_SCORING_FIELDS = {"weights", "workload_power", "rest_factor", "neutral_partner", "shift_share"}
+_SCORING_FIELDS = {"weights", "workload_power", "neutral_partner", "shift_share"}
+# Scoring fields that no longer exist, with why, so that an old input gets a clear message (ADR 0036)
+_REMOVED_SCORING_FIELDS = {"rest_factor": "no longer a setting: the rest targets are derived from the input "
+                                          "(ADR 0036); remove it"}
 _WEIGHT_FIELDS = {"likes", "workload", "rest"}
 _WORKER_FIELDS = {"name", "roles", "unavailable", "likes", "dislikes"}
 _POST_FIELDS = {"name", "roles", "length", "time", "variations"}
@@ -107,6 +110,11 @@ def _parse_scoring(raw: object, problems: list[str]) -> ScoringParameters:
     if raw is None:
         return ScoringParameters()
     where = "settings, scoring"
+    if isinstance(raw, dict):
+        for name, why in _REMOVED_SCORING_FIELDS.items():
+            if name in raw:
+                problems.append(f"{where}: {name} is {why}")
+        raw = {name: value for name, value in raw.items() if name not in _REMOVED_SCORING_FIELDS}
     section = _entry_mapping(raw, where, _SCORING_FIELDS, problems)
     overrides: dict[str, Any] = {}
     weights = section.get("weights")

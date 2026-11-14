@@ -154,10 +154,11 @@ def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Pat
 
 
 def test_a_setting_from_the_command_line_is_named_by_its_parameters_in_field_order() -> None:
-    setting = tune.parse_setting("shift_share=0.25, rest_factor=2.5")
-    assert setting == tune.Setting("rest_factor=2.5,shift_share=0.25", rest_factor=2.5, shift_share=0.25)
+    setting = tune.parse_setting("shift_share=0.25, neutral_partner=0.25")
+    assert setting == tune.Setting("neutral_partner=0.25,shift_share=0.25", neutral_partner=0.25, shift_share=0.25)
     assert tune.parse_setting("workload_power=3").workload_power == 3
-    for bad in ("", "rest_factor", "speed=2", "rest_factor=2,rest_factor=3", "shift_share=2", "workload_power=2.5"):
+    for bad in ("", "shift_share", "speed=2", "rest_factor=2.5", "shift_share=0.2,shift_share=0.3", "shift_share=2",
+                "workload_power=2.5"):
         with pytest.raises(ValueError):
             tune.parse_setting(bad)
 
@@ -179,13 +180,13 @@ def test_a_round_runs_its_settings_as_its_own_resumable_stage(tmp_path: pathlib.
     monkeypatch.setattr(tune, "BENCHMARKS", tmp_path)
     monkeypatch.setattr(tune, "RESULTS", tmp_path / "results")
     monkeypatch.setattr(tune, "benchmarks", lambda: [tune.Benchmark("small", "sweep", False)])
-    tune.run_round("trial", ["rest_factor=2.5"], "tuning", 1)
-    tune.run_round("trial", ["rest_factor=2.5", "rest_factor=2.5,shift_share=0.25"], "tuning", 1)  # adds one
+    tune.run_round("trial", ["shift_share=0.5"], "tuning", 1)
+    tune.run_round("trial", ["shift_share=0.5", "neutral_partner=0.25,shift_share=0.5"], "tuning", 1)  # adds one
     rows = tune.read_results("trial")
     assert [(row["stage"], row["setting"]) for row in rows] == [
-        ("trial", "rest_factor=2.5"), ("trial", "rest_factor=2.5,shift_share=0.25")]
+        ("trial", "shift_share=0.5"), ("trial", "neutral_partner=0.25,shift_share=0.5")]
     assert all(row["status"] == "done" for row in rows)
     assert "trial" in tune.stages()
     for bad_name in ("baseline", "two words", "../escape"):
         with pytest.raises(ValueError, match="name"):
-            tune.run_round(bad_name, ["rest_factor=2.5"], "tuning", 1)
+            tune.run_round(bad_name, ["shift_share=0.5"], "tuning", 1)

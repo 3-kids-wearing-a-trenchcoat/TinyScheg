@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tinyscheg.model.shift import Shift
-from tinyscheg.scoring.constants import DISLIKED_PARTNER, ScoringConstants, hours, like_value
+from tinyscheg.scoring.constants import DISLIKED_PARTNER, ScoringConstants, hours, like_value, rest_target
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,33 +243,59 @@ def _assigned_load(constants: ScoringConstants, assignment: Sequence[int | None]
 
 def rest_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
     """
-    The rest penalty R**: for each worker, the hours by which each rest falls short of gamma times the length of the
-    shift before it, divided by the worker's worst possible deficit M_w and multiplied by the mean M_w (rest_unit,
-    ADR 0032): an hour short weighs more for a worker who could rarely be short, and the average hour the same at
-    any schedule length
+    The rest penalty R** (ADR 0036): for each worker, the hours D by which their rests fall short of their targets
+    in all, and their term rest_unit / M_w * D ** 2 / rest_scale. Squared, the same shortfall costs more on a worker
+    who already has some, so it's spread rather than concentrated; measured in typical targets (rest_scale), the
+    square doesn't depend on the unit of time. Divided by the worker's worst possible deficit M_w and multiplied by
+    the mean M_w (rest_unit, ADR 0032): an hour short weighs more for a worker who could rarely be short.
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
-    :return: the sum over workers, in hours; workers with M_w = 0 can never have a deficit and count 0
+    :return: the sum over workers; workers with M_w = 0 can never have a deficit and count 0
     """
     total = 0.0
-    for worker, slot_indexes in enumerate(_slots_by_worker(constants, assignment)):
-        worst = constants.workers[worker].worst_deficit
-        if worst == 0:
-            continue
-        # Slots in stable order are sorted by start time, and a worker's slots never overlap, so consecutive slots
-        # are consecutive shifts; the last one has no rest after it, and so no deficit.
-        deficit = 0.0
-        for earlier, later in zip(slot_indexes, slot_indexes[1:]):
-            deficit += rest_deficit(constants, earlier, later)
-        total += deficit * constants.rest_unit / worst
+    for worker, deficit in enumerate(worker_deficits(constants, assignment)):
+        total += rest_term(constants, worker, deficit)
     return total
 
 
+def worker_deficits(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[float]:
+    """
+    Each worker's rest deficit: the hours by which their rests fall short of their targets, in all
+    :param constants: ScoringConstants
+    :param assignment: a worker index per slot, or None
+    :return: a deficit in hours per worker, in worker order
+    """
+    deficits = []
+    for slot_indexes in _slots_by_worker(constants, assignment):
+        # Slots in stable order are sorted by start time, and a worker's slots never overlap, so consecutive slots
+        # are consecutive shifts; the rests before the first and after the last aren't judged.
+        deficit = 0.0
+        for earlier, later in zip(slot_indexes, slot_indexes[1:]):
+            deficit += rest_deficit(constants, earlier, later)
+        deficits.append(deficit)
+    return deficits
+
+
+def rest_term(constants: ScoringConstants, worker: int, deficit: float) -> float:
+    """
+    A worker's term of the rest penalty, convex in their deficit (ADR 0036)
+    :param constants: ScoringConstants
+    :param worker: int, the worker's index
+    :param deficit: float, their deficit in hours
+    :return: rest_unit / M_w * deficit ** 2 / rest_scale; 0 if they can never have a deficit
+    """
+    worst = constants.workers[worker].worst_deficit
+    if worst == 0 or constants.rest_scale <= 0:
+        return 0.0
+    return constants.rest_unit / worst * deficit * deficit / constants.rest_scale
+
+
 def rest_deficit(constants: ScoringConstants, earlier: int, later: int) -> float:
-    """The hours by which the rest between two consecutive slots of a worker falls short of gamma times the earlier
-    slot's length."""
+    """The hours by which the rest between two consecutive slots of a worker falls short of its target: gamma times
+    the mean of the two slots' lengths (ADR 0036)."""
     rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end)
-    return max(0.0, constants.parameters.rest_factor * constants.slot_hours[earlier] - rest)
+    target = rest_target(constants.rest_factor, constants.slot_hours[earlier], constants.slot_hours[later])
+    return max(0.0, target - rest)
 
 
 def _slots_by_worker(constants: ScoringConstants, assignment: Sequence[int | None]) -> list[list[int]]:

@@ -14,8 +14,8 @@ from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.scoring.constants import ScoringConstants, build_constants
-from tinyscheg.scoring.penalty import _water_level, likes_penalty, rest_penalty, score, workload_penalty
+from tinyscheg.scoring.constants import ScoringConstants, build_constants, rest_target
+from tinyscheg.scoring.penalty import _water_level, likes_penalty, rest_penalty, rest_term, score, workload_penalty
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -89,23 +89,45 @@ def test_higher_power_leans_harder_on_the_most_loaded() -> None:
 
 # --- rest ---
 
+THREE = [Worker("Anne"), Worker("Bob"), Worker("Cy")]
+
+
+def test_rest_targets_are_derived_from_the_input() -> None:
+    # ADR 0036: 4-hour shifts at 0, 4, 8 and 12, three workers available for 16 hours: 48 available hours for 16 of
+    # work, so gamma = (48 - 16) / 16 = 2, the target between two 4-hour shifts 8 hours, one typical target 8 hours
+    constants = constants_for(THREE, {"any": 1}, 4, 16, min_rest=2)
+    assert constants.rest_factor == 2 and constants.rest_scale == 8
+
+
 def test_rest_deficit_relative_to_the_worst_case() -> None:
-    # 4-hour shifts at 0, 4, 8 and 12 with 2 hours' minimum rest; with a rest factor of 3, the target after a 4-hour
-    # shift is 12 hours. The worst Anne could do is 0-4 then 8-12 (4 hours' rest, 8 short), so M_w = 8.
-    parameters = ScoringParameters(rest_factor=3)
-    constants = constants_for([Worker("Anne")], {"any": 1}, 4, 16, min_rest=2, parameters=parameters)
-    assert constants.workers[0].worst_deficit == 8
-    assert constants.rest_unit == 8  # the mean worst deficit, Anne's own: so her hours short count as hours
-    assert rest_penalty(constants, [0, None, 0, None]) == pytest.approx(8)
-    assert rest_penalty(constants, [0, None, None, 0]) == pytest.approx(4)  # 8 hours' rest, 4 short
+    # with 2 hours' minimum rest, the worst a worker could do is 0-4 then 8-12 (4 hours' rest, 4 short), so M_w = 4;
+    # their term is rest_unit / M_w * D ** 2 / rest_scale, rest_unit being the mean M_w (4)
+    constants = constants_for(THREE, {"any": 1}, 4, 16, min_rest=2)
+    assert [worker.worst_deficit for worker in constants.workers] == [4, 4, 4]
+    assert constants.rest_unit == 4
+    assert rest_penalty(constants, [0, None, 0, None]) == pytest.approx(4 * 4 / 8)
+    assert rest_penalty(constants, [0, None, None, 0]) == 0  # 8 hours' rest: the target is met
     assert rest_penalty(constants, [0, None, None, None]) == 0
 
 
+def test_the_same_shortfall_costs_more_on_one_worker_than_spread() -> None:
+    # ADR 0036: each worker's shortfall is squared, so 4 hours short on one worker cost more than 2 on each of two
+    constants = constants_for(THREE, {"any": 1}, 4, 16, min_rest=2)
+    one = rest_term(constants, 0, 4)
+    assert one > rest_term(constants, 0, 2) + rest_term(constants, 1, 2)
+    assert one == pytest.approx(4 * rest_term(constants, 0, 2))
+
+
+def test_the_rest_target_is_the_mean_of_both_shifts() -> None:
+    # ADR 0036: the same two shifts get the same target in either order
+    assert rest_target(3, 2, 6) == rest_target(3, 6, 2) == 12
+    assert rest_target(3, 4, 4) == 12  # equal lengths: gamma times the length, as before
+
+
 def test_no_rest_penalty_when_the_minimum_rest_meets_the_target() -> None:
-    parameters = ScoringParameters(rest_factor=1)  # the target after a 4-hour shift is 4 hours
-    constants = constants_for([Worker("Anne")], {"any": 1}, 4, 16, min_rest=4, parameters=parameters)
-    assert constants.workers[0].worst_deficit == 0
-    assert rest_penalty(constants, [0, None, 0, None]) == 0
+    constants = constants_for(THREE, {"any": 1}, 4, 16, min_rest=8)  # the target between two 4-hour shifts is 8 hours
+    assert [worker.worst_deficit for worker in constants.workers] == [0, 0, 0]
+    assert rest_penalty(constants, [0, None, None, 0]) == 0
 
 
 # --- the total ---

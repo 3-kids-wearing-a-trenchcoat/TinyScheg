@@ -6,7 +6,7 @@ from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_best_schedule
 from tinyscheg.model.post import Post, ShiftRules
-from tinyscheg.model.schedule_input import PreviousSchedule, ScheduleInput, ScoringParameters, Settings
+from tinyscheg.model.schedule_input import PreviousSchedule, ScheduleInput, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.scoring.constants import ScoringConstants, build_constants
 from tinyscheg.scoring.penalty import score
@@ -67,13 +67,14 @@ def test_the_minimum_rest_holds_across_the_boundary() -> None:
 
 
 def test_the_new_schedule_makes_up_for_the_history() -> None:
-    # 2-hour shifts with 2 hours' minimum rest and a rest target of one shift's length, so that no rest falls short
-    # and workload alone decides; Anne and Bob took turns over the history, Cy did nothing
+    # 2-hour shifts with 2 hours' minimum rest; Anne and Bob took turns over the history, Cy did nothing. Making up
+    # for it crams Cy at the minimum rest, as Anne and Bob were; with each worker's shortfall squared (ADR 0036), their
+    # further short rests cost more than Cy's first ones, so Cy still takes more
     post = Post("desk", ShiftRules(dt.timedelta(hours=2), (("any", 1),)))
     workers = tuple(Worker(name) for name in ("Anne", "Bob", "Cy"))
 
     def two_hourly(start: int, end: int, history: tuple[PreviousSchedule, ...] = ()) -> ScheduleInput:
-        settings = Settings(period(start, end), dt.timedelta(hours=2), ScoringParameters(rest_factor=1))
+        settings = Settings(period(start, end), dt.timedelta(hours=2))
         return ScheduleInput(settings, workers, (post,), history)
 
     history = (PreviousSchedule("before", two_hourly(0, 12), (ANNE, BOB) * 3),)

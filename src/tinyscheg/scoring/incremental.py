@@ -12,8 +12,8 @@ from dataclasses import dataclass
 
 from tinyscheg.scoring.constants import ScoringConstants
 from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, _water_level, likes_total, normalized_likes,
-                                       pair_like_value, rest_deficit, rest_penalty, shift_likes_lower_bound,
-                                       workload_total)
+                                       pair_like_value, rest_deficit, rest_penalty, rest_term, shift_likes_lower_bound,
+                                       worker_deficits, workload_total)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +26,7 @@ class _Saved:
     remaining: float
     worker: int                                  # the worker assigned
     load: float                                  # their load before
+    deficit: float                               # their rest deficit before
     position: int                                # where the slot went among their slots
     caps: tuple[tuple[int, float], ...]          # (worker, cap before), for every cap changed
     shift_bounds: tuple[tuple[int, float], ...]  # (shift index, its likes look-ahead before), for every one changed
@@ -34,7 +35,7 @@ class _Saved:
 class IncrementalScore:
     """
     The running totals of one search: the likes total over the filled pairs, the workload and rest totals, and each
-    worker's load and slots in time order; and for the lower bound, each shift's likes look-ahead and each
+    worker's load, rest deficit and slots in time order; and for the lower bound, each shift's likes look-ahead and each
     worker's workload cap. assign updates them, undo restores them; both must be called in step with the search's
     own assignments, the latest assignment undone first.
     """
@@ -53,8 +54,9 @@ class IncrementalScore:
         # the totals of what's filled already, computed from scratch; from here on they're kept up to date
         self.likes = likes_total(constants, assignment)        # over filled pairs, before normalizing
         self.workload = workload_total(constants, assignment)  # the sum of av * (load / av) ** p, before normalizing
-        self.rest = rest_penalty(constants, assignment)        # the sum of deficit * rest_unit / M_w
+        self.rest = rest_penalty(constants, assignment)        # the sum of each worker's rest term
         self.load = _assigned_load(constants, assignment)
+        self.deficits = worker_deficits(constants, assignment)  # each worker's rest deficit, in hours
         self.slots: list[list[int]] = _slots_by_worker(constants, assignment)
         self.shift_bounds = [shift_likes_lower_bound(constants, shift, assignment, domains)
                              for shift in constants.shifts]
@@ -130,12 +132,14 @@ class IncrementalScore:
         changed_shifts = sorted({constants.slots[slot].shift_index}
                                 | {constants.slots[other].shift_index for other in before})
         old_shift_bounds = tuple((shift, self.shift_bounds[shift]) for shift in changed_shifts)
-        old = (self.likes, self.workload, self.rest, self.likes_bound, self.remaining, self.load[worker])
-        # the scores, from the deltas, taken before the worker's load and slots change
-        rest_delta, position = self._rest_delta(worker, slot)
+        old = (self.likes, self.workload, self.rest, self.likes_bound, self.remaining, self.load[worker],
+               self.deficits[worker])
+        # the scores, from the deltas, taken before the worker's load, deficit and slots change
+        rest_delta, position, deficit_change = self._rest_delta(worker, slot)
         self.likes += self._likes_delta(slot, worker)
         self.workload += self._workload_delta(worker, slot)
         self.rest += rest_delta
+        self.deficits[worker] += deficit_change
         self.load[worker] += constants.slot_load[slot]
         self.slots[worker].insert(position, slot)
         # the workload look-ahead: the slot's load is no longer to be spread, nor in anyone's cap; and a worker dropped
@@ -156,8 +160,8 @@ class IncrementalScore:
             new = shift_likes_lower_bound(constants, constants.shifts[shift], self.assignment, self.domains)
             self.likes_bound += new - self.shift_bounds[shift]
             self.shift_bounds[shift] = new
-        likes, workload, rest, likes_bound, remaining, load = old
-        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, worker, load, position,
+        likes, workload, rest, likes_bound, remaining, load, deficit = old
+        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, worker, load, deficit, position,
                                   tuple(caps_before.items()), old_shift_bounds))
 
     def undo(self) -> None:
@@ -166,6 +170,7 @@ class IncrementalScore:
         self.likes, self.workload, self.rest = saved.likes, saved.workload, saved.rest
         self.likes_bound, self.remaining = saved.likes_bound, saved.remaining
         self.load[saved.worker] = saved.load
+        self.deficits[saved.worker] = saved.deficit
         del self.slots[saved.worker][saved.position]
         for capped, cap in saved.caps:
             self.caps[capped] = cap
@@ -207,16 +212,17 @@ class IncrementalScore:
         return availability * (((load + self.constants.slot_load[slot]) / availability) ** power
                                - (load / availability) ** power)
 
-    def _rest_delta(self, worker: int, slot: int) -> tuple[float, int]:
+    def _rest_delta(self, worker: int, slot: int) -> tuple[float, int, float]:
         """
         What giving the worker the slot adds to the rest total, and where the slot goes among their slots
-        :return: (the change in deficit * rest_unit / M_w, the slot's position in the worker's slots)
+        :return: (the change in the worker's rest term, the slot's position in their slots, the change in their
+        deficit in hours)
         """
         slots = self.slots[worker]
         position = bisect.bisect_left(slots, slot)
         worst = self.constants.workers[worker].worst_deficit
         if worst == 0:
-            return 0.0, position
+            return 0.0, position, 0.0
         earlier = slots[position - 1] if position > 0 else None
         later = slots[position] if position < len(slots) else None
         change = 0.0
@@ -226,4 +232,6 @@ class IncrementalScore:
             change += rest_deficit(self.constants, slot, later)
         if earlier is not None and later is not None:
             change -= rest_deficit(self.constants, earlier, later)
-        return change * self.constants.rest_unit / worst, position
+        deficit = self.deficits[worker]
+        term_change = rest_term(self.constants, worker, deficit + change) - rest_term(self.constants, worker, deficit)
+        return term_change, position, change

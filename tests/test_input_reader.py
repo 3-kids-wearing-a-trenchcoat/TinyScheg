@@ -207,11 +207,17 @@ def test_scoring_defaults_when_omitted(tmp_path: pathlib.Path) -> None:
 
 
 def test_scoring_overrides(tmp_path: pathlib.Path) -> None:
-    text = with_scoring("weights: {likes: 1, workload: 2, rest: 1}\nworkload_power: 3\nrest_factor: 2.5\n"
+    text = with_scoring("weights: {likes: 1, workload: 2, rest: 1}\nworkload_power: 3\n"
                         "neutral_partner: 0.25\nshift_share: 0.75\n")
     scoring = read_input(write(tmp_path, text)).settings.scoring
-    assert scoring == ScoringParameters(1, 2, 1, workload_power=3, rest_factor=2.5, neutral_partner=0.25,
-                                        shift_share=0.75)
+    assert scoring == ScoringParameters(1, 2, 1, workload_power=3, neutral_partner=0.25, shift_share=0.75)
+
+
+def test_rest_factor_is_no_longer_a_setting(tmp_path: pathlib.Path) -> None:
+    # ADR 0036: the rest targets are derived from the input; an old input that sets rest_factor is told so
+    problems = problems_of(tmp_path, with_scoring("rest_factor: 2.5\n"))
+    assert problems == ("settings, scoring: rest_factor is no longer a setting: the rest targets are derived from the "
+                        "input (ADR 0036); remove it",)
 
 
 def test_omitted_weights_keep_their_defaults(tmp_path: pathlib.Path) -> None:
@@ -227,7 +233,7 @@ def test_empty_scoring_section_keeps_the_defaults(tmp_path: pathlib.Path) -> Non
 
 
 def test_every_invalid_scoring_field_is_reported(tmp_path: pathlib.Path) -> None:
-    text = with_scoring("weights: {likes: -1, wrokload: 1}\nworkload_power: 1\nrest_factor: fast\n"
+    text = with_scoring("weights: {likes: -1, wrokload: 1}\nworkload_power: 1\nshift_share: fast\n"
                         "neutal_partner: 0.5\n")
     problems = problems_of(tmp_path, text)
     assert len(problems) == 5, problems
@@ -235,7 +241,7 @@ def test_every_invalid_scoring_field_is_reported(tmp_path: pathlib.Path) -> None
     assert any(problem.startswith("settings, scoring, weights: unknown field 'wrokload'") for problem in problems)
     assert "settings, scoring: the likes weight must be at least 0, got -1" in problems
     assert "settings, scoring: workload_power must be a whole number of at least 2, got 1" in problems
-    assert "settings, scoring: rest_factor must be a number, got 'fast'" in problems
+    assert "settings, scoring: shift_share must be a number, got 'fast'" in problems
 
 
 def test_all_zero_weights(tmp_path: pathlib.Path) -> None:
