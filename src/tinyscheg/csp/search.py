@@ -15,6 +15,19 @@ from tinyscheg.scoring.penalty import Penalty, lower_bound, score
 # tie (ADR 0027): far above the rounding differences of incremental scoring (about 1e-14), far below any difference
 # that matters
 NEAR_TIE_MARGIN = 1e-9
+# How often the search reports its progress, in nodes (ADR 0035): rarely enough to cost nothing noticeable, often
+# enough that a report comes every small fraction of a second
+PROGRESS_INTERVAL_NODES = 4096
+
+
+@dataclass(frozen=True, slots=True)
+class SearchProgress:
+    """
+    How far a search has got (ADR 0035): finished is the share of the search space finished so far, from 0 to 1 (each
+    node's weight split equally among its children, a finished branch's weight added), and nodes the nodes visited.
+    """
+    finished: float
+    nodes: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +39,9 @@ class SearchResult:
     schedule), for reporting where an infeasible input got stuck (ADR 0020). penalty is the schedule's penalty when
     the search looked for the best schedule (None otherwise, or if there is none). nodes counts the (partial)
     schedules the search visited, and pruned the branches it cut off because they couldn't beat the pocket.
+    complete is False for a best-schedule search stopped by Ctrl+C (ADR 0035): assignment is then the best schedule
+    found so far, not proven the best (None if none was found yet), and finished the share of the search space it
+    had finished; for a search that ran to the end, finished is 1.
     """
     assignment: tuple[int, ...] | None
     deepest: int
@@ -33,6 +49,8 @@ class SearchResult:
     penalty: Penalty | None = None
     nodes: int = 0
     pruned: int = 0
+    complete: bool = True
+    finished: float = 1.0
 
 
 def choose_slot(state: SearchState) -> int | None:
@@ -72,13 +90,15 @@ class _Search:
     """
 
     def __init__(self, problem: Problem, constants: ScoringConstants | None = None, prune: bool = True,
-                 on_improvement: Callable[[Penalty], None] | None = None, incremental: bool = True) -> None:
+                 on_improvement: Callable[[Penalty], None] | None = None, incremental: bool = True,
+                 on_progress: Callable[[SearchProgress], None] | None = None) -> None:
         """
         :param problem: Problem
         :param constants: ScoringConstants to look for the best schedule with; None to stop at the first legal one
         :param prune: False to visit every branch even when it can't beat the pocket (for testing the pruning)
         :param on_improvement: called with the new pocket's penalty whenever a better schedule is found, or None
         :param incremental: False to steer by scoring from scratch, as before ADR 0027 (for testing and comparing)
+        :param on_progress: called with the search's progress every PROGRESS_INTERVAL_NODES nodes, or None
         """
         self.problem = problem
         self.state = SearchState(problem)
@@ -92,37 +112,51 @@ class _Search:
         self.nodes = 0
         self.pruned = 0
         self.on_improvement = on_improvement
+        self.on_progress = on_progress
+        self.finished = 0.0  # the share of the search space finished (ADR 0035); it only observes the search
         self.scores = (IncrementalScore(constants, self.state.assigned, self.state.domains)
                        if constants is not None and incremental else None)
 
-    def search(self) -> bool:
+    def search(self, weight: float = 1.0) -> bool:
         """
         Fill the remaining slots, recursively
+        :param weight: this branch's share of the whole search space (1 at the root), split equally among the values
+        tried for the next slot; added to self.finished once the branch is finished (ADR 0035)
         :return: True to stop the search: when looking for the first legal schedule, once every slot is assigned
         (the state then holds the schedule). False otherwise, with the state restored to what it was: when looking
         for the first schedule, no assignment of the remaining slots is legal; when looking for the best, this
         branch has been searched (or pruned), and the pocket holds the best schedule found so far
         """
         self.nodes += 1
+        if self.on_progress is not None and self.nodes % PROGRESS_INTERVAL_NODES == 0:
+            self.on_progress(SearchProgress(self.finished, self.nodes))
         if self._cannot_beat_pocket():
             self.pruned += 1
+            self.finished += weight
             return False
         slot_index = choose_slot(self.state)
         if slot_index is None:
+            self.finished += weight
             return self._complete()
         if self.filled > self.deepest:
             self.deepest, self.stuck_slot = self.filled, self.problem.slots[slot_index]
-        for worker in self._value_order(slot_index):
+        values = self._value_order(slot_index)
+        if not values:
+            self.finished += weight  # a dead end: no worker left for the slot
+        share = weight / len(values) if values else 0.0
+        for worker in values:
             changes = self.state.assign(slot_index, worker)
             self.filled += 1
             if changes.emptied is None:
                 if self.scores is not None:
                     self.scores.assign(slot_index, worker, changes.saved_domains)
-                stop = self.search()
+                stop = self.search(share)
                 if self.scores is not None:
                     self.scores.undo()
                 if stop:
                     return True
+            else:
+                self.finished += share  # forward checking emptied a domain: nothing to search below
             self.state.undo(changes)
             self.filled -= 1
         return False
@@ -202,21 +236,44 @@ def find_first_schedule(problem: Problem) -> SearchResult:
 
 def find_best_schedule(problem: Problem, constants: ScoringConstants, prune: bool = True,
                        on_improvement: Callable[[Penalty], None] | None = None,
-                       incremental: bool = True) -> SearchResult:
+                       incremental: bool = True, on_progress: Callable[[SearchProgress], None] | None = None,
+                       keep_best_on_interrupt: bool = False) -> SearchResult:
     """
     Search for the best legal schedule by branch and bound: every branch is searched unless its penalty is already
-    at least the pocket's. The search runs to the end, however long that takes.
+    at least the pocket's. The search runs to the end, however long that takes, unless stopped with Ctrl+C.
     :param problem: Problem
     :param constants: ScoringConstants, built for the same input
     :param prune: False only for testing: search every branch, to check that pruning loses nothing
     :param on_improvement: called with the penalty of each better schedule as it's found (e.g. to show progress);
     None for no calls
     :param incremental: False only for testing and comparing: steer by scoring from scratch (ADR 0027)
+    :param on_progress: called with the search's progress every PROGRESS_INTERVAL_NODES nodes (ADR 0035); None for
+    no calls
+    :param keep_best_on_interrupt: True to return the best schedule found so far when Ctrl+C stops the search, marked
+    as not complete (ADR 0035); False to let KeyboardInterrupt through
     :return: the legal schedule with the lowest penalty and its penalty (deterministically: of equally good
     schedules, the first found), or the point at which the search got stuck if there is none
     """
-    run = _Search(problem, constants, prune, on_improvement, incremental)
-    run.search()
+    run = _Search(problem, constants, prune, on_improvement, incremental, on_progress)
+    try:
+        run.search()
+    except KeyboardInterrupt:
+        if not keep_best_on_interrupt:
+            raise
+        return _interrupted(run, constants)
     if run.pocket is None:
         return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes, pruned=run.pruned)
     return SearchResult(run.pocket, len(problem.slots), None, run.pocket_penalty, run.nodes, run.pruned)
+
+
+def _interrupted(run: _Search, constants: ScoringConstants) -> SearchResult:
+    """
+    The result of a best-schedule search stopped by Ctrl+C: the best schedule found so far, if any, with its penalty
+    recomputed from scratch (the interruption may have come between storing the pocket and its penalty)
+    """
+    pocket = run.pocket
+    if pocket is None:
+        return SearchResult(None, run.deepest, None, nodes=run.nodes, pruned=run.pruned, complete=False,
+                            finished=run.finished)
+    return SearchResult(pocket, len(run.problem.slots), None, score(constants, pocket), run.nodes, run.pruned,
+                        complete=False, finished=run.finished)

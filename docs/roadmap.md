@@ -169,7 +169,7 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
 Following a long search, then the rest part's blind spots found on 2026-11-13 and 2026-11-14.
 
 - [ ] **Search progress and Ctrl+C** ([ADR 0035](decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md))
-    - [ ] The share of the search space finished, tracked by the search, which only observes
+    - [x] The share of the search space finished, tracked by the search, which only observes
     - [ ] Command line: a two-line block redrawn in place on a terminal (the best schedule so far, and the progress
       with a rough time left); plain lines otherwise
     - [ ] Ctrl+C writes the best schedule found so far, marked as not proven the best

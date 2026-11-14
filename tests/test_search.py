@@ -11,7 +11,8 @@ import pytest
 
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
-from tinyscheg.csp.search import _Search, choose_slot, find_best_schedule, find_first_schedule
+from tinyscheg.csp import search as search_module
+from tinyscheg.csp.search import SearchProgress, _Search, choose_slot, find_best_schedule, find_first_schedule
 from tinyscheg.csp.state import SearchState
 from tinyscheg.model.post import Post, ShiftRules, Variation
 from tinyscheg.model.schedule_input import ScheduleInput, Settings
@@ -285,6 +286,55 @@ def test_incremental_scoring_finds_the_same_best_penalty_as_scoring_from_scratch
             assert incremental.penalty == from_scratch.penalty
             assert incremental.penalty == score(constants, incremental.assignment)
         assert incremental.nodes == from_scratch.nodes and incremental.pruned == from_scratch.pruned
+
+
+def test_progress_rises_to_one_and_changes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    # ADR 0035: the share finished only ever rises and reaches 1 at the end, and observing it changes nothing
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+    for schedule_input in small_inputs():
+        problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+        seen: list[SearchProgress] = []
+        observed = find_best_schedule(problem, constants, on_progress=seen.append)
+        assert observed == find_best_schedule(problem, constants)
+        assert observed.complete and observed.finished == 1
+        shares = [progress.finished for progress in seen]
+        assert shares == sorted(shares) and all(0 <= share < 1 for share in shares)
+        assert [progress.nodes for progress in seen] == list(range(1, observed.nodes + 1))
+        run = _Search(problem, constants)
+        run.search()
+        assert run.finished == pytest.approx(1)
+
+
+def test_ctrl_c_keeps_the_best_schedule_found_so_far(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+    schedule_input = read_input(EXAMPLE_INPUT)
+    problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+    improvements = []
+
+    def stop_once_a_schedule_is_found(progress: SearchProgress) -> None:
+        if improvements:
+            raise KeyboardInterrupt
+
+    result = find_best_schedule(problem, constants, on_improvement=improvements.append,
+                                on_progress=stop_once_a_schedule_is_found, keep_best_on_interrupt=True)
+    assert not result.complete and 0 < result.finished < 1
+    assert result.assignment is not None and result.penalty is not None
+    assert hard_constraint_violations(schedule_input, problem.slots, result.assignment) == []
+    assert result.penalty == score(constants, result.assignment) == improvements[-1]
+    with pytest.raises(KeyboardInterrupt):  # without keep_best_on_interrupt, Ctrl+C goes through
+        find_best_schedule(problem, constants, on_progress=stop_once_a_schedule_is_found)
+
+
+def test_ctrl_c_before_any_schedule_is_found_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+    schedule_input = read_input(EXAMPLE_INPUT)
+    problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+
+    def stop(progress: SearchProgress) -> None:
+        raise KeyboardInterrupt
+
+    result = find_best_schedule(problem, constants, on_progress=stop, keep_best_on_interrupt=True)
+    assert result.assignment is None and result.penalty is None and not result.complete
 
 
 def test_branch_and_bound_is_deterministic() -> None:
