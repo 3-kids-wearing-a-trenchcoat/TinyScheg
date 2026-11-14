@@ -97,6 +97,13 @@ $M_w$, as the heaviest path through a worker's possible shifts
 
 It takes $O(n^2)$ time for $n$ ranges. Tests check it against trying every legal sequence.
 
+### `integer_power(base, exponent) -> float`
+
+`base` raised to a whole `exponent`, multiplied out one factor at a time; the workload part's powers use it. Python's
+`float ** int` rounds differently in the last digit from one interpreter to another (CPython's `pow` differs from
+repeated multiplication for about one value in a thousand), which could make CPython and PyPy break a tie
+differently; multiplication rounds the same on both.
+
 ### `workload_unit(workers, loads, power) -> float` and `rest_unit(workers) -> float`
 
 The two units above ([ADR 0032](../../decisions/0032-flat-penalty-parts.md)). Measured in them, one shift of imbalance
