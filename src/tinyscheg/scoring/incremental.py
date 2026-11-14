@@ -227,11 +227,11 @@ class IncrementalScore:
         later = slots[position] if position < len(slots) else None
         change = 0.0
         if earlier is not None:
-            change += rest_deficit(self.constants, earlier, slot)
+            change += rest_deficit(self.constants, worker, earlier, slot)
         if later is not None:
-            change += rest_deficit(self.constants, slot, later)
+            change += rest_deficit(self.constants, worker, slot, later)
         if earlier is not None and later is not None:
-            change -= rest_deficit(self.constants, earlier, later)
+            change -= rest_deficit(self.constants, worker, earlier, later)
         deficit = self.deficits[worker]
         term_change = rest_term(self.constants, worker, deficit + change) - rest_term(self.constants, worker, deficit)
         return term_change, position, change

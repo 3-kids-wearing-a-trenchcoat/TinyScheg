@@ -46,7 +46,9 @@ class ScoringConstants:
     rest_unit is the mean M_w of the workers who could have a deficit, which keeps the average hour short costing the
     same at any length. rest_factor is gamma, derived from the input (ADR 0036): the schedule's free hours per hour
     of work; rest_scale is one typical rest target, gamma times the mean slot length, the unit each worker's squared
-    hours short are measured in. pair_values[w][p] is what workers w and p add to the likes total as a pair, before
+    hours short are measured in. unavailable_at_start[w][i] and unavailable_at_end[w][i] are worker w's unavailable
+    hours before slot i starts and ends, so that a rest counts only the time they were available (ADR 0038).
+    pair_values[w][p] is what workers w and p add to the likes total as a pair, before
     dividing by the shift's other slots: both workers' like values of each other, computed once since the search asks
     for them at every step.
     """
@@ -62,6 +64,8 @@ class ScoringConstants:
     rest_unit: float
     rest_factor: float
     rest_scale: float
+    unavailable_at_start: tuple[tuple[float, ...], ...]
+    unavailable_at_end: tuple[tuple[float, ...], ...]
     pair_values: tuple[tuple[float, ...], ...]
 
 
@@ -100,7 +104,7 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         ranges = sorted({slot.time for slot, domain in zip(slots, domains) if index in domain})
         worker_constants.append(WorkerConstants(
             availability=available[index],
-            worst_deficit=worst_deficit(ranges, min_rest, factor),
+            worst_deficit=worst_deficit(ranges, min_rest, factor, worker.unavailable),
             likes=frozenset(index_of[name] for name in worker.likes),
             dislikes=frozenset(index_of[name] for name in worker.dislikes)))
     return ScoringConstants(
@@ -116,6 +120,10 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         rest_unit=rest_unit(worker_constants),
         rest_factor=factor,
         rest_scale=factor * mean_hours,
+        unavailable_at_start=tuple(tuple(unavailable_before(worker.unavailable, slot.time.start) for slot in slots)
+                                   for worker in workers),
+        unavailable_at_end=tuple(tuple(unavailable_before(worker.unavailable, slot.time.end) for slot in slots)
+                                 for worker in workers),
         pair_values=pair_values(worker_constants, parameters.neutral_partner))
 
 
@@ -164,6 +172,27 @@ def availability(worker: Worker, period: DateTimeRange) -> float:
     return hours(period.duration) - unavailable
 
 
+def unavailable_before(unavailable: Sequence[DateTimeRange], moment: dt.datetime) -> float:
+    """
+    How many hours of a worker's unavailability fall before a moment (ADR 0038): what a rest ending then and starting
+    at an earlier moment leaves out, as the difference of two of these
+    :param unavailable: the worker's unavailability, sorted by start (as Worker keeps it); overlaps count once
+    :param moment: datetime.datetime
+    :return: the hours, 0.0 exactly for a worker with no unavailability before the moment
+    """
+    total = 0.0
+    covered_until: dt.datetime | None = None  # the end of the unavailability counted so far
+    for away in unavailable:
+        if away.start >= moment:
+            break
+        start = away.start if covered_until is None else max(away.start, covered_until)
+        end = min(away.end, moment)
+        if end > start:
+            total += hours(end - start)
+        covered_until = away.end if covered_until is None else max(covered_until, away.end)
+    return total
+
+
 def rest_factor(available: Sequence[float], slot_hours: Sequence[float]) -> float:
     """
     The rest factor gamma, derived from the input (ADR 0036): the schedule's free hours per hour of work. Fair shares
@@ -202,19 +231,24 @@ def slot_load(slot_hours: float, mean_hours: float, shift_share: float) -> float
     return (1 - shift_share) * slot_hours + shift_share * mean_hours
 
 
-def worst_deficit(ranges: Sequence[DateTimeRange], min_rest: float, rest_factor: float) -> float:
+def worst_deficit(ranges: Sequence[DateTimeRange], min_rest: float, rest_factor: float,
+                  unavailable: Sequence[DateTimeRange] = ()) -> float:
     """
     The largest total rest deficit a worker could have, over any legal sequence of the given time ranges
     :param ranges: the distinct time ranges of the slots in the worker's domain, sorted
-    :param min_rest: the minimum rest between two shifts, in hours
+    :param min_rest: the minimum rest between two shifts, in hours (on the clock: which sequences are legal)
     :param rest_factor: gamma; the target for the rest between two shifts is gamma times their mean length
+    :param unavailable: the worker's unavailability, sorted; a rest counts only the time they're available (ADR 0038)
     :return: M_w: the heaviest path through the ranges, each step weighted by the deficit it causes (ADR 0014)
     """
+    away_at_start = [unavailable_before(unavailable, time.start) for time in ranges]
+    away_at_end = [unavailable_before(unavailable, time.end) for time in ranges]
     best = [0.0] * len(ranges)  # best[i]: the largest total deficit of a legal sequence starting with ranges[i]
     for first in reversed(range(len(ranges))):
         length = hours(ranges[first].duration)
         best[first] = max((max(0.0, rest_target(rest_factor, length, hours(ranges[later].duration))
-                                - hours(ranges[later].start - ranges[first].end)) + best[later]
+                                - (hours(ranges[later].start - ranges[first].end)
+                                   - (away_at_start[later] - away_at_end[first]))) + best[later]
                            for later in _followers(ranges, first, min_rest)), default=0.0)
     return max(best, default=0.0)
 

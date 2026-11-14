@@ -266,12 +266,12 @@ def worker_deficits(constants: ScoringConstants, assignment: Sequence[int | None
     :return: a deficit in hours per worker, in worker order
     """
     deficits = []
-    for slot_indexes in _slots_by_worker(constants, assignment):
+    for worker, slot_indexes in enumerate(_slots_by_worker(constants, assignment)):
         # Slots in stable order are sorted by start time, and a worker's slots never overlap, so consecutive slots
         # are consecutive shifts; the rests before the first and after the last aren't judged.
         deficit = 0.0
         for earlier, later in zip(slot_indexes, slot_indexes[1:]):
-            deficit += rest_deficit(constants, earlier, later)
+            deficit += rest_deficit(constants, worker, earlier, later)
         deficits.append(deficit)
     return deficits
 
@@ -290,10 +290,19 @@ def rest_term(constants: ScoringConstants, worker: int, deficit: float) -> float
     return constants.rest_unit / worst * deficit * deficit / constants.rest_scale
 
 
-def rest_deficit(constants: ScoringConstants, earlier: int, later: int) -> float:
-    """The hours by which the rest between two consecutive slots of a worker falls short of its target: gamma times
-    the mean of the two slots' lengths (ADR 0036)."""
-    rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end)
+def rest_deficit(constants: ScoringConstants, worker: int, earlier: int, later: int) -> float:
+    """
+    The hours by which the rest between two consecutive slots of a worker falls short of its target: gamma times the
+    mean of the two slots' lengths (ADR 0036). The rest counts only the time the worker was available: unavailable
+    time is neither work nor rest (ADR 0038).
+    :param constants: ScoringConstants
+    :param worker: int, the worker's index
+    :param earlier: int, the earlier slot's index
+    :param later: int, the later slot's index
+    :return: the deficit, in hours
+    """
+    away = constants.unavailable_at_start[worker][later] - constants.unavailable_at_end[worker][earlier]
+    rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end) - away
     target = rest_target(constants.rest_factor, constants.slot_hours[earlier], constants.slot_hours[later])
     return max(0.0, target - rest)
 

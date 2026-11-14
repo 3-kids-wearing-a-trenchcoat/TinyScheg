@@ -12,7 +12,8 @@ from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Set
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import (DISLIKED_PARTNER, LIKED_PARTNER, availability, build_constants, hours,
-                                         like_value, rest_factor, rest_unit, slot_load, workload_unit, worst_deficit)
+                                         like_value, rest_factor, rest_unit, slot_load, unavailable_before,
+                                         workload_unit, worst_deficit)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -47,16 +48,21 @@ def test_fully_available_and_never_available() -> None:
 
 # --- worst deficit ---
 
-def brute_force(ranges: list[DateTimeRange], min_rest: float, factor: float) -> float:
-    """The largest deficit over every legal sequence of the ranges, by trying them all."""
+def brute_force(ranges: list[DateTimeRange], min_rest: float, factor: float,
+                unavailable: tuple[DateTimeRange, ...] = ()) -> float:
+    """The largest deficit over every legal sequence of the ranges, by trying them all; a rest counts only the time
+    outside the unavailability (checked hour by hour, the ranges being on whole hours)."""
     largest_deficit = 0.0
     for size in range(1, len(ranges) + 1):
         for sequence in itertools.combinations(ranges, size):  # ranges are sorted, so combinations are in time order
-            gaps = [hours(later.start - earlier.end) for earlier, later in zip(sequence, sequence[1:])]
-            if any(gap <= 0 or gap < min_rest for gap in gaps):  # never back to back
-                continue
-            deficit = sum(max(0.0, factor * (hours(earlier.duration) + hours(later.duration)) / 2 - gap)
-                          for earlier, later, gap in zip(sequence, sequence[1:], gaps))
+            pairs = list(zip(sequence, sequence[1:]))
+            if any(not 0 < hours(later.start - earlier.end) >= min_rest for earlier, later in pairs):
+                continue  # too close on the clock, or back to back
+            rests = [sum(1 for hour in range(int(hours(earlier.end - at(0))), int(hours(later.start - at(0))))
+                         if not any(away.overlaps(span(hour, hour + 1)) for away in unavailable))
+                     for earlier, later in pairs]
+            deficit = sum(max(0.0, factor * (hours(earlier.duration) + hours(later.duration)) / 2 - rest)
+                          for (earlier, later), rest in zip(pairs, rests))
             largest_deficit = max(largest_deficit, deficit)
     return largest_deficit
 
@@ -68,6 +74,28 @@ def test_worst_deficit_by_hand() -> None:
     assert worst_deficit([span(0, 4)], 6, 3) == 0                 # a single shift has no rest after it
     # shifts of different lengths: the target is gamma times their mean length, 2 * (2 + 8) / 2 = 10 hours
     assert worst_deficit([span(0, 2), span(8, 16)], 6, 2) == 4
+
+
+def test_unavailable_hours_before_a_moment() -> None:
+    # ADR 0038: overlapping unavailability counts once; only the part before the moment counts
+    away = tuple(sorted((span(2, 6), span(4, 8), span(20, 22))))
+    assert unavailable_before(away, at(5)) == 3
+    assert unavailable_before(away, at(10)) == 6
+    assert unavailable_before(away, at(24)) == 8
+    assert unavailable_before((), at(24)) == 0
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_worst_deficit_with_unavailability_matches_brute_force(seed: int) -> None:
+    # ADR 0038: rests count only available time, while which sequences are legal stays on the clock
+    generator = random.Random(1000 + seed)
+    starts = sorted(generator.sample(range(0, 40), 9))
+    ranges = sorted({span(start, start + generator.choice([2, 3, 4])) for start in starts})
+    away_start = generator.randrange(0, 40)
+    away = (span(away_start, away_start + generator.choice([2, 4, 8])),)
+    ranges = [time for time in ranges if not time.overlaps(away[0])]  # a worker is available for their shifts
+    min_rest, factor = generator.choice([0, 3, 6]), generator.choice([1, 2, 3])
+    assert worst_deficit(ranges, min_rest, factor, away) == pytest.approx(brute_force(ranges, min_rest, factor, away))
 
 
 def test_rest_factor_is_the_free_hours_per_hour_of_work() -> None:

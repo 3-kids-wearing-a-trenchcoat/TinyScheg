@@ -28,18 +28,22 @@ def span(start: float, end: float) -> DateTimeRange:
 
 
 def penalties(names: list[str], posts: tuple[tuple[str, float], ...], period: float, min_rest: float,
-              *schedules: dict[str, list[str] | str]) -> list[Penalty]:
+              *schedules: dict[str, list[str] | str],
+              away: dict[str, tuple[float, float]] | None = None) -> list[Penalty]:
     """
     Score schedules of one input, each checked legal first
-    :param names: the workers' names, all available throughout
+    :param names: the workers' names, available throughout unless away
     :param posts: (name, shift length in hours) of each post, one worker per shift
     :param period: the schedule's length in hours, from START
     :param min_rest: the minimum rest in hours
     :param schedules: each a mapping from a post to its shifts' workers in time order (a string of one-letter names)
+    :param away: for some workers, the (start, end) hours they're unavailable
     :return: each schedule's penalty
     """
+    away = away or {}
     schedule_input = ScheduleInput(Settings(span(0, period), dt.timedelta(hours=min_rest)),
-                                   tuple(Worker(name) for name in names),
+                                   tuple(Worker(name, unavailable=(span(*away[name]),) if name in away else ())
+                                         for name in names),
                                    tuple(Post(post, ShiftRules(dt.timedelta(hours=length), (("any", 1),)))
                                          for post, length in posts))
     problem = build_problem(schedule_input)
@@ -118,6 +122,16 @@ def test_the_same_shortfall_costs_more_on_one_worker_than_on_two() -> None:
     # 3-hour shifts, 15 hours' rest the norm: 3 hours short on each of two workers beats 6 on one
     assert_only_rest_is_worse(*penalties(list("ABCDEF"), (("post", 3),), 36, 6, {"post": "ABCDEFABCEFD"},
                                          {"post": "ABCDEFCABDEF"}))
+
+
+def test_unavailable_time_is_neither_work_nor_rest() -> None:
+    # ADR 0038: 2-hour shifts over 24 hours; B is away from 06:00 to 18:00. B's shifts right before and right after
+    # the absence (12 hours apart on the clock, none of it available) are crammed; at 00:00 and 22:00 (20 hours on the
+    # clock, 8 available) they're spread out, although C, who swaps with B, then rests 12 hours rather than 20.
+    # Counting the absence as rest, the two would cost the same.
+    better, worse = penalties(list("ABCDEF"), (("post", 2),), 24, 2, {"post": "BACDEAFDECFB"},
+                              {"post": "CABDEAFDEBFC"}, away={"B": (6, 18)})
+    assert_only_rest_is_worse(better, worse)
 
 
 def test_a_worker_idle_in_the_history_makes_up_for_it() -> None:

@@ -15,7 +15,8 @@ from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Set
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import ScoringConstants, build_constants, rest_target
-from tinyscheg.scoring.penalty import _water_level, likes_penalty, rest_penalty, rest_term, score, workload_penalty
+from tinyscheg.scoring.penalty import (_water_level, likes_penalty, rest_deficit, rest_penalty, rest_term, score,
+                                       workload_penalty)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -123,6 +124,19 @@ def test_the_rest_target_is_the_mean_of_both_shifts() -> None:
     # ADR 0036: the same two shifts get the same target in either order
     assert rest_target(3, 2, 6) == rest_target(3, 6, 2) == 12
     assert rest_target(3, 4, 4) == 12  # equal lengths: gamma times the length, as before
+
+
+def test_unavailable_time_inside_a_rest_isnt_rest() -> None:
+    # ADR 0038, the user's example: 2-hour shifts over 24 hours. Anne is available all day and works at 00:00 and
+    # 12:00, resting 10 hours; Bob is away from 06:00 to 18:00 and works at 00:00 and 18:00: 16 hours on the clock,
+    # but only 4 of them available. Unavailable time is neither work nor rest, so Bob's rest counts as 4 hours.
+    workers = [Worker("Anne"), Worker("Bob", unavailable=(DateTimeRange(dt.datetime(2025, 1, 1, 6),
+                                                                         dt.datetime(2025, 1, 1, 18)),))]
+    constants = constants_for(workers, {"any": 1}, 2, 24)
+    target = rest_target(constants.rest_factor, 2, 2)
+    assert rest_deficit(constants, 0, 0, 6) == pytest.approx(max(0.0, target - 10))
+    assert rest_deficit(constants, 1, 0, 9) == pytest.approx(max(0.0, target - 4))
+    assert rest_deficit(constants, 0, 0, 9) == pytest.approx(max(0.0, target - 16))  # Anne: all 16 hours count
 
 
 def test_no_rest_penalty_when_the_minimum_rest_meets_the_target() -> None:
