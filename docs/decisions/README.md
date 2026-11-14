@@ -56,6 +56,7 @@ ADR that supersedes the old one.
 | [0032](0032-flat-penalty-parts.md) | Flat penalty parts: one event costs the same at any schedule length | Accepted |
 | [0033](0033-pypy-for-development-runs.md) | PyPy for development runs; the code stays Python 3.11-compatible | Accepted |
 | [0034](0034-never-back-to-back.md) | A worker is never assigned back-to-back shifts, whatever the minimum rest | Accepted |
+| [0035](0035-search-progress-and-keeping-the-best-on-interrupt.md) | The search shows its progress, and Ctrl+C keeps the best schedule found so far | Accepted |
 
 ## Template
 

@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–7 complete; the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)).
+Progress: Phases 1–7 complete; the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)). Phase 8 in progress.
 
 ## Phase 1: Walking skeleton
 
@@ -163,6 +163,22 @@ Extending previous schedules rather than starting fresh ([Future work](explanati
 - [x] Audit across schedules: the audit reads the history too, to check that fairness carries over, including
   whether past short straws need compensating (ADR 0030)
 - [x] End-to-end test: two consecutive schedules, the second making up for the first
+
+## Phase 8: Progress, then rest and availability
+
+Following a long search, then the rest part's blind spots found on 2026-11-13 and 2026-11-14.
+
+- [ ] **Search progress and Ctrl+C** ([ADR 0035](decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md))
+    - [ ] The share of the search space finished, tracked by the search, which only observes
+    - [ ] Command line: a two-line block redrawn in place on a terminal (the best schedule so far, and the progress
+      with a rough time left); plain lines otherwise
+    - [ ] Ctrl+C writes the best schedule found so far, marked as not proven the best
+- [ ] **Rest targets derived from the input** (prototypes in progress): a target after each shift proportional to its
+  length, by the schedule's own ratio of free time to work, instead of a rest factor chosen by hand
+- [ ] **Each worker's worst rest deficit from scratch over the history:** a history slot counts for everyone who was
+  available for it and had its role that day, not only for whoever worked it
+- [ ] **Rests measured in available time:** unavailable time inside a rest counts as neither work nor rest
+- [ ] Re-check the weights against the corrected audit
 
 ## Later
 
