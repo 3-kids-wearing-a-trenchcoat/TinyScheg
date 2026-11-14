@@ -32,13 +32,47 @@ from the parameters, not from search luck.
 
 ## What "better" means
 
-Decided before looking at any numbers (2026-11-11), in this order:
+Revised on 2026-11-14, for the weight re-check after the rest part changed
+([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)): the audit is one fallible tool among
+others, so the evidence is weighed in this order.
 
-1. **Severity with an easy fix**, as low as possible: unfairness that could easily have been avoided.
-2. **Concentration**: unfairness shouldn't pile up on one or two workers.
-3. **Total severity**, including complaints with no easy fix, only as a tie-breaker: much of it is unavoidable.
+1. **The user's rules**, as checks each setting passes or fails. A like or a dislike is worth one short rest (a shift
+   one slot sooner), once: it can make up for one short straw, or for being the one who has to take the extra shift in
+   an unavoidable 2-2-3, but not for a worker's second short rest, and no number of them for an avoidable two-shift
+   gap ("2-2-4 is an outrage"); a dislike weighs a little more than a like, only so that "A likes B, B dislikes A" is a
+   net penalty ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)). These are checked on each setting's
+   [unit trade-offs](#whats-recorded), along with the history test (a worker idle in the history makes up for it).
+2. **Measures that don't come from the audit**, input by input, alone and over two periods: rests at the minimum,
+   the spread of workers' shortest rests, the gaps in hours and shifts between peers (a one-shift gap is fine where it
+   can't be helped, two is an outrage), liked and disliked pairings, and whether the second period still has a legal
+   schedule.
+3. **The audit**, by the priorities decided on 2026-11-11: severity with an easy fix (unfairness that could easily
+   have been avoided), then concentration (unfairness shouldn't pile up on one or two workers), then total severity,
+   including complaints with no easy fix, as a tie-breaker.
 
 The measures aren't collapsed into one number; trade-offs between them are a decision, not a calculation.
+
+## What's recorded
+
+For each setting and input, `tools/tune.py` finds the best schedule and audits it, then continues the input for a
+second period of the same length, right after the first and with the first's schedule as its history (the same
+workers and posts, each worker's unavailability repeated a period later), finds the best schedule of that and audits
+the whole of both (the `day2_` columns). A first period that leaves the second no legal schedule is recorded as day
+2's `no schedule`: a failure, since in real use the next schedule couldn't be made
+([future work](future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule)).
+
+Besides the audit's measures, each schedule gets measures that don't come from the audit, over the whole schedule
+(both periods for day 2): each rest in available time
+([ADR 0038](../decisions/0038-rests-count-only-available-time.md)), how many are at or below the minimum rest, their
+median, the spread of the workers' shortest rests, the largest gaps in hours and in shifts between fully available
+workers, and the pairings in shared shifts with someone a worker likes or dislikes (each worker's view counted).
+
+Each setting's **unit trade-offs** are computed from the formulas on the example input, for an average worker and an
+average shift: what a like and a dislike cost (each instead of a neutral partner), a first and a second short rest
+(an average shift's length of rest less, each), one extra shift (taken on by everyone else) and an outrage (one shift
+moved between two equal workers, a gap of two), all weighted. The report checks the user's rules on them: an outrage
+must outweigh `OUTRAGE_PAIRINGS` (3) likes or dislikes, and a worker's second short rest must outweigh a like or a
+dislike; it also shows a like per short rest (meant to be about 1) and a dislike per like (a little over 1).
 
 ## Benchmark inputs
 

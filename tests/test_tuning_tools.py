@@ -11,6 +11,7 @@ from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.parsing.input_reader import parse_input, read_input
+from tinyscheg.scoring.constants import build_constants
 
 SEEDS = range(5)
 HOURS = 12
@@ -124,6 +125,63 @@ def test_one_run_finds_and_audits_the_best_schedule(tmp_path: pathlib.Path, monk
     assert row["status"] == "done" and row["penalty"] >= 0
     assert set(row) <= set(tune.RESULT_FIELDS)
     assert len(row["assignment"].split()) == len(build_problem(parse_input(generated[0])).slots)
+
+
+def test_one_run_continues_for_a_second_period(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # day 2: the input continued right after the first period, with the first's schedule as its history; a first
+    # period that leaves the second no legal schedule is recorded as such
+    generated = next(generate.generate(seed, HOURS) for seed in SEEDS if generate.generate(seed, HOURS))
+    assert generated is not None
+    (tmp_path / "inputs").mkdir()
+    generate.write_input(tmp_path / "inputs" / "small.yml", *generated)
+    monkeypatch.setattr(tune, "BENCHMARKS", tmp_path)
+    row = tune.run_one("baseline", tune.DEFAULTS, tune.Benchmark("small", "sweep", False))
+    assert row["day2_status"] in ("done", "no schedule")
+    first = parse_input(generated[0])
+    second = tune.next_period(first, tuple(int(worker) for worker in row["assignment"].split()))
+    assert second.settings.period.start == first.settings.period.end
+    assert second.history[0].schedule_input == first
+    if row["day2_status"] == "done":
+        whole = build_problem(second)
+        assert len(row["day2_assignment"].split()) == len(whole.slots)  # both periods
+        assert row["day2_rests"] >= row["rests"]
+
+
+def test_measures_that_dont_come_from_the_audit() -> None:
+    # 2-hour shifts from 00:00 to 12:00, one desk worker at a time, minimum rest 2 hours. Anne works 00-02, 04-06 and
+    # 08-10 (rests 2 and 2, both at the minimum); Bob 02-04 and 10-12 (rest 6); Cy 06-08 and is away 08-12. Bob
+    # dislikes Anne, but they never share a shift (one worker per shift), so no pairings.
+    document = {"settings": {"time": ["2025-01-01T00:00", "2025-01-01T12:00"], "min_rest": 2},
+                "workers": [{"name": "Anne"}, {"name": "Bob", "dislikes": ["Anne"]},
+                            {"name": "Cy", "unavailable": [["2025-01-01T08:00", "2025-01-01T12:00"]]}],
+                "posts": [{"name": "desk", "roles": {"any": 1}, "length": 2}]}
+    schedule_input = parse_input(document)
+    problem = build_problem(schedule_input)
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.scoring_domains)
+    anne, bob, cy = 0, 1, 2
+    measures = tune.measure_fields(problem, constants, (anne, bob, anne, cy, anne, bob))
+    assert measures["rests"] == 3 and measures["rests_at_minimum"] == 2 and measures["rest_median"] == 2
+    assert measures["shortest_rest_spread"] == 4      # Bob's shortest 6, Anne's 2; Cy has one shift
+    assert measures["peer_hours_gap"] == 2            # Anne 6 h, Bob 4 h; Cy isn't fully available
+    assert measures["peer_shifts_gap"] == 1
+    assert measures["liked_pairings"] == measures["disliked_pairings"] == 0
+
+
+def test_unit_tradeoffs_follow_the_formulas() -> None:
+    # at the defaults, a like costs alpha / beta of the likes weight and a dislike 1 - alpha / beta; with workload
+    # power 2, one extra average shift costs one workload unit and moving one shift between equal workers two
+    tradeoffs = tune.unit_tradeoffs(tune.DEFAULTS)
+    parameters = tune.DEFAULTS.parameters()
+    assert tradeoffs["like"] == pytest.approx(parameters.likes_weight * parameters.neutral_partner)
+    assert tradeoffs["dislike"] == pytest.approx(parameters.likes_weight * (1 - parameters.neutral_partner))
+    assert tradeoffs["extra_shift"] == pytest.approx(parameters.workload_weight)
+    assert tradeoffs["outrage"] == pytest.approx(2 * parameters.workload_weight)
+    assert tradeoffs["second_short_rest"] == pytest.approx(3 * tradeoffs["first_short_rest"])  # squared: 4 - 1
+    # the defaults let three dislikes outweigh an outrage; a heavier workload weight doesn't
+    assert not tradeoffs["outrage_outweighs_pairings"]
+    heavier = tune.Setting("heavier", workload_weight=0.6)
+    assert tune.unit_tradeoffs(heavier)["outrage_outweighs_pairings"]
 
 
 def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Path,

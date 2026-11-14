@@ -1,6 +1,8 @@
 """
-Tune the scoring parameters against the schedule audit (docs/explanation/tuning.md): for each benchmark input and
-each parameter setting, find the best schedule by branch and bound and audit it. A development tool.
+Tune the scoring parameters (docs/explanation/tuning.md): for each benchmark input and each parameter setting, find
+the best schedule by branch and bound, then continue it for a second period with the first as history and find the
+best of that too; audit both, and record measures that don't come from the audit. Each setting's unit trade-offs are
+checked against the user's rules too. A development tool.
 Usage:
   PYTHONPATH=src python tools/tune.py run STAGE [--jobs N]   run a stage (resumable: finished runs are kept)
   PYTHONPATH=src python tools/tune.py status                 progress and results so far
@@ -32,14 +34,16 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from audit import build_context, evaluate, find_fixes, summarize
+from audit import build_context, evaluate, find_fixes, summarize, with_history
 from tinyscheg.csp.problem import Problem, build_problem
-from tinyscheg.csp.search import find_best_schedule
+from tinyscheg.csp.search import SearchResult, find_best_schedule
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_NEUTRAL_PARTNER, DEFAULT_REST_WEIGHT,
                                             DEFAULT_SHIFT_SHARE, DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT,
-                                            ScheduleInput, ScoringParameters)
+                                            PreviousSchedule, ScheduleInput, ScoringParameters)
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.scoring.constants import build_constants
+from tinyscheg.scoring.constants import ScoringConstants, build_constants, hours, unavailable_before
+from tinyscheg.scoring.penalty import REST_POWER
+from tinyscheg.timing.datetime_range import DateTimeRange
 
 BENCHMARKS = pathlib.Path(__file__).parent / "benchmarks"
 MANIFEST = BENCHMARKS / "manifest.csv"
@@ -57,11 +61,26 @@ WORKLOAD_POWERS = (2, 3, 4)
 NEUTRAL_PARTNERS = (0.1, 0.2, 0.25, 1 / 3, 0.4, 0.45)  # all below 1/2: a dislike outweighs a like (ADR 0023)
 SHIFT_SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)            # 0 is hours only, as before ADR 0026
 
+EXAMPLE = pathlib.Path(__file__).parent.parent / "exampleInput.yml"  # the input the unit trade-offs are computed on
+AT_MINIMUM_TOLERANCE = 1e-9  # hours: a rest within this of the minimum rest counts as at the minimum
+EQUAL_AVAILABILITY_TOLERANCE = 1e-9  # hours: workers this close to the most available one count as fully available
+# The user's rules for likes (2026-11-14), checked on each setting's unit trade-offs: an avoidable two-shift gap (an
+# "outrage") must outweigh this many likes or dislikes; a like or dislike may make up for one short rest, never a
+# second one for the same worker
+OUTRAGE_PAIRINGS = 3
+
+AUDIT_FIELDS = ("complaints", "easy_fixes", "easy_fix_severity", "no_fix_severity", "aggrieved", "concentration",
+                "separate_complaints", "separate_severity")
+# measures that don't come from the audit (rests in available time, ADR 0038; peers are the fully available workers)
+MEASURE_FIELDS = ("rests", "rests_at_minimum", "rest_median", "shortest_rest_spread", "peer_hours_gap",
+                  "peer_shifts_gap", "liked_pairings", "disliked_pairings")
+DAY2 = "day2_"  # the prefix of the second period's fields, measured over both periods together
 RESULT_FIELDS = ("stage", "setting", "input", "tier", "holdout", "likes_weight", "workload_weight", "rest_weight",
                  "workload_power", "neutral_partner", "shift_share", "status", "seconds", "nodes",
-                 "penalty", "likes", "workload", "rest", "complaints", "easy_fixes", "easy_fix_severity",
-                 "no_fix_severity", "aggrieved", "concentration", "separate_complaints", "separate_severity",
-                 "assignment")
+                 "penalty", "likes", "workload", "rest", *AUDIT_FIELDS, *MEASURE_FIELDS, "assignment",
+                 f"{DAY2}status", f"{DAY2}seconds", f"{DAY2}nodes", f"{DAY2}penalty",
+                 *(DAY2 + field for field in AUDIT_FIELDS), *(DAY2 + field for field in MEASURE_FIELDS),
+                 f"{DAY2}assignment")
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +214,9 @@ def _on_alarm(signum: int, frame: Any) -> None:
 
 def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any]:
     """
-    Find the best schedule for one input at one setting, and audit it
+    Find the best schedule for one input at one setting and audit it; then continue it for a second period, with the
+    first as history, and do the same for the whole of both (a first period that leaves the second no legal schedule
+    is recorded as day 2's "no schedule": a failure, since in real use the next schedule couldn't be made)
     :return: the results row
     """
     row: dict[str, Any] = {"stage": stage, "setting": setting.name, "input": benchmark.name, "tier": benchmark.tier,
@@ -205,37 +226,121 @@ def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any
     schedule_input = read_input(benchmark.path)
     schedule_input = dataclasses.replace(schedule_input, settings=dataclasses.replace(
         schedule_input.settings, scoring=setting.parameters()))
+    problem, constants, status, seconds, result = _solve(schedule_input)
+    row |= {"status": status, "seconds": seconds}
+    if result is None or result.assignment is None or result.penalty is None:
+        return row
+    row |= {"nodes": result.nodes, "penalty": round(result.penalty.total, 6), "likes": round(result.penalty.likes, 6),
+            "workload": round(result.penalty.workload, 6), "rest": round(result.penalty.rest, 6),
+            **audit_fields(schedule_input, problem, result.assignment),
+            **measure_fields(problem, constants, result.assignment),
+            "assignment": " ".join(map(str, result.assignment))}
+    second = next_period(schedule_input, result.assignment)
+    problem, constants, status, seconds, result = _solve(second)
+    row |= {f"{DAY2}status": status, f"{DAY2}seconds": seconds}
+    if result is None or result.assignment is None or result.penalty is None:
+        return row
+    return {**row, f"{DAY2}nodes": result.nodes, f"{DAY2}penalty": round(result.penalty.total, 6),
+            **{DAY2 + field: value for field, value in audit_fields(second, problem, result.assignment).items()},
+            **{DAY2 + field: value for field, value in measure_fields(problem, constants, result.assignment).items()},
+            f"{DAY2}assignment": " ".join(map(str, result.assignment))}
+
+
+def _solve(schedule_input: ScheduleInput) -> tuple[Problem, ScoringConstants, str, float, SearchResult | None]:
+    """
+    Find the best schedule of an input within JOB_TIME_LIMIT
+    :return: (its Problem, its ScoringConstants, the status: "done", "no schedule" or "timed out", the seconds taken,
+    the SearchResult or None if timed out)
+    """
     problem = build_problem(schedule_input)
-    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.scoring_domains)
+    settings = problem.settings or schedule_input.settings
+    constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
     started = time.perf_counter()
     signal.signal(signal.SIGALRM, _on_alarm)
     signal.setitimer(signal.ITIMER_REAL, JOB_TIME_LIMIT)
     try:
         result = find_best_schedule(problem, constants)
     except _TimedOut:
-        return {**row, "status": "timed out", "seconds": round(time.perf_counter() - started, 2)}
+        return problem, constants, "timed out", round(time.perf_counter() - started, 2), None
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
-    seconds = time.perf_counter() - started
-    if result.assignment is None or result.penalty is None:
-        return {**row, "status": "no schedule", "seconds": round(seconds, 2)}
-    return {**row, "status": "done", "seconds": round(seconds, 2), "nodes": result.nodes,
-            "penalty": round(result.penalty.total, 6), "likes": round(result.penalty.likes, 6),
-            "workload": round(result.penalty.workload, 6), "rest": round(result.penalty.rest, 6),
-            **audit_fields(schedule_input, problem, result.assignment),
-            "assignment": " ".join(map(str, result.assignment))}
+    status = "done" if result.assignment is not None else "no schedule"
+    return problem, constants, status, round(time.perf_counter() - started, 2), result
+
+
+def next_period(schedule_input: ScheduleInput, assignment: tuple[int, ...]) -> ScheduleInput:
+    """
+    The input continued for a second period of the same length, right after the first, with the first's schedule as
+    its history (ADR 0031): the same workers and posts, each worker's unavailability repeated a period later
+    :param schedule_input: ScheduleInput of the first period
+    :param assignment: its schedule, a worker index per slot
+    :return: ScheduleInput of the second period
+    """
+    length = schedule_input.settings.period.duration
+
+    def later(time: DateTimeRange) -> DateTimeRange:
+        return DateTimeRange(time.start + length, time.end + length)
+    workers = tuple(dataclasses.replace(worker, unavailable=tuple(later(away) for away in worker.unavailable))
+                    for worker in schedule_input.workers)
+    settings = dataclasses.replace(schedule_input.settings, period=later(schedule_input.settings.period))
+    return dataclasses.replace(schedule_input, settings=settings, workers=workers,
+                               history=(PreviousSchedule("first period", schedule_input, tuple(assignment)),))
+
+
+def measure_fields(problem: Problem, constants: ScoringConstants, assignment: tuple[int, ...]) -> dict[str, Any]:
+    """
+    Measures of a schedule that don't come from the audit, over the whole schedule (its history included): each rest
+    in available time (ADR 0038), how many are at or below the minimum rest, their median, and the spread of the
+    workers' shortest rests; the largest gaps in hours and in shifts between fully available workers (peers); and the
+    pairings in shared shifts with someone a worker likes or dislikes (each worker's view counted)
+    :param problem: the schedule's Problem (with a history, the whole schedule's, its workers' unavailability too)
+    :param constants: its ScoringConstants, for each worker's availability and the minimum rest
+    :param assignment: a worker index per slot
+    :return: the measure fields of a results row
+    """
+    times: list[list[DateTimeRange]] = [[] for _ in problem.workers]
+    for slot, worker in zip(problem.slots, assignment):
+        times[worker].append(slot.time)
+    rests, shortest = [], []
+    for worker, mine in zip(problem.workers, times):
+        mine.sort()
+        own = [hours(later.start - earlier.end) - (unavailable_before(worker.unavailable, later.start)
+                                                   - unavailable_before(worker.unavailable, earlier.end))
+               for earlier, later in zip(mine, mine[1:])]
+        rests += own
+        if own:
+            shortest.append(min(own))
+    most = max(worker.availability for worker in constants.workers)
+    peers = [index for index, worker in enumerate(constants.workers)
+             if worker.availability >= most - EQUAL_AVAILABILITY_TOLERANCE]
+    worked = [sum(hours(time.duration) for time in times[index]) for index in peers]
+    counts = [len(times[index]) for index in peers]
+    liked = disliked = 0
+    for shift in problem.shifts:
+        together = [problem.workers[assignment[slot.index]] for slot in shift.slots]
+        for worker in together:
+            liked += sum(1 for partner in together if partner is not worker and partner.name in worker.likes)
+            disliked += sum(1 for partner in together if partner is not worker and partner.name in worker.dislikes)
+    return {"rests": len(rests),
+            "rests_at_minimum": sum(1 for rest in rests if rest <= constants.min_rest + AT_MINIMUM_TOLERANCE),
+            "rest_median": round(statistics.median(rests), 4) if rests else "",
+            "shortest_rest_spread": round(max(shortest) - min(shortest), 4) if shortest else 0,
+            "peer_hours_gap": round(max(worked) - min(worked), 4), "peer_shifts_gap": max(counts) - min(counts),
+            "liked_pairings": liked, "disliked_pairings": disliked}
 
 
 def audit_fields(schedule_input: ScheduleInput, problem: Problem, assignment: tuple[int, ...]) -> dict[str, Any]:
     """
     Audit a schedule
     :param schedule_input: ScheduleInput
-    :param problem: its Problem, for the shifts and slots
-    :param assignment: a worker index per slot
+    :param problem: its Problem, for the shifts and slots (with a history, the whole schedule's)
+    :param assignment: a worker index per slot (with a history, of the whole schedule)
     :return: the audit's fields of a results row
     """
-    context = build_context(schedule_input, problem.shifts, problem.slots)
+    if schedule_input.history:  # the whole schedule, the history included (ADR 0031)
+        context, assignment = with_history(schedule_input, problem.new_shifts, assignment)
+    else:
+        context = build_context(schedule_input, problem.shifts, problem.slots)
     audit = evaluate(context, assignment)
     summary = summarize(audit, find_fixes(context, assignment, audit))
     return {"complaints": summary.complaints, "easy_fixes": summary.easy_fixes,
@@ -250,8 +355,22 @@ def reaudit_row(row: dict[str, str]) -> dict[str, str]:
     if row["status"] != "done":
         return row
     schedule_input = read_input(Benchmark(row["input"], row["tier"], row["holdout"] == "True").path)
+    schedule_input = dataclasses.replace(schedule_input, settings=dataclasses.replace(
+        schedule_input.settings, scoring=_row_parameters(row)))
     assignment = tuple(int(worker) for worker in row["assignment"].split())
-    return {**row, **audit_fields(schedule_input, build_problem(schedule_input), assignment)}
+    row = {**row, **audit_fields(schedule_input, build_problem(schedule_input), assignment)}
+    if row.get(f"{DAY2}status") != "done":
+        return row
+    second = next_period(schedule_input, assignment)
+    whole = tuple(int(worker) for worker in row[f"{DAY2}assignment"].split())
+    redone = audit_fields(second, build_problem(second), whole)
+    return {**row, **{DAY2 + field: value for field, value in redone.items()}}
+
+
+def _row_parameters(row: dict[str, str]) -> ScoringParameters:
+    """The scoring parameters a results row was run with."""
+    return ScoringParameters(float(row["likes_weight"]), float(row["workload_weight"]), float(row["rest_weight"]),
+                             int(row["workload_power"]), float(row["neutral_partner"]), float(row["shift_share"]))
 
 
 def _run_job(job: tuple[str, Setting, Benchmark]) -> dict[str, Any]:
@@ -374,6 +493,98 @@ def setting_summaries(rows: list[dict[str, str]], include_holdout: bool = False)
                                             s["total_severity"]))
 
 
+def measure_summaries(rows: list[dict[str, str]], include_holdout: bool = False) -> dict[str, dict[str, Any]]:
+    """
+    Each setting's measures that don't come from the audit, alone and over both periods (day 2), and day 2's audit
+    measures: shares and means over the inputs it finished, the largest shift gap between peers (the user tolerates a
+    gap of one shift where it can't be helped; two is an outrage), and how many first periods left the second no legal
+    schedule
+    :return: by setting name
+    """
+    by_setting: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        if row["status"] == "done" and (include_holdout or row["holdout"] != "True"):
+            by_setting.setdefault(row["setting"], []).append(row)
+    summaries = {}
+    for setting, done in by_setting.items():
+        second = [row for row in done if row.get(f"{DAY2}status") == "done"]
+        summary: dict[str, Any] = {"inputs": len(done), "day2_inputs": len(second),
+                                   "day2_no_schedule": sum(1 for row in done
+                                                           if row.get(f"{DAY2}status") == "no schedule"),
+                                   "day2_timed_out": sum(1 for row in done if row.get(f"{DAY2}status") == "timed out")}
+        for prefix, group in (("", done), (DAY2, second)):
+            if not group:
+                continue
+            rests = sum(int(row[f"{prefix}rests"]) for row in group)
+            at_minimum = sum(int(row[f"{prefix}rests_at_minimum"]) for row in group)
+            summary |= {
+                f"{prefix}at_minimum": at_minimum / rests if rests else 0,
+                f"{prefix}spread": statistics.fmean(float(row[f"{prefix}shortest_rest_spread"]) for row in group),
+                f"{prefix}hours_gap": statistics.fmean(float(row[f"{prefix}peer_hours_gap"]) for row in group),
+                f"{prefix}shifts_gap_max": max(int(row[f"{prefix}peer_shifts_gap"]) for row in group),
+                f"{prefix}disliked": statistics.fmean(int(row[f"{prefix}disliked_pairings"]) for row in group),
+                f"{prefix}liked": statistics.fmean(int(row[f"{prefix}liked_pairings"]) for row in group)}
+        if second:
+            summary |= {"day2_easy_fix_severity": statistics.fmean(float(row[f"{DAY2}easy_fix_severity"])
+                                                                   for row in second),
+                        "day2_concentration": statistics.fmean(float(row[f"{DAY2}concentration"]) for row in second)}
+        summaries[setting] = summary
+    return summaries
+
+
+def unit_tradeoffs(setting: Setting, path: pathlib.Path = EXAMPLE) -> dict[str, Any]:
+    """
+    What one event of each kind costs at a setting, weighted, on an input (by default the example, which the scoring
+    docs use), for an average worker and an average shift; and whether the user's rules for likes hold (2026-11-14):
+    an avoidable two-shift gap outweighs OUTRAGE_PAIRINGS likes or dislikes, and a like or dislike can't make up for
+    a worker's second short rest
+    :param setting: Setting
+    :param path: pathlib.Path of the input
+    :return: the weighted costs of a like, a dislike (each instead of a neutral partner), a first and a second short
+    rest (one average shift's length of rest less, each), one extra shift (taken on by everyone else) and an outrage
+    (one shift moved between two equal workers, a gap of two); two ratios; and the two rules' checks
+    """
+    schedule_input = read_input(path)
+    schedule_input = dataclasses.replace(schedule_input, settings=dataclasses.replace(
+        schedule_input.settings, scoring=setting.parameters()))
+    problem = build_problem(schedule_input)
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.scoring_domains)
+    parameters = constants.parameters
+    available = [worker.availability for worker in constants.workers if worker.availability > 0]
+    mean_available = statistics.fmean(available)
+    load = statistics.fmean(constants.slot_load)
+    per_hour = sum(constants.slot_load) / sum(available)  # the load per available hour at fair shares
+    fair = per_hour * mean_available                         # an average worker's fair load
+    power = parameters.workload_power
+
+    def term(worker_load: float) -> float:
+        return mean_available * (worker_load / mean_available) ** power
+    extra_shift = (term(fair + load) - term(fair) - power * per_hour ** (power - 1) * load) / constants.workload_unit
+    outrage = (term(fair + load) + term(fair - load) - 2 * term(fair)) / constants.workload_unit
+    shift_hours = statistics.fmean(constants.slot_hours)
+
+    def short(times: int) -> float:  # an average worker (rest_unit / M_w = 1) short by that many shifts' length
+        return (times * shift_hours) ** REST_POWER / constants.rest_scale
+    costs = {"like": parameters.likes_weight * parameters.neutral_partner,
+             "dislike": parameters.likes_weight * (1 - parameters.neutral_partner),
+             "first_short_rest": parameters.rest_weight * short(1),
+             "second_short_rest": parameters.rest_weight * (short(2) - short(1)),
+             "extra_shift": parameters.workload_weight * extra_shift,
+             "outrage": parameters.workload_weight * outrage}
+    pairing = max(costs["like"], costs["dislike"])
+    return {**costs, "like_per_short_rest": costs["like"] / costs["first_short_rest"],
+            "dislike_per_like": costs["dislike"] / costs["like"],
+            "outrage_outweighs_pairings": costs["outrage"] > OUTRAGE_PAIRINGS * pairing,
+            "second_short_rest_outweighs_pairing": costs["second_short_rest"] > pairing}
+
+
+def _row_setting(row: dict[str, str]) -> Setting:
+    """The setting a results row was run with."""
+    return Setting(row["setting"], float(row["likes_weight"]), float(row["workload_weight"]), float(row["rest_weight"]),
+                   int(row["workload_power"]), float(row["neutral_partner"]), float(row["shift_share"]))
+
+
 def stages() -> list[str]:
     """Every stage: the fixed ones, then the rounds started so far, by name."""
     rounds = {path.name.removesuffix(".status.json") for path in RESULTS.glob("*.status.json")} - set(FIXED_STAGES)
@@ -458,13 +669,46 @@ def main(argv: list[str] | None = None) -> int:
         if not read_results(arguments.stage):
             print(f"tune: {arguments.stage} has no results", file=sys.stderr)
             return 1
-        print(f"{'setting':<34} {'inputs':>6} {'easy-fix sev.':>13} {'concentration':>13} {'total sev.':>10} "
-              f"{'liked-p. sev.':>13} {'seconds':>8}")
-        for summary in setting_summaries(read_results(arguments.stage), arguments.holdout):
-            print(f"{summary['setting']:<34} {summary['inputs']:>6} {summary['easy_fix_severity']:>13.2f} "
-                  f"{summary['concentration']:>13.2f} {summary['total_severity']:>10.2f} "
-                  f"{summary['separate_severity']:>13.2f} {summary['seconds']:>8.1f}")
+        print_report(read_results(arguments.stage), arguments.holdout)
     return 0
+
+
+def print_report(rows: list[dict[str, str]], include_holdout: bool) -> None:
+    """Print a stage's report: the audit's measures, the others alone and over two periods, and the trade-offs."""
+    summaries = setting_summaries(rows, include_holdout)
+    print("The audit, first period alone (ranked by the tuning priorities):")
+    print(f"{'setting':<34} {'inputs':>6} {'easy-fix sev.':>13} {'concentration':>13} {'total sev.':>10} "
+          f"{'liked-p. sev.':>13} {'seconds':>8}")
+    for summary in summaries:
+        print(f"{summary['setting']:<34} {summary['inputs']:>6} {summary['easy_fix_severity']:>13.2f} "
+              f"{summary['concentration']:>13.2f} {summary['total_severity']:>10.2f} "
+              f"{summary['separate_severity']:>13.2f} {summary['seconds']:>8.1f}")
+    measures = measure_summaries(rows, include_holdout)
+    for prefix, title in (("", "first period alone"), (DAY2, "both periods together (day 2)")):
+        print(f"\nOther measures, {title}: rests at the minimum, shortest-rest spread, peer hours gap, largest peer "
+              f"shift gap, liked and disliked pairings per input")
+        for summary in summaries:
+            m = measures[summary["setting"]]
+            if f"{prefix}at_minimum" not in m:
+                print(f"{summary['setting']:<34} no second period finished")
+                continue
+            extra = (f"  day 2: {m['day2_inputs']} done, {m['day2_no_schedule']} with no legal schedule, "
+                     f"{m['day2_timed_out']} timed out; easy-fix sev. {m['day2_easy_fix_severity']:.2f}, "
+                     f"concentration {m['day2_concentration']:.2f}") if prefix else ""
+            print(f"{summary['setting']:<34} {m[f'{prefix}at_minimum']:>6.0%} {m[f'{prefix}spread']:>6.1f} "
+                  f"{m[f'{prefix}hours_gap']:>6.1f} {m[f'{prefix}shifts_gap_max']:>4} {m[f'{prefix}liked']:>6.1f} "
+                  f"{m[f'{prefix}disliked']:>6.1f}{extra}")
+    print(f"\nUnit trade-offs on the example, weighted: like, dislike, first and second short rest, extra shift, "
+          f"outrage; like per short rest, dislike per like; rules (outrage > {OUTRAGE_PAIRINGS} pairings, second "
+          f"short rest > a pairing)")
+    settings = {row["setting"]: _row_setting(row) for row in rows}
+    for summary in summaries:
+        t = unit_tradeoffs(settings[summary["setting"]])
+        rules = " ".join("ok" if t[check] else "FAIL" for check in ("outrage_outweighs_pairings",
+                                                                     "second_short_rest_outweighs_pairing"))
+        print(f"{summary['setting']:<34} {t['like']:.3f} {t['dislike']:.3f} {t['first_short_rest']:.3f} "
+              f"{t['second_short_rest']:.3f} {t['extra_shift']:.3f} {t['outrage']:.3f}   "
+              f"{t['like_per_short_rest']:.2f} {t['dislike_per_like']:.2f}   {rules}")
 
 
 if __name__ == "__main__":
