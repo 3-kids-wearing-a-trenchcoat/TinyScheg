@@ -17,7 +17,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tinyscheg.model.shift import Shift
-from tinyscheg.scoring.constants import DISLIKED_PARTNER, ScoringConstants, hours, like_value, rest_target
+from tinyscheg.scoring.constants import (DISLIKED_PARTNER, ScoringConstants, hours, integer_power, like_value,
+                                         rest_target)
 
 
 # Each worker's rest shortfall goes through deficit ** REST_POWER (ADR 0036): squared, so that the same shortfall
@@ -100,7 +101,7 @@ def workload_total(constants: ScoringConstants, assignment: Sequence[int | None]
     """The workload penalty before normalizing: the sum of av * (assigned load / av) ** p."""
     power = constants.parameters.workload_power
     assigned_load = _assigned_load(constants, assignment)
-    return math.fsum(worker.availability * (assigned_load[index] / worker.availability) ** power
+    return math.fsum(worker.availability * integer_power(assigned_load[index] / worker.availability, power)
                for index, worker in enumerate(constants.workers) if worker.availability > 0)
 
 
@@ -207,7 +208,8 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
             pool.append((assigned_load[index] / worker.availability, worker.availability,
                          (assigned_load[index] + caps[index]) / worker.availability))
     level = _water_level(pool, remaining)
-    filled = math.fsum(availability * min(max(ratio, level), highest) ** power for ratio, availability, highest in pool)
+    filled = math.fsum(availability * integer_power(min(max(ratio, level), highest), power)
+                       for ratio, availability, highest in pool)
     return filled / constants.workload_unit
 
 
@@ -249,10 +251,11 @@ def _assigned_load(constants: ScoringConstants, assignment: Sequence[int | None]
 def rest_penalty(constants: ScoringConstants, assignment: Sequence[int | None]) -> float:
     """
     The rest penalty R** (ADR 0036): for each worker, the hours D by which their rests fall short of their targets
-    in all, and their term rest_unit / M_w * D ** 2 / rest_scale. Squared, the same shortfall costs more on a worker
-    who already has some, so it's spread rather than concentrated; measured in typical targets (rest_scale), the
-    square doesn't depend on the unit of time. Divided by the worker's worst possible deficit M_w and multiplied by
-    the mean M_w (rest_unit, ADR 0032): an hour short weighs more for a worker who could rarely be short.
+    in all, and their term rest_unit / M_w * D ** REST_POWER / rest_scale. Squared (REST_POWER = 2), the same
+    shortfall costs more on a worker who already has some, so it's spread rather than concentrated; measured in
+    typical targets (rest_scale), the square doesn't depend on the unit of time. Divided by the worker's worst
+    possible deficit M_w and multiplied by the mean M_w (rest_unit, ADR 0032): an hour short weighs more for a worker
+    who could rarely be short.
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
     :return: the sum over workers; workers with M_w = 0 can never have a deficit and count 0

@@ -262,6 +262,21 @@ def _followers(ranges: Sequence[DateTimeRange], first: int, min_rest: float) -> 
             if (rest := hours(ranges[later].start - ranges[first].end)) > 0 and rest >= min_rest]
 
 
+def integer_power(base: float, exponent: int) -> float:
+    """
+    base ** exponent for a whole exponent, multiplied out one factor at a time. float ** int rounds differently in the
+    last digit from one interpreter to another (CPython's pow differs from repeated multiplication for about one value
+    in a thousand), which could make CPython and PyPy break a tie differently; multiplication rounds the same on both.
+    :param base: float
+    :param exponent: int, at least 0
+    :return: base multiplied by itself exponent times (1.0 for 0)
+    """
+    result = 1.0
+    for _ in range(exponent):
+        result *= base
+    return result
+
+
 def workload_unit(workers: Sequence[WorkerConstants], loads: Sequence[float], power: int) -> float:
     """
     The unit the workload penalty is measured in (ADR 0032): the term av * (load / av) ** p of an average worker
@@ -275,7 +290,8 @@ def workload_unit(workers: Sequence[WorkerConstants], loads: Sequence[float], po
     available = [worker.availability for worker in workers if worker.availability > 0]
     if not available or not loads:
         return 0.0
-    return (math.fsum(loads) / len(loads)) ** power / (math.fsum(available) / len(available)) ** (power - 1)
+    return (integer_power(math.fsum(loads) / len(loads), power)
+            / integer_power(math.fsum(available) / len(available), power - 1))
 
 
 def rest_unit(workers: Sequence[WorkerConstants]) -> float:

@@ -10,7 +10,7 @@ import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from tinyscheg.scoring.constants import ScoringConstants
+from tinyscheg.scoring.constants import ScoringConstants, integer_power
 from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, _water_level, likes_total, normalized_likes,
                                        pair_like_value, rest_deficit, rest_penalty, rest_term, shift_likes_lower_bound,
                                        worker_deficits, workload_total)
@@ -112,7 +112,7 @@ class IncrementalScore:
         level = _water_level(pool, self.remaining)
         filled = 0.0
         for ratio, availability, highest in pool:  # a plain loop rounds the same on every interpreter, like fsum
-            filled += availability * min(max(ratio, level), highest) ** power
+            filled += availability * integer_power(min(max(ratio, level), highest), power)
         return filled / constants.workload_unit
 
     # --- assigning and undoing ---
@@ -209,8 +209,8 @@ class IncrementalScore:
             return 0.0
         power = self.constants.parameters.workload_power
         load = self.load[worker]
-        return availability * (((load + self.constants.slot_load[slot]) / availability) ** power
-                               - (load / availability) ** power)
+        return availability * (integer_power((load + self.constants.slot_load[slot]) / availability, power)
+                               - integer_power(load / availability, power))
 
     def _rest_delta(self, worker: int, slot: int) -> tuple[float, int, float]:
         """
