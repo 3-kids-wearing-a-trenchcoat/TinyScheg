@@ -20,7 +20,9 @@ The constants every penalty is computed from, calculated once per run, before th
 * `settings` — [`Settings`](schedule-input.md#class-settingsperiod-min_restdefault_min_rest-scoringscoringparameters),
   for the period, the minimum rest and the scoring parameters.
 * `workers`, `shifts`, `slots` — in input and stable order, as in [`Problem`](problem.md).
-* `domains` — for each slot, the indexes of the workers who can fill it, as `Problem.domains`.
+* `domains` — for each slot, the indexes of the workers who could fill it from scratch, as `Problem.scoring_domains`:
+  with a history, every worker who could have filled a history slot, not only the one who did ([ADR 0037](../../decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md)). Only the
+  worst rest deficits use it.
 
 ### `class ScoringConstants`
 

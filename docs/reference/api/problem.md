@@ -9,7 +9,7 @@ The scheduling problem as a CSP (see [CSP formulation](../../explanation/csp-for
 variables and workers the values. Workers and slots are referred to **by index**: a worker's index is its position in
 the input, and a slot's index is its position in the stable slot order (`slot.index`).
 
-## `class Problem(workers, shifts, slots, domains, neighbours, min_rest, interchangeable=(), fixed=(), settings=None)`
+## `class Problem(workers, shifts, slots, domains, neighbours, min_rest, interchangeable=(), fixed=(), settings=None, eligible=())`
 
 The fixed description of a scheduling CSP. It's immutable and doesn't change during the search, which keeps its own
 state, starting from `domains`.
@@ -31,12 +31,17 @@ state, starting from `domains`.
 * `settings` — the [`Settings`](schedule-input.md) of the whole schedule, whose period runs from the history's start
   to the new period's end; the input's own without a history. The scoring constants are built from it. `None` only
   for problems built by hand.
+* `eligible` — `tuple[tuple[int, ...], ...]`: with a history, for each slot, the workers who could have filled it in
+  a schedule made from scratch ([ADR 0037](../../decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md)): for a history slot, everyone in that period's input who was available for
+  its whole time and had its role then; for a new slot, its initial domain. Empty (the default) without a history.
 
 Properties and methods:
 
 * `is_fixed(slot_index)` — whether the slot is a history slot.
 * `new_shifts`, `new_slots` — the new period's shifts and slots, the ones the search fills and the output shows:
   all of them without a history.
+* `scoring_domains` — `eligible`, or `domains` without a history: what the scoring constants are built from, so
+  that a worker's worst possible rest deficit doesn't depend on which history slots they were given.
 
 ## `build_problem(schedule_input) -> Problem`
 
@@ -55,7 +60,8 @@ new period ([ADR 0031](../../decisions/0031-history-as-the-filled-part-of-one-sc
   rest), as forward checking from them would;
 * `workers` are the input's, each with the unavailability they had over the whole schedule: as in each history
   input during its period (all of it if they weren't in that input), as in this input during the new period, and
-  all the time between periods, so that availability counts only the periods themselves.
+  all the time between periods, so that availability counts only the periods themselves;
+* `eligible` holds who could have filled each slot from scratch, as above.
 
 ## `initial_domain(slot, workers) -> tuple[int, ...]`
 

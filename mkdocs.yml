@@ -94,6 +94,7 @@ nav:
       - 0034 Never back to back: decisions/0034-never-back-to-back.md
       - 0035 Search progress and Ctrl+C: decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md
       - 0036 Rest targets from the input: decisions/0036-rest-targets-from-the-input-convex-per-worker.md
+      - 0037 Worst rest deficit over the history: decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md
 
 markdown_extensions:
   - admonition

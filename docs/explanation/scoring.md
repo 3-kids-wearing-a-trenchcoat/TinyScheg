@@ -434,7 +434,10 @@ $M_w$ is calculated **exactly**, as the most expensive path in a
 [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) (DAG)
 (see [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md)):
 
-* the nodes are the slots in whose domain $w$ is (after unary pruning);
+* the nodes are the slots $w$ could fill (after unary pruning). With a history, a history slot is a node for every
+  worker who could have filled it in its own period (in that period's input, available for it, with its role then),
+  not only for the one who did: being passed over doesn't change a worker's worst case, being unavailable does
+  ([ADR 0037](../decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md));
 * there is an edge $s \rightarrow s'$ whenever $w$ could work $s$ and then $s'$ as consecutive shifts, i.e.
   $[s']_\text{start} - [s]_\text{end} \geq m$;
 * the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot \frac{|s| + |s'|}{2} - ([s']_\text{start} - [s]_\text{end}) \big)$.

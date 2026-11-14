@@ -177,8 +177,9 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
   the rest factor is the schedule's own ratio of free time to work instead of a value chosen by hand, the target for
   the rest between two shifts comes from both their lengths, and each worker's shortfall is squared; `rest_factor`
   removed; the provable properties of the rest part as tests
-- [ ] **Each worker's worst rest deficit from scratch over the history:** a history slot counts for everyone who was
-  available for it and had its role that day, not only for whoever worked it
+- [x] **Each worker's worst rest deficit from scratch over the history**
+  ([ADR 0037](decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md)): a history slot counts for
+  everyone who was available for it and had its role that day, not only for whoever worked it
 - [ ] **Rests measured in available time:** unavailable time inside a rest counts as neither work nor rest
 - [ ] Re-check the weights against the corrected audit
 
