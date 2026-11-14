@@ -48,6 +48,13 @@ end of a period from leaning on the workers the next one will need first; or lea
 the warning and add workers. Until then, the tuning counts a setting whose first day leaves no legal second day as a
 failure.
 
+A milder form (2026-11-14): a first period that leaves the next a worse schedule than another first period would
+have. On `sweep_02`, with the workload weight raised from 0.38 to 1.0, the first day's best schedule no longer had an
+avoidable gap of two shifts, but the second day continued from it had 17 complaints with an easy fix instead of none.
+From the same first day, every setting gave the same second day, so the difference came from the first day alone; by
+the 1.0 setting's own scoring, the two days together were better continued from the 0.38 setting's first day, gap and
+all. The best schedule for each period isn't always the best start for the next.
+
 ## Explaining infeasibility
 
 > [!WARNING]
@@ -109,7 +116,10 @@ schedule. Still deferred:
 
   (Run 12 at a time, so times are noisy; node counts aren't. Alone, the caps cost more than they save; with the
   likes look-ahead, they cut the nodes by another 3½ times.) Still open: a rest look-ahead (none is valid that's
-  cheap, since a worker can always get no further shifts), and caps that account for overlapping slots.
+  cheap, since a worker can always get no further shifts), caps that account for overlapping slots, and a workload
+  bound that hands out the remaining work in whole slots. Today's spreads it as if it could be split finely, and the
+  workload weight multiplies that gap: raising the weight from 0.38 to 1.0 (2026-11-14) took the search to about 4.5
+  times the nodes on the tuning inputs (15.6 M to 70 M), probably for that reason.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
@@ -272,6 +282,28 @@ since a liked partner adds nothing where a neutral or disliked one adds a cost. 
 commensurate within each worker's total, rather than only weighed against each other in the sum, and the workload's
 availability-relative form fitted in. It needs an ADR, new provable properties and tuning again. Related:
 [a fairness term for liked pairings](#a-fairness-term-for-liked-pairings), the likes-only version of the same idea.
+
+## Workload in hours only
+
+> [!WARNING]
+> **Not yet implemented.** Deferred on 2026-11-14.
+
+The workload part counts shifts as well as hours: the shift share $\sigma$ blends each slot's hours with one average
+slot ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)), an exchange rate between shifts and hours
+set by hand, which the user would rather not set. It was added when the rest part ignored the rest after a short
+shift, so nothing kept one worker from being given several short shifts while another had one long one at the same
+hours. The user (2026-11-14) would measure workload only as the hours worked over the hours available, and leave
+spreading shifts out to rest; of two workers like those below, the one who worked more hours drew the short straw,
+and even when that was unavoidable it has to count, so that it can be made up for later.
+
+The rest part ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)) gives each rest a
+target in proportion to the two shifts around it, and nothing for rest beyond it. In tight schedules the target
+between two short shifts sits at or near the minimum rest (between two 2-hour shifts, 6 hours, the minimum itself, on
+`sweep_02`; 6.85 on `sweep_11`), so there rest can't keep short shifts apart, and with hours alone nothing else does.
+On `sweep_11` over two days, $\sigma = 0$ gave one worker five 2-hour shifts (10 hours) with rests of 6–8 hours, and
+another two 4-hour shifts (8 hours) with one rest of 16: hours alone see the 2 extra hours, but not that they came as
+three more, shorter shifts with shorter rests. At $\sigma = 0.5$, every fully available worker had 3 or 4 shifts. So
+$\sigma$ stays at 0.5 until the rest part keeps short shifts apart in tight schedules too; then it could go to 0.
 
 ## Tuning on longer schedules
 

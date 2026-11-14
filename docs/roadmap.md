@@ -188,8 +188,9 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
-- [ ] Faster search: stronger pruning, e.g. a rest look-ahead or a tighter workload bound (tried 2026-11-13 and not worth
-      it: workload caps that account for overlaps; symmetry between identical workers, rare in the benchmark)
+- [ ] Faster search: stronger pruning, e.g. a rest look-ahead or a tighter workload bound, one that hands out the
+      remaining work in whole slots (tried 2026-11-13 and not worth it: workload caps that account for overlaps;
+      symmetry between identical workers, rare in the benchmark)
 - [ ] Faster search by non-heuristic means: parallelization, a compiled core, optionally domains as bitsets (PyPy
       adopted for development runs, ADR 0033)
 - [ ] Explaining more fully why an input is infeasible
@@ -199,7 +200,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       wrong (see `explanation/future-work.md`)
 - [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one
       convex function, so that a liked shift makes up for a short straw (after the weight re-check)
-- [ ] A schedule that leaves the next period with no legal schedule: check or avoid it (found 2026-11-14)
+- [ ] Scoring: workload in hours only (shift share 0), once the rest part keeps short shifts apart in tight schedules
+      too (deferred 2026-11-14)
+- [ ] A schedule that leaves the next period with no legal schedule, or a worse one: check or avoid it (found
+      2026-11-14)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Forcing a specific worker into a specific shift (low priority)
