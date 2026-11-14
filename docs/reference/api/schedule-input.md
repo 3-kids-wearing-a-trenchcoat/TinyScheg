@@ -13,19 +13,17 @@ the CSP and output code can use it without depending on `parsing`.
 * `DEFAULT_MIN_REST` — `datetime.timedelta(hours=6)`, the minimum rest period when the input doesn't set one.
 * Scoring parameter defaults ([ADR 0022](../../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md)):
   `DEFAULT_LIKES_WEIGHT = 0.57`, `DEFAULT_WORKLOAD_WEIGHT = 0.215`, `DEFAULT_REST_WEIGHT = 0.215`,
-  `DEFAULT_WORKLOAD_POWER = 2`, `DEFAULT_REST_FACTOR = 2.5`, `DEFAULT_NEUTRAL_PARTNER = 1/3`,
-  `DEFAULT_SHIFT_SHARE = 0.5`.
-* Limits: `MIN_WORKLOAD_POWER = 2`, `MIN_REST_FACTOR = 1.0`.
+  `DEFAULT_WORKLOAD_POWER = 2`, `DEFAULT_NEUTRAL_PARTNER = 1/3`, `DEFAULT_SHIFT_SHARE = 0.5`.
+* Limits: `MIN_WORKLOAD_POWER = 2`, `MAX_NEUTRAL_PARTNER = 0.5`.
 
-## `class ScoringParameters(likes_weight, workload_weight, rest_weight, workload_power, rest_factor, neutral_partner, shift_share)`
+## `class ScoringParameters(likes_weight, workload_weight, rest_weight, workload_power, neutral_partner, shift_share)`
 
 The parameters of the [penalty score](../../explanation/scoring.md#parameters). Immutable; every field defaults to
-its constant above.
+its constant above. There's no rest factor: the rest targets are derived from the input ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)).
 
 * `likes_weight`, `workload_weight`, `rest_weight` — the weights $a$, $b$, $c$. Each at least 0, not all 0. They're
   **relative**: they're stored divided by their sum, so `ScoringParameters(1, 2, 1) == ScoringParameters()`.
 * `workload_power` — $p$ in $\varphi(x) = x^p$, a whole number of at least `MIN_WORKLOAD_POWER`.
-* `rest_factor` — $\gamma$, at least `MIN_REST_FACTOR`.
 * `neutral_partner` — $\alpha / \beta$, more than 0 and less than `MAX_NEUTRAL_PARTNER` (1/2), so that a dislike
   outweighs a like ([ADR 0023](../../decisions/0023-dislikes-outweigh-likes.md)).
 * `shift_share` — $\sigma$, from 0 to 1: how much a slot's load for the workload penalty counts it as one average

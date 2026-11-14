@@ -46,7 +46,6 @@ Every field is optional; an omitted field keeps its default.
 |-------------------|---------------------------------------|----------------|-------------|
 | `weights`         | mapping of `likes`, `workload`, `rest` to numbers | 0.57, 0.215, 0.215 | What each part of the score is multiplied by: how one disliked pairing, one shift of imbalance and one hour of short rest trade against each other ([ADR 0032](../decisions/0032-flat-penalty-parts.md)). Each at least 0, not all 0. They're relative: each is divided by their sum. An omitted key keeps its default weight, before dividing: `{likes: 0}` gives 0, 0.215 and 0.215, i.e. 0, ½ and ½. |
 | `workload_power`  | whole number                          | 2              | How harshly unequal workloads are penalized. At least 2; higher values lean harder on the most loaded workers. |
-| `rest_factor`     | number                                | 2.5            | The ideal rest after a shift, as a multiple of its length. At least 1. Only rest targets longer than `min_rest` have an effect. |
 | `neutral_partner` | number                                | 1/3 (0.333…)   | How bad sharing a shift with a neutral worker is, relative to a disliked one (a liked one costs nothing). More than 0, less than 0.5, so that disliking a partner counts more than liking one ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)). |
 | `shift_share`     | number                                | 0.5            | How much each shift counts in itself, rather than by its hours, when comparing workloads. From 0 (only hours count) to 1 (every shift counts the same, however long), so that several short shifts can weigh more than one long one ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)). |
 
@@ -55,8 +54,13 @@ settings:
   time: ["2025-01-01", "2025-01-04"]
   scoring:
     weights: {likes: 1, workload: 2, rest: 1}
-    rest_factor: 2.5
+    shift_share: 0.25
 ```
+
+There's no rest factor to set: the rest targets are derived from the input
+([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). An input that still sets
+`rest_factor` is rejected: `settings, scoring: rest_factor is no longer a setting: the rest targets are derived from
+the input (ADR 0036); remove it`.
 
 ## `workers`
 

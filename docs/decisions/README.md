@@ -49,7 +49,7 @@ ADR that supersedes the old one.
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
 | [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
 | [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Accepted |
-| [0028](0028-rest-factor-default-2-5.md) | Default rest factor 2.5 | Accepted |
+| [0028](0028-rest-factor-default-2-5.md) | Default rest factor 2.5 | Superseded by [0036](0036-rest-targets-from-the-input-convex-per-worker.md) |
 | [0029](0029-schedule-history-input.md) | Schedule history: previous inputs and their schedules, read back as fixed history | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
 | [0030](0030-history-in-scoring.md) | History in scoring: the history and the new schedule scored as one | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
 | [0031](0031-history-as-the-filled-part-of-one-schedule.md) | History as the already-filled part of one schedule | Accepted |
@@ -57,6 +57,7 @@ ADR that supersedes the old one.
 | [0033](0033-pypy-for-development-runs.md) | PyPy for development runs; the code stays Python 3.11-compatible | Accepted |
 | [0034](0034-never-back-to-back.md) | A worker is never assigned back-to-back shifts, whatever the minimum rest | Accepted |
 | [0035](0035-search-progress-and-keeping-the-best-on-interrupt.md) | The search shows its progress, and Ctrl+C keeps the best schedule found so far | Accepted |
+| [0036](0036-rest-targets-from-the-input-convex-per-worker.md) | Rest targets derived from the input, for the rest between two shifts, with each worker's shortfall squared | Accepted |
 
 ## Template
 

@@ -4,7 +4,7 @@ Sources: [`src/tinyscheg/scoring/constants.py`](https://github.com/3-kids-wearin
 [`src/tinyscheg/scoring/penalty.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/penalty.py)
 
 See [Scoring](../../explanation/scoring.md) for the formulas and why, and
-[`ScoringParameters`](schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner-shift_share)
+[`ScoringParameters`](schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-neutral_partner-shift_share)
 for the parameters. The package depends only on `model` and `timing`: it receives slots, shifts, workers and domains
 as plain data, and the search will use it rather than the other way round. All durations are in hours, as `float`.
 
@@ -38,6 +38,9 @@ Immutable.
   ([ADR 0032](../../decisions/0032-flat-penalty-parts.md)): (mean slot load)$^p$ / (mean availability)$^{p-1}$, over
   the workers with some availability; 0 if there are none.
 * `rest_unit` — $\bar{M}$, the mean `worst_deficit` of the workers who could have one; 0 if none can.
+* `rest_factor` — $\gamma$, from `rest_factor` below ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)).
+* `rest_scale` — $\tau = \gamma \cdot \overline{|s|}$, one typical rest target (the mean slot length times $\gamma$),
+  the unit each worker's squared hours short are measured in.
 * `pair_values` — `tuple[tuple[float, ...], ...]`: `pair_values[w][p]` is what workers `w` and `p` add to the likes
   total as a pair, before dividing by the shift's other slots: both their like values of each other, from
   `pair_values`. Computed once, since the search asks for them at every step.
@@ -61,6 +64,15 @@ A slot's load: $(1 - \sigma) \cdot$ `slot_hours` $+ \; \sigma \cdot$ `mean_hours
 of the schedule's slots. With $\sigma = 0$ the load is the slot's hours; with $\sigma = 1$ every slot has the same load.
 The total load of all slots equals their total hours.
 
+### `rest_factor(available, slot_hours) -> float` and `rest_target(rest_factor, earlier_hours, later_hours) -> float`
+
+The rest factor and the rest targets ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)):
+
+* `rest_factor` — $\gamma = (\sum \text{available} - H) / H$, $H$ the total of `slot_hours`: the schedule's free
+  hours per hour of work. 0 if there are no slots.
+* `rest_target` — the target for the rest between two consecutive shifts of a worker,
+  $\gamma \cdot (\text{earlier} + \text{later}) / 2$: the same two shifts get the same target in either order.
+
 ### `worst_deficit(ranges, min_rest, rest_factor) -> float`
 
 $M_w$, as the heaviest path through a worker's possible shifts
@@ -69,8 +81,8 @@ $M_w$, as the heaviest path through a worker's possible shifts
 * `ranges` — the distinct time ranges of the slots in the worker's domain, sorted. Slots at the same time count once,
   since a worker can only work one of them.
 * There's a step from one range to a later one when it starts at least `min_rest` after the first ends.
-* Each step weighs the deficit it causes, $\max(0, \gamma \cdot |s| - \text{rest})$. A sequence's last shift has no
-  rest after it, so no deficit.
+* Each step weighs the deficit it causes, $\max(0, \text{rest target} - \text{rest})$, the target from `rest_target`.
+  A sequence's last shift has no rest after it, so no deficit.
 
 It takes $O(n^2)$ time for $n$ ranges. Tests check it against trying every legal sequence.
 
@@ -156,10 +168,13 @@ availability, divided by `workload_unit`. 0 if no worker can be assigned anythin
 
 ### `rest_penalty(constants, assignment) -> float`
 
-$\mathcal{R}^{**}$: for each worker, the sum over their consecutive shifts of
-$\max(0, \gamma \cdot |s| - \text{rest after } s)$, divided by their `worst_deficit` and multiplied by `rest_unit`:
-in hours, an hour weighing more for a worker who could rarely be short. Workers whose worst deficit is 0 can never
-have one, and count 0.
+$\mathcal{R}^{**}$ ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)): for each worker, their deficit $D_w$, the sum over their consecutive shifts of
+$\max(0, \text{rest target} - \text{rest})$, and their term `rest_unit` / `worst_deficit` $\cdot D_w^2 /$
+`rest_scale`: squared, so the same shortfall costs more on a worker who already has some, and weighing more for a
+worker who could rarely be short. Workers whose worst deficit is 0 can never have one, and count 0.
+
+`worker_deficits(constants, assignment)` gives each worker's $D_w$, and `rest_term(constants, worker, deficit)` one
+worker's term.
 
 ### Helpers shared with the `incremental` module
 
@@ -167,7 +182,7 @@ have one, and count 0.
 before dividing by their units), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
 look-ahead),
 `pair_like_value(constants, worker, partner)` (both workers' like values of each other, from `pair_values`), `normalized_likes(constants,
-total)` and `rest_deficit(constants, earlier, later)` (one rest's deficit). Both modules use them, so that they do the
+total)`, `rest_deficit(constants, earlier, later)` (one rest's deficit), `worker_deficits` and `rest_term` (above). Both modules use them, so that they do the
 same arithmetic.
 
 ## `incremental` module

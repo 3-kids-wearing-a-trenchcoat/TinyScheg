@@ -7,7 +7,9 @@ point, not final, but they shape how every later output is read, so the method i
 > [!IMPORTANT]
 > **Partially implemented.** The benchmark generator (`tools/benchmarks/generate.py`) and the tuning runner
 > (`tools/tune.py`) exist and are tested. The first round is done: the default rest factor became 2.5
-> ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)). Longer schedules are still to be checked.
+> ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)), since superseded: the rest factor is now derived from
+> the input, and each worker's shortfall squared ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)), so the weights are to be checked again. Longer schedules
+> are still to be checked.
 
 > [!WARNING]
 > **The audit changed on 2026-11-13** (load compared with no exchange rate between shifts and hours, shifts counted in
@@ -18,10 +20,11 @@ point, not final, but they shape how every later output is read, so the method i
 
 ## What's tuned, against what
 
-The six independent parameters: the weights of likes, workload and rest (two independent values, since only their
-ratios matter), the workload power $p$, the rest factor $\gamma$, the neutral partner value $\alpha / \beta$,
+The five independent parameters: the weights of likes, workload and rest (two independent values, since only their
+ratios matter), the workload power $p$, the neutral partner value $\alpha / \beta$,
 which stays below 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)), and the shift share $\sigma$
-([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)).
+([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)). The rest factor $\gamma$ was a sixth until it
+became derived from the input ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)).
 
 The yardstick is the audit, **held fixed**: its own thresholds aren't tuned, or the two would just drift towards each
 other. Since branch and bound gives the proven best schedule for each setting, any difference in the result comes
@@ -85,7 +88,7 @@ searching again.
 3. **Rounds, by hand** — a few candidate settings at a time, chosen from what the earlier stages showed, run on the
    tuning inputs, read, and adjusted for the next round, until the complaints stop dropping: the aim is fewer
    complaints, not none. Each round is its own stage, named on the command line:
-   `python tools/tune.py round NAME --setting rest_factor=2.5,shift_share=0.5 --setting ...`, where each setting
+   `python tools/tune.py round NAME --setting neutral_partner=0.25,shift_share=0.5 --setting ...`, where each setting
    names only the parameters it changes from the defaults, and `--inputs holdout` or `--inputs confirm` runs it on
    the held-back inputs or the confirm tier instead (report it with `--holdout` to include the held-back ones).
    Running a round again with more settings adds them. There's no automated search over the parameters: which

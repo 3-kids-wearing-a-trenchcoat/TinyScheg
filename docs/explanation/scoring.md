@@ -9,8 +9,9 @@
 > [ADR 0013](../decisions/0013-availability-weighted-workload.md),
 > [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md),
 > [ADR 0021](../decisions/0021-power-function-for-workload-fairness.md),
-> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md) and
-> [ADR 0032](../decisions/0032-flat-penalty-parts.md).
+> [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md),
+> [ADR 0032](../decisions/0032-flat-penalty-parts.md) and
+> [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md).
 > This page was corrected on 2026-11-10 and the corrections confirmed on 2026-11-11; see [Corrections](#corrections).
 > Parameter defaults are listed under [Parameters](#parameters).
 
@@ -37,8 +38,8 @@ is deterministic (e.g. sums are always taken in the same order).
 ## Calculations
 
 Each *criterion* (likes/dislikes, workload, rest) has its own penalty function, each measured in **fixed units**, so
-that one event (a disliked pairing, a shift of imbalance, an hour of short rest) costs the same whatever the
-schedule's length ([ADR 0032](../decisions/0032-flat-penalty-parts.md)). Their **weighted sum** is the total penalty.
+that one event (a disliked pairing, a shift of imbalance, a worker's hours of short rest) costs the same whatever
+the schedule's length ([ADR 0032](../decisions/0032-flat-penalty-parts.md)). Their **weighted sum** is the total penalty.
 Only differences between schedules matter: a penalty that every schedule carries changes no comparison, so the total
 growing with the schedule's size doesn't matter.
 
@@ -290,14 +291,20 @@ while worker B gets very spread-out shifts.
 
 That said, rest periods shouldn't necessarily all be made as similar as possible, especially in an asynchronous
 schedule. An ideal rest period following a 3-hour shift can and should be shorter than one following a 4-hour (or
-longer) shift.
+longer) shift. (Since [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md), a rest's target comes from both shifts around it, so that the same two shifts cost the
+same in either order: a rest next to a longer shift should be longer, whichever side it's on.)
 A rest period longer than the ideal doesn't need to be penalized either, since the main problem with an overly long
 rest period is the risk of it coming at the expense of someone else — and that is already reflected as a shorter
 rest for that someone else. If it's possible to give worker X extra rest without it coming at someone's expense, X
 should get it.
 
 For these reasons, a fairly simple function suffices: it calculates a **rest deficit** for each rest period of each
-worker, sums them up and normalizes the result.
+worker, sums them up per worker, and adds up a convex function of each worker's total.
+
+> [!NOTE]
+> **Implemented**, as below since 2026-11-14 ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)): the targets are derived from the input rather than set
+> by a rest factor chosen by hand, a rest's target comes from both shifts around it, and each worker's total is
+> squared. The provable properties this is meant to have are tests (`tests/test_rest_properties.py`).
 
 Let $w \in W$ be some worker, and $A_t(w)$ all the slots $w$ is assigned to at iteration $t \in \mathbb{N}$.
 Let $A_t(w) = ( s_1, s_2 ,\dots , s_n)$ be ordered by **`DateTimeRange`**, meaning that for every
@@ -315,12 +322,20 @@ $$
 \Delta s_i = \begin{cases} [s_{i+1}]_\text{start} - [s_i]_\text{end} & i \neq n \\ \infty & i=n \end{cases}
 $$
 
-and the **rest target** after $s_i$ — the shift's duration times $\gamma$, for some $1 \leq \gamma \in \mathbb{R}$
-(the rest factor, a [parameter](#parameters), 2.5 by default, [ADR 0028](../decisions/0028-rest-factor-default-2-5.md)):
+and, for $i \neq n$, the **rest target** between $s_i$ and $s_{i+1}$: the mean of the two shifts' durations times
+the **rest factor** $\gamma$,
 
 $$
-r(s_i) = \gamma \cdot |s_i|
+r(s_i) = \gamma \cdot \frac{|s_i| + |s_{i+1}|}{2}, \qquad \gamma = \frac{\sum_{w \in W} \mathrm{av}_w - H}{H}
 $$
+
+where $H = \sum_{s \in S} |s|$ is the total length of all slots. $\gamma$ is the schedule's free hours per hour of
+work, derived from the input (over the whole schedule, history included,
+[ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)) rather than chosen: since fair shares
+of work are proportional to availability, it's every worker's free time divided by their fair share, so a worker
+who works their share, spread evenly, gets exactly their share of free time around each shift. Each shift sits in
+the middle of its share, half before it and half after; nothing is assumed about which side of a shift its demand
+falls on. With every shift the same length, the target is $\gamma \cdot |s_i|$; on the example, $\gamma \approx 3.46$.
 
 (All time periods are in hours.)
 
@@ -343,12 +358,15 @@ $$
 That is, the sum of the rest deficits for each shift $w$ is assigned to at iteration $t$.
 
 > **Monotonicity:** assigning $w$ another slot $s'$ can only add deficit.
-> * If $s'$ falls between two of $w$'s slots $s_i < s' < s_{i+1}$, the rest after $s_i$ shrinks from
->   $\Delta s_i$ to $[s']_\text{start} - [s_i]_\text{end} < \Delta s_i$, so $d_t(w, s_i)$ can only grow; and $s'$
->   brings a new deficit $d_t(w, s') \geq 0$. (The rest periods around $s'$ add up to *less* than the old one:
->   $\big([s']_\text{start} - [s_i]_\text{end}\big) + \big([s_{i+1}]_\text{start} - [s']_\text{end}\big) = \Delta s_i - |s'|$.)
+> * If $s'$ falls between two of $w$'s slots $s_i < s' < s_{i+1}$, the one rest between them becomes two. Their
+>   periods add up to *less* than the old one,
+>   $\big([s']_\text{start} - [s_i]_\text{end}\big) + \big([s_{i+1}]_\text{start} - [s']_\text{end}\big) = \Delta s_i - |s'|$,
+>   and their targets to *more*, $\gamma \frac{|s_i| + |s'|}{2} + \gamma \frac{|s'| + |s_{i+1}|}{2} = r(s_i) + \gamma |s'|$.
+>   So the two deficits, each at least 0 and together at least
+>   $\big(r(s_i) + \gamma |s'|\big) - \big(\Delta s_i - |s'|\big) \geq r(s_i) - \Delta s_i$, add up to at
+>   least the old one.
 > * If $s'$ comes after $w$'s last slot, the rest after that slot goes from $\infty$ (no deficit) to a finite value,
->   so its deficit can only grow, and $d_t(w, s') = 0$.
+>   so its deficit can only grow (from 0), and $d_t(w, s') = 0$.
 > * If $s'$ comes before $w$'s first slot, it only adds a new deficit $d_t(w, s') \geq 0$.
 >
 > No other deficit changes, so $\mathcal{R}_t(w)$ never decreases.
@@ -362,16 +380,19 @@ $$
 #### Scaling the rest deficit
 
 The minimum possible deficit for any worker at any slot is 0. Since any two slots assigned to the same worker are at
-least $m$ hours apart, $\Delta s \geq m$, so the maximum possible deficit after a slot $s$ is reached when the next
+least $m$ hours apart, $\Delta s \geq m$, so the maximum possible deficit of a rest is reached when the next
 shift starts as soon as the minimum rest period is over:
 
 $$
-d_m(s) = \max \big(0, \; r(s) - m \big) = \max \big(0, \; \gamma \cdot |s| - m \big)
+d_m(s) = \max \big(0, \; r(s) - m \big)
 $$
 
-If $\gamma \cdot |s| \leq m$, the minimum rest period already meets the rest target and $s$ can never cause a
-deficit. So $\gamma$ only has an effect relative to the minimum rest and the shift lengths: with 6 hours' minimum
-rest and 3-hour shifts, any $\gamma \leq 2$ turns the rest penalty off entirely.
+If $r(s) \leq m$, the minimum rest period already meets the rest target and that rest can never fall short. With a
+rest factor chosen by hand (2.5, before ADR 0036), that silenced the rest part after short shifts: with 6 hours'
+minimum rest, after any shift of 2.4 hours or less. With $\gamma$ derived from the input, it happens only where
+spreading a worker's fair share evenly would give them no more than the minimum rest anyway: then resting at the
+minimum is what even spacing gives. (A worker who gets fewer shifts than their share has room the target doesn't
+see; among the benchmark inputs, `sweep_02`, whose 2-hour targets come out at exactly 6 hours.)
 
 Normalizing each deficit by $d_m(s)$ isn't very helpful, because the number of rest periods varies; normalization
 should instead be relative to *each worker*, whose number is constant for a given schedule.
@@ -381,15 +402,25 @@ $\mathcal{R}_t(w)$ could take over any legal set of slots $w$ could be assigned 
 the next section). **The normalized worker rest deficit function** is
 $\frac{1}{M_w} \sum _{s \in A_t(w)} d_t(w,s) = \sum _{s \in A_t(w)} \frac{d_t(w,s)}{M_w}$, which lies between 0
 (best case) and 1 (worst case). If $M_w = 0$, $w$ can never have a deficit and the term is defined to be 0.
-To keep the average hour short costing the same at any schedule length, the sum is multiplied by $\bar{M}$, the mean
-$M_w$ of the workers who could have a deficit ([ADR 0032](../decisions/0032-flat-penalty-parts.md)), so it's measured
-in hours. Therefore, **the global rest deficit function** is:
+To keep the average hour short costing the same at any schedule length, it's multiplied by $\bar{M}$, the mean
+$M_w$ of the workers who could have a deficit ([ADR 0032](../decisions/0032-flat-penalty-parts.md)); without
+$\bar{M}$, every $M_w$ grows with the schedule, and an hour short would cost about 1/length.
+
+Each worker's total is then **squared** ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)), so that the same shortfall costs more on a worker who already
+has some, the history included: it's spread rather than concentrated, and a worker who has had short rests is made
+up to, as with workload. The square is taken in units of one typical target, $\tau = \gamma \cdot \overline{|s|}$
+($\overline{|s|}$ the mean slot length; also derived from the input), so it doesn't depend on the unit of time.
+Therefore, **the global rest deficit function** is:
 
 $$
-\mathcal{R}^{**}(t) = \bar{M} \sum _{w \in W} \frac{1}{M_w} \mathcal{R}_t(w) = \bar{M} \sum _{w \in W} \Bigg( \sum_{s \in A_t(w)} \frac{d_t(w,s)}{M_w} \Bigg)
+\mathcal{R}^{**}(t) = \sum _{w \in W} \frac{\bar{M}}{M_w} \cdot \frac{\mathcal{R}_t(w)^2}{\tau}
 $$
 
-Without $\bar{M}$, every $M_w$ grows with the schedule, and an hour short cost about 1/length.
+Each worker's total only grows, so its square does, and $\mathcal{R}^{**}$ is monotone. A worker's first
+hours short cost less than before and later ones more: at half a typical target short, an hour costs what it did
+with the sum alone. Without the square, the same total cost the same however it was shared out, and putting it all
+on one worker, at the minimum rest while others rested far longer, was as cheap as spreading it (measured on
+2026-11-14, ADR 0036).
 
 Normalizing **per worker** is deliberate. Each worker's rest is judged relative to their *own* worst case, just as
 their workload is judged relative to their *own* availability. As a result, an hour of deficit weighs more for a
@@ -406,7 +437,7 @@ $M_w$ is calculated **exactly**, as the most expensive path in a
 * the nodes are the slots in whose domain $w$ is (after unary pruning);
 * there is an edge $s \rightarrow s'$ whenever $w$ could work $s$ and then $s'$ as consecutive shifts, i.e.
   $[s']_\text{start} - [s]_\text{end} \geq m$;
-* the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot |s| - ([s']_\text{start} - [s]_\text{end}) \big)$.
+* the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot \frac{|s| + |s'|}{2} - ([s']_\text{start} - [s]_\text{end}) \big)$.
 
 Every legal sequence of $w$'s shifts is a path in this graph, and its total deficit is the path's total weight, so
 $M_w$ is the weight of the heaviest path. Sorting the slots by time and applying a standard
@@ -440,7 +471,7 @@ Each sub-function is monotonically non-decreasing, and the weights are non-negat
 ## Parameters
 
 > [!NOTE]
-> **Implemented**: [`ScoringParameters`](../reference/api/schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-rest_factor-neutral_partner-shift_share)
+> **Implemented**: [`ScoringParameters`](../reference/api/schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-neutral_partner-shift_share)
 > and the `scoring` input settings. Decided in
 > [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md).
 
@@ -451,9 +482,11 @@ Every parameter has a default, defined once as a named constant in the code, and
 |-----------|--------|---------|-------------|----------------|
 | Weights of likes, workload and rest | $a$, $b$, $c$ | 0.57, 0.215, 0.215 ([ADR 0032](../decisions/0032-flat-penalty-parts.md)) | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
 | Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
-| Rest factor | $\gamma$ | 2.5 | `rest_factor` | at least 1 ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)) |
 | Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
 | Shift share of a slot's load | $\sigma$ | 0.5 | `shift_share` | from 0 to 1 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)) |
+
+The rest factor $\gamma$ is no longer a parameter: it's derived from the input ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md); before, it was set by hand,
+2.5 by default, [ADR 0028](../decisions/0028-rest-factor-default-2-5.md)).
 
 What the defaults mean on the example input (`exampleInput.yml`: 9 workers, 17 slots), as changes to a schedule
 with every parameter at its default: at 24 hours, the best schedule branch and bound finds; made 48 hours long, the
@@ -464,11 +497,15 @@ first legal one (recomputed on 2026-11-12, after [ADR 0032](../decisions/0032-fl
 | Moving a 3-hour shift from one worker to another with the same load (a gap of two shifts) | +2.1 | +0.45 | +0.43 |
 | The same with a 4-hour shift | +2.9 | +0.62 | |
 | One worker paired with someone they dislike instead of a neutral partner | +0.67 | +0.38 | +0.38 |
-| One hour of rest below target | +0.62 to +1.69 | +0.13 to +0.36 | +0.17 to +0.25 |
+| One hour of rest below target (before ADR 0036) | +0.62 to +1.69 | +0.13 to +0.36 | +0.17 to +0.25 |
 
 * **The same at any length:** a two-shift gap and a disliked pairing cost the same at 48 hours as at 24. An hour of
   rest costs the same *on average*; for any one worker it depends on how short their rests could be compared with
   the others', so the range shifts a little with the schedule.
+* **Rest, since [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md):** an hour short no longer costs a fixed amount. On the example, one typical target is
+  $\tau \approx 9.8$ hours, and for a worker with an average worst case, a worker's first hour short costs +0.10 before
+  weights (+0.02 weighted), the second +0.31 (+0.07), the fifth +0.92 (+0.20), the tenth +1.95 (+0.42). The weights
+  were set before this change, so they're to be checked again.
 * **Workload:** a gap in 4-hour shifts costs about 1.4 times a gap in 3-hour ones. With hours alone it would be
   about 1.8 times ($(4/3)^2$); with the shift share at 0.5, part of each shift's load is the same whatever its length.
 * On this input, a two-shift gap costs a little more than a disliked pairing, and an hour of short rest a little

@@ -1,6 +1,6 @@
 # 0028. Default rest factor 2.5
 
-**Status:** Accepted.
+**Status:** Superseded by [0036](0036-rest-targets-from-the-input-convex-per-worker.md).
 
 ## Context
 

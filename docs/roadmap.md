@@ -173,8 +173,10 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
     - [x] Command line: a two-line block redrawn in place on a terminal (the best schedule so far, and the progress
       with a rough time left); plain lines otherwise
     - [x] Ctrl+C writes the best schedule found so far, marked as not proven the best
-- [ ] **Rest targets derived from the input** (prototypes in progress): a target after each shift proportional to its
-  length, by the schedule's own ratio of free time to work, instead of a rest factor chosen by hand
+- [x] **Rest targets derived from the input** ([ADR 0036](decisions/0036-rest-targets-from-the-input-convex-per-worker.md)):
+  the rest factor is the schedule's own ratio of free time to work instead of a value chosen by hand, the target for
+  the rest between two shifts comes from both their lengths, and each worker's shortfall is squared; `rest_factor`
+  removed; the provable properties of the rest part as tests
 - [ ] **Each worker's worst rest deficit from scratch over the history:** a history slot counts for everyone who was
   available for it and had its role that day, not only for whoever worked it
 - [ ] **Rests measured in available time:** unavailable time inside a rest counts as neither work nor rest
