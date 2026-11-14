@@ -2,6 +2,7 @@
 import copy
 import csv
 import pathlib
+import statistics
 
 import pytest
 
@@ -178,10 +179,24 @@ def test_unit_tradeoffs_follow_the_formulas() -> None:
     assert tradeoffs["extra_shift"] == pytest.approx(parameters.workload_weight)
     assert tradeoffs["outrage"] == pytest.approx(2 * parameters.workload_weight)
     assert tradeoffs["second_short_rest"] == pytest.approx(3 * tradeoffs["first_short_rest"])  # squared: 4 - 1
-    # at the defaults an outrage outweighs three dislikes; at a much lighter workload weight it doesn't
-    assert tradeoffs["outrage_outweighs_pairings"]
-    lighter = tune.Setting("lighter", workload_weight=0.2)
-    assert not tune.unit_tradeoffs(lighter)["outrage_outweighs_pairings"]
+    # one worker resting at the minimum twice: short twice by two average shifts' target less the minimum, squared
+    schedule_input = read_input(tune.EXAMPLE)
+    problem = build_problem(schedule_input)
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.scoring_domains)
+    shift_hours = statistics.fmean(constants.slot_hours)
+    shortfall = 2 * (constants.rest_factor * shift_hours - constants.min_rest)
+    assert tradeoffs["twice_at_minimum"] == pytest.approx(parameters.rest_weight * shortfall ** 2
+                                                          / constants.rest_scale)
+    assert tradeoffs["outrage_per_twice_at_minimum"] == pytest.approx(tradeoffs["outrage"]
+                                                                      / tradeoffs["twice_at_minimum"])
+    # each rule check can fail: at a much lighter workload weight an outrage outweighs neither three dislikes nor one
+    # worker resting at the minimum twice; at a much heavier rest weight a like is worth far less than a short rest
+    assert all(tradeoffs[check] for check in tune.RULE_CHECKS)
+    lighter = tune.unit_tradeoffs(tune.Setting("lighter", workload_weight=0.2))
+    assert not lighter["outrage_outweighs_pairings"]
+    assert not lighter["outrage_outweighs_twice_at_minimum"]
+    assert not tune.unit_tradeoffs(tune.Setting("heavier rest", rest_weight=1))["like_about_one_short_rest"]
 
 
 def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Path,

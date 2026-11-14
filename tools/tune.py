@@ -21,6 +21,7 @@ import argparse
 import csv
 import dataclasses
 import json
+import math
 import multiprocessing
 import os
 import pathlib
@@ -64,10 +65,14 @@ SHIFT_SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)            # 0 is hours only, as befo
 EXAMPLE = pathlib.Path(__file__).parent.parent / "exampleInput.yml"  # the input the unit trade-offs are computed on
 AT_MINIMUM_TOLERANCE = 1e-9  # hours: a rest within this of the minimum rest counts as at the minimum
 EQUAL_AVAILABILITY_TOLERANCE = 1e-9  # hours: workers this close to the most available one count as fully available
-# The user's rules for likes (2026-11-14), checked on each setting's unit trade-offs: an avoidable two-shift gap (an
-# "outrage") must outweigh this many likes or dislikes; a like or dislike may make up for one short rest, never a
-# second one for the same worker
+# The user's rules (2026-11-14), checked on each setting's unit trade-offs on the example (the defaults' in
+# tests/test_default_tradeoffs.py): an avoidable two-shift gap (an "outrage") must outweigh this many likes or
+# dislikes, and one worker resting at the minimum twice; a like or dislike may make up for one short rest, never a
+# second one for the same worker; and a like is worth about one short rest, within this factor either way
 OUTRAGE_PAIRINGS = 3
+LIKE_PER_SHORT_REST_FACTOR = 1.25
+RULE_CHECKS = ("outrage_outweighs_pairings", "outrage_outweighs_twice_at_minimum",
+               "second_short_rest_outweighs_pairing", "like_about_one_short_rest")  # unit_tradeoffs' checks, in order
 
 AUDIT_FIELDS = ("complaints", "easy_fixes", "easy_fix_severity", "no_fix_severity", "aggrieved", "concentration",
                 "separate_complaints", "separate_severity")
@@ -535,14 +540,16 @@ def measure_summaries(rows: list[dict[str, str]], include_holdout: bool = False)
 def unit_tradeoffs(setting: Setting, path: pathlib.Path = EXAMPLE) -> dict[str, Any]:
     """
     What one event of each kind costs at a setting, weighted, on an input (by default the example, which the scoring
-    docs use), for an average worker and an average shift; and whether the user's rules for likes hold (2026-11-14):
-    an avoidable two-shift gap outweighs OUTRAGE_PAIRINGS likes or dislikes, and a like or dislike can't make up for
-    a worker's second short rest
+    docs use), for an average worker and an average shift; and whether the user's rules hold (2026-11-14): an
+    avoidable two-shift gap outweighs OUTRAGE_PAIRINGS likes or dislikes, and one worker resting at the minimum
+    twice; a like or dislike can't make up for a worker's second short rest; and a like is worth one short rest,
+    within LIKE_PER_SHORT_REST_FACTOR either way
     :param setting: Setting
     :param path: pathlib.Path of the input
     :return: the weighted costs of a like, a dislike (each instead of a neutral partner), a first and a second short
-    rest (one average shift's length of rest less, each), one extra shift (taken on by everyone else) and an outrage
-    (one shift moved between two equal workers, a gap of two); two ratios; and the two rules' checks
+    rest (one average shift's length of rest less, each), one worker resting at the minimum twice (between average
+    shifts), one extra shift (taken on by everyone else) and an outrage (one shift moved between two equal workers, a
+    gap of two); three ratios; and the four rules' checks
     """
     schedule_input = read_input(path)
     schedule_input = dataclasses.replace(schedule_input, settings=dataclasses.replace(
@@ -564,19 +571,27 @@ def unit_tradeoffs(setting: Setting, path: pathlib.Path = EXAMPLE) -> dict[str, 
     outrage = (term(fair + load) + term(fair - load) - 2 * term(fair)) / constants.workload_unit
     shift_hours = statistics.fmean(constants.slot_hours)
 
-    def short(times: int) -> float:  # an average worker (rest_unit / M_w = 1) short by that many shifts' length
-        return (times * shift_hours) ** REST_POWER / constants.rest_scale
+    def short_by(hours_short: float) -> float:  # an average worker (rest_unit / M_w = 1) short by that many hours
+        return hours_short ** REST_POWER / constants.rest_scale
+    at_minimum = max(0.0, constants.rest_factor * shift_hours - constants.min_rest)  # two average shifts' target
     costs = {"like": parameters.likes_weight * parameters.neutral_partner,
              "dislike": parameters.likes_weight * (1 - parameters.neutral_partner),
-             "first_short_rest": parameters.rest_weight * short(1),
-             "second_short_rest": parameters.rest_weight * (short(2) - short(1)),
+             "first_short_rest": parameters.rest_weight * short_by(shift_hours),
+             "second_short_rest": parameters.rest_weight * (short_by(2 * shift_hours) - short_by(shift_hours)),
+             "twice_at_minimum": parameters.rest_weight * short_by(2 * at_minimum),  # one worker's shortfall, squared
              "extra_shift": parameters.workload_weight * extra_shift,
              "outrage": parameters.workload_weight * outrage}
     pairing = max(costs["like"], costs["dislike"])
-    return {**costs, "like_per_short_rest": costs["like"] / costs["first_short_rest"],
+    like_per_short_rest = costs["like"] / costs["first_short_rest"]
+    return {**costs, "like_per_short_rest": like_per_short_rest,
             "dislike_per_like": costs["dislike"] / costs["like"],
+            "outrage_per_twice_at_minimum": (costs["outrage"] / costs["twice_at_minimum"] if costs["twice_at_minimum"]
+                                             else math.inf),
             "outrage_outweighs_pairings": costs["outrage"] > OUTRAGE_PAIRINGS * pairing,
-            "second_short_rest_outweighs_pairing": costs["second_short_rest"] > pairing}
+            "outrage_outweighs_twice_at_minimum": costs["outrage"] > costs["twice_at_minimum"],
+            "second_short_rest_outweighs_pairing": costs["second_short_rest"] > pairing,
+            "like_about_one_short_rest": 1 / LIKE_PER_SHORT_REST_FACTOR <= like_per_short_rest
+                                         <= LIKE_PER_SHORT_REST_FACTOR}
 
 
 def _row_setting(row: dict[str, str]) -> Setting:
@@ -698,17 +713,18 @@ def print_report(rows: list[dict[str, str]], include_holdout: bool) -> None:
             print(f"{summary['setting']:<34} {m[f'{prefix}at_minimum']:>6.0%} {m[f'{prefix}spread']:>6.1f} "
                   f"{m[f'{prefix}hours_gap']:>6.1f} {m[f'{prefix}shifts_gap_max']:>4} {m[f'{prefix}liked']:>6.1f} "
                   f"{m[f'{prefix}disliked']:>6.1f}{extra}")
-    print(f"\nUnit trade-offs on the example, weighted: like, dislike, first and second short rest, extra shift, "
-          f"outrage; like per short rest, dislike per like; rules (outrage > {OUTRAGE_PAIRINGS} pairings, second "
-          f"short rest > a pairing)")
+    print(f"\nUnit trade-offs on the example, weighted: like, dislike, first and second short rest, at the minimum "
+          f"twice, extra shift, outrage; like per short rest, dislike per like, outrage per twice at the minimum; "
+          f"rules (outrage > {OUTRAGE_PAIRINGS} pairings, outrage > twice at the minimum, second short rest > a "
+          f"pairing, a like about one short rest)")
     settings = {row["setting"]: _row_setting(row) for row in rows}
     for summary in summaries:
         t = unit_tradeoffs(settings[summary["setting"]])
-        rules = " ".join("ok" if t[check] else "FAIL" for check in ("outrage_outweighs_pairings",
-                                                                     "second_short_rest_outweighs_pairing"))
+        rules = " ".join("ok" if t[check] else "FAIL" for check in RULE_CHECKS)
         print(f"{summary['setting']:<34} {t['like']:.3f} {t['dislike']:.3f} {t['first_short_rest']:.3f} "
-              f"{t['second_short_rest']:.3f} {t['extra_shift']:.3f} {t['outrage']:.3f}   "
-              f"{t['like_per_short_rest']:.2f} {t['dislike_per_like']:.2f}   {rules}")
+              f"{t['second_short_rest']:.3f} {t['twice_at_minimum']:.3f} {t['extra_shift']:.3f} {t['outrage']:.3f}   "
+              f"{t['like_per_short_rest']:.2f} {t['dislike_per_like']:.2f} {t['outrage_per_twice_at_minimum']:.2f}   "
+              f"{rules}")
 
 
 if __name__ == "__main__":
