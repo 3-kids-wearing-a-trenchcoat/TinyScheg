@@ -36,7 +36,7 @@ While it runs, its progress is shown on standard error
 two lines redrawn in place: the best schedule found so far, and how far the search has got:
 
 ```
-best:     penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), found after 0:04
+best:     penalty 8.72 (likes 2.67, workload 32.65, rest 0.85), found after 0:05
 progress: 37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough)
 ```
 
@@ -49,15 +49,15 @@ progress: 37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough)
 * The block is redrawn at most every `REDRAW_SECONDS` (0.25 s), each line cut to the terminal's width. When the
   search ends, it stays as last drawn, ending in `done` (or `interrupted`), and the summary follows. Where the
   terminal doesn't understand the codes for redrawing several lines, one line is redrawn instead, the progress
-  first: `37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough) | best 8.38 after 0:04`.
+  first: `37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough) | best 8.72 after 0:05`.
 
 When standard error isn't a terminal (redirected to a file, say), each better schedule found is reported on a line
 of its own, with the seconds since the search started, and a progress line every `PLAIN_PROGRESS_SECONDS` (60 s):
 
 ```
-tinyscheg: found penalty 8.79 after 0 s
-tinyscheg: found penalty 8.53 after 1 s
-tinyscheg: found penalty 8.38 after 4 s
+tinyscheg: found penalty 9.66 after 0 s
+tinyscheg: found penalty 8.81 after 1 s
+tinyscheg: found penalty 8.72 after 5 s
 tinyscheg: 81.3% of the search finished after 60 s, 9,118,208 nodes, about 14 s left (rough)
 ```
 
@@ -67,7 +67,7 @@ lower is better — with its three parts before weighting, e.g.:
 
 ```
 wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
-penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), the best possible
+penalty 8.72 (likes 2.67, workload 32.65, rest 0.85), the best possible
 ```
 
 The penalty and each part are at least 0, each part in its own units ([Scoring](../explanation/scoring.md)); only
@@ -86,7 +86,7 @@ summary says that it isn't proven the best, and how much of the search was finis
 
 ```
 wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
-penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), the best found before the search was interrupted, not proven the best (37.2% of the search finished)
+penalty 8.72 (likes 2.67, workload 32.65, rest 0.85), the best found before the search was interrupted, not proven the best (37.2% of the search finished)
 ```
 
 The exit code is still 130, so a script can tell that the run didn't finish. If no schedule has been found yet,
