@@ -66,7 +66,7 @@ def take_samples(schedule_input: ScheduleInput, count: int) -> list[Sample]:
     """
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     context = build_context(schedule_input, problem.shifts, problem.slots)
     samples = []
     for seed in range(count):

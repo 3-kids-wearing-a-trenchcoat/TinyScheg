@@ -96,7 +96,7 @@ def test_example_constants() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     assert constants.parameters == ScoringParameters()
     assert constants.min_rest == 6
     assert constants.shared_slots == 10          # 5 night shifts of the front gate, 2 workers each
@@ -118,7 +118,7 @@ def test_pair_values_are_both_workers_like_values_of_each_other() -> None:
     schedule_input = read_input(EXAMPLE_INPUT)
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     neutral = constants.parameters.neutral_partner
     count = len(constants.workers)
     for worker, partner in itertools.product(range(count), repeat=2):  # the same worker twice included
@@ -136,7 +136,7 @@ def test_workers_with_no_availability_or_deficit_are_left_out_of_the_units() -> 
     schedule_input = ScheduleInput(Settings(period, dt.timedelta(hours=4)), (Worker("Anne"), away), (post,))
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     anne, bob = constants.workers
     assert bob.availability == 0 and bob.worst_deficit == 0
     assert constants.workload_unit == 4 ** 2 / 8          # Bob's availability doesn't count

@@ -78,7 +78,9 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
     :param workers: all workers, in input order
     :param shifts: all shifts, in stable order
     :param slots: all slots, in stable order
-    :param domains: for each slot, the indexes of the workers who can fill it (after the unary constraints)
+    :param domains: for each slot, the indexes of the workers who could fill it from scratch, as
+    Problem.scoring_domains gives them: with a history, every worker who could have filled a history slot, not only
+    the one who did (ADR 0037)
     :return: ScoringConstants
     """
     parameters = settings.scoring

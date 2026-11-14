@@ -95,7 +95,7 @@ def test_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) 
     assert hard_constraint_violations(schedule_input, problem.slots, assignment) == []
     # the schedule written is the best one, and the penalty shown is its own
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     best = find_best_schedule(problem, constants)
     assert assignment == best.assignment
     assert penalty == f"{describe_penalty(score(constants, assignment))}, the best possible"

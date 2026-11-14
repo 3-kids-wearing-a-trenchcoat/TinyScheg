@@ -31,7 +31,8 @@ def constants_for(workers: list[Worker], roles: dict[str, int], length: int, per
     schedule_input = ScheduleInput(Settings(period, dt.timedelta(hours=min_rest), parameters), tuple(workers),
                                    (post,))
     problem = build_problem(schedule_input)
-    return build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    return build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                           problem.scoring_domains)
 
 
 # --- likes ---
@@ -162,7 +163,7 @@ def example() -> tuple[ScoringConstants, tuple[int, ...]]:
     schedule_input = read_input(EXAMPLE_INPUT)
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     assignment = find_first_schedule(problem).assignment
     assert assignment is not None
     return constants, assignment
@@ -247,7 +248,7 @@ def test_workload_penalty_ranks_schedules_by_the_spread_of_workloads() -> None:
     schedule_input = ScheduleInput(settings, tuple(workers), (Post("post", ShiftRules(dt.timedelta(hours=2),
                                                                                    (("any", 1),))),))
     problem = build_problem(schedule_input)
-    constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
     schedules = [assignment for assignment in product(range(3), repeat=len(problem.slots))
                  if not hard_constraint_violations(schedule_input, problem.slots, assignment)]
     assert len(schedules) > 10
@@ -284,7 +285,8 @@ def shifts_input(shift_share: float) -> tuple[ScoringConstants, list]:
     workers = (Worker("Anne"), Worker("Bob"), Worker("Cy"))
     settings = Settings(period, dt.timedelta(0), ScoringParameters(shift_share=shift_share))
     problem = build_problem(ScheduleInput(settings, workers, posts))
-    return build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.domains), problem.slots
+    return build_constants(settings, problem.workers, problem.shifts, problem.slots,
+                           problem.scoring_domains), problem.slots
 
 
 def schedule(slots: list, plan: dict[tuple[str, int], int]) -> list[int]:

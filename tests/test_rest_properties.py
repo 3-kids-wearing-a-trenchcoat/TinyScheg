@@ -44,7 +44,7 @@ def penalties(names: list[str], posts: tuple[tuple[str, float], ...], period: fl
                                          for post, length in posts))
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     result = []
     for schedule in schedules:
         queues = {post: list(workers) for post, workers in schedule.items()}
@@ -131,6 +131,7 @@ def test_a_worker_idle_in_the_history_makes_up_for_it() -> None:
 
     now = two_hourly(12, 24, (PreviousSchedule("before", two_hourly(0, 12), (0, 1) * 3),))
     problem = build_problem(now)
-    constants = build_constants(problem.settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    constants = build_constants(problem.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.scoring_domains)
     new = find_best_schedule(problem, constants).assignment[6:]
     assert new.count(2) > max(new.count(0), new.count(1))

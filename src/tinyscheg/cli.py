@@ -107,7 +107,7 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
         return EXIT_NO_SCHEDULE
     # with a history, the whole schedule's settings: its period runs from the history's start (ADR 0031)
     settings = problem.settings or schedule_input.settings
-    constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
     display = _ProgressDisplay(sys.stderr)
     result = find_best_schedule(problem, constants, on_improvement=display.improvement, on_progress=display.progress,
                                 keep_best_on_interrupt=True)

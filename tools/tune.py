@@ -207,7 +207,7 @@ def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any
         schedule_input.settings, scoring=setting.parameters()))
     problem = build_problem(schedule_input)
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
-                                problem.domains)
+                                problem.scoring_domains)
     started = time.perf_counter()
     signal.signal(signal.SIGALRM, _on_alarm)
     signal.setitimer(signal.ITIMER_REAL, JOB_TIME_LIMIT)

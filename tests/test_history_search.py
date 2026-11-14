@@ -45,7 +45,7 @@ def constants_for(schedule_input: ScheduleInput) -> ScoringConstants:
     """The scoring constants of the whole schedule."""
     problem = build_problem(schedule_input)
     assert problem.settings is not None
-    return build_constants(problem.settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    return build_constants(problem.settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
 
 
 def test_the_history_is_the_filled_first_part_of_one_schedule() -> None:
@@ -119,3 +119,49 @@ def test_departed_workers_slots_are_dropped() -> None:
     history = (previous(0, 8, (2, 0), workers=("Anne", "Bob", "Cy")),)  # Cy, then Anne
     now = schedule(12, 24, workers=("Anne", "Bob"), history=history)
     assert build_problem(now).fixed[:1] == (0,)  # only Anne's shift is left of the history
+
+
+# --- who could have filled a history slot (ADR 0037) ---
+
+def test_a_history_slot_counts_for_everyone_who_could_have_filled_it() -> None:
+    # Cy was away for the first history shift; Dan joined after the history. Each history slot counts for everyone
+    # who was in that period's input and available for it, not only the worker who had it; new slots as usual.
+    away = ScheduleInput(Settings(period(0, 12), MIN_REST),
+                         (Worker("Anne"), Worker("Bob"), Worker("Cy", unavailable=(period(0, 4),))), (DESK,))
+    now = schedule(12, 24, ("Anne", "Bob", "Cy", "Dan"), (PreviousSchedule("0-12", away, (ANNE, BOB, ANNE)),))
+    problem = build_problem(now)
+    assert problem.domains[:3] == ((ANNE,), (BOB,), (ANNE,))  # the search's: who did
+    assert problem.scoring_domains[:3] == ((ANNE, BOB), (ANNE, BOB, CY), (ANNE, BOB, CY))  # the scoring's: who could
+    assert problem.scoring_domains[3:] == ((0, 1, 2, 3),) * 3
+
+
+def test_a_history_slot_counts_by_the_roles_of_its_own_period() -> None:
+    # Cy became a supervisor after the history, so the history's supervisor shifts don't count for Cy
+    supervising = Post("desk", ShiftRules(dt.timedelta(hours=4), (("supervisor", 1),)))
+    supervisors = (Worker("Anne", roles=frozenset({"supervisor"})), Worker("Bob", roles=frozenset({"supervisor"})))
+    then = ScheduleInput(Settings(period(0, 12), MIN_REST), supervisors + (Worker("Cy"),), (supervising,))
+    now = ScheduleInput(Settings(period(12, 24), MIN_REST),
+                        supervisors + (Worker("Cy", roles=frozenset({"supervisor"})),), (supervising,),
+                        (PreviousSchedule("0-12", then, (ANNE, BOB, ANNE)),))
+    problem = build_problem(now)
+    assert problem.scoring_domains[:3] == ((ANNE, BOB),) * 3
+    assert problem.scoring_domains[3:] == ((ANNE, BOB, CY),) * 3
+
+
+def test_being_passed_over_in_the_history_doesnt_shrink_the_worst_rest_deficit() -> None:
+    # Anne and Bob took turns over the history, Cy did nothing. From scratch, Cy could have been given those shifts
+    # too, so Cy's worst possible deficit is the same as theirs, and an hour short costs Cy no more than them; before
+    # ADR 0037 it was computed from the new period alone, making Cy's hours short the dearest of the three
+    post = Post("desk", ShiftRules(dt.timedelta(hours=2), (("any", 1),)))
+    workers = tuple(Worker(name) for name in ("Anne", "Bob", "Cy"))
+
+    def two_hourly(start: int, end: int, history: tuple[PreviousSchedule, ...] = ()) -> ScheduleInput:
+        return ScheduleInput(Settings(period(start, end), dt.timedelta(hours=2)), workers, (post,), history)
+
+    now = two_hourly(12, 24, (PreviousSchedule("0-12", two_hourly(0, 12), (ANNE, BOB) * 3),))
+    problem = build_problem(now)
+    assert problem.settings is not None
+    worst = [worker.worst_deficit for worker in constants_for(now).workers]
+    assert worst[ANNE] == worst[BOB] == worst[CY] > 0
+    passed_over = build_constants(problem.settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    assert passed_over.workers[CY].worst_deficit < passed_over.workers[ANNE].worst_deficit  # what it was before

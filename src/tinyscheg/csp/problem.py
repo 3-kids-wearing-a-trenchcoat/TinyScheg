@@ -29,6 +29,11 @@ class Problem:
     With a history (ADR 0031), the schedule is the history's shifts followed by the new period's, as one schedule
     already filled up to the new period: fixed[i] is the worker of history slot i, None for a new slot (empty if
     there's no history), and settings covers the whole schedule's period; it's None only for problems built by hand.
+    eligible[i] holds the workers who could have filled slot i in a schedule made from scratch (ADR 0037): for a
+    history slot, everyone in that period's input who was available for its whole time and had its role then; for a
+    new slot, its initial domain. Empty if there's no history, where it's the same as domains. The scoring constants
+    are built from it (scoring_domains), so that a worker's worst possible rest deficit doesn't depend on whether
+    they were given history slots, only on whether they could have been.
     """
     workers: tuple[Worker, ...]
     shifts: tuple[Shift, ...]
@@ -39,10 +44,17 @@ class Problem:
     interchangeable: tuple[tuple[int, ...], ...] = ()
     fixed: tuple[int | None, ...] = ()
     settings: Settings | None = None
+    eligible: tuple[tuple[int, ...], ...] = ()
 
     def is_fixed(self, slot_index: int) -> bool:
         """True if the slot is part of the history, with its worker fixed."""
         return bool(self.fixed) and self.fixed[slot_index] is not None
+
+    @property
+    def scoring_domains(self) -> tuple[tuple[int, ...], ...]:
+        """For each slot, the workers who could have filled it from scratch: what the scoring constants are built
+        from (ADR 0037)."""
+        return self.eligible or self.domains
 
     @property
     def new_shifts(self) -> tuple[Shift, ...]:
@@ -89,16 +101,20 @@ def _with_history(schedule_input: ScheduleInput) -> Problem:
     """
     settings = schedule_input.settings
     history = sorted(schedule_input.history, key=lambda previous: previous.schedule_input.settings.period.start)
+    workers = tuple(_whole_schedule_worker(worker, schedule_input, history) for worker in schedule_input.workers)
     past: list[tuple[Shift, tuple[int, ...]]] = []
+    past_eligible: list[tuple[int, ...]] = []  # for each history slot, in order, who could have filled it (ADR 0037)
     for previous in history:
-        past += _past_shifts(previous, schedule_input.workers)
+        shifts_then = _past_shifts(previous, schedule_input.workers)
+        past += shifts_then
+        past_eligible += [_eligible_then(slot, previous, workers) for shift, _ in shifts_then for slot in shift.slots]
     new = [(shift, ()) for shift in generate_shifts(schedule_input.posts, settings.period)]
     shifts = _renumbered([shift for shift, _ in past + new])
     slots = all_slots(shifts)
     fixed = tuple([worker for _, workers in past for worker in workers] + [None] * sum(len(s.slots) for s, _ in new))
     start = history[0].schedule_input.settings.period.start
     whole = Settings(DateTimeRange(start, settings.period.end), settings.min_rest, settings.scoring)
-    workers = tuple(_whole_schedule_worker(worker, schedule_input, history) for worker in schedule_input.workers)
+    eligible = tuple(past_eligible) + tuple(initial_domain(slot, workers) for slot in slots[len(past_eligible):])
     neighbours = tuple(tuple(other for other in others if fixed[index] is None or fixed[other] is None)
                        for index, others in enumerate(difference_constraints(slots, settings.min_rest)))
     domains = []
@@ -110,7 +126,22 @@ def _with_history(schedule_input: ScheduleInput) -> Problem:
             domains.append(tuple(worker for worker in initial_domain(slot, workers) if worker not in taken))
     return Problem(workers=workers, shifts=shifts, slots=slots, domains=tuple(domains), neighbours=neighbours,
                    min_rest=settings.min_rest, interchangeable=interchangeable_slots(slots), fixed=fixed,
-                   settings=whole)
+                   settings=whole, eligible=eligible)
+
+
+def _eligible_then(slot: Slot, previous: PreviousSchedule, workers: Sequence[Worker]) -> tuple[int, ...]:
+    """
+    The workers who could have filled a history slot in its own period (ADR 0037): those in that period's input, with
+    the slot's role as that input gave them, and available for its whole time (workers being as they are over the
+    whole schedule, whose unavailability includes that period's)
+    :param slot: Slot of the history period
+    :param previous: PreviousSchedule, the period's input and schedule
+    :param workers: the current workers, over the whole schedule
+    :return: their indexes, ascending
+    """
+    then = {worker.name: worker for worker in previous.schedule_input.workers}
+    return tuple(index for index, worker in enumerate(workers)
+                 if worker.name in then and then[worker.name].has_role(slot.role) and worker.is_available(slot.time))
 
 
 def _past_shifts(previous: PreviousSchedule, workers: Sequence[Worker]) -> list[tuple[Shift, tuple[int, ...]]]:

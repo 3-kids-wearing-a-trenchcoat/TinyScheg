@@ -220,7 +220,8 @@ def small_inputs() -> list[ScheduleInput]:
 def constants_of(schedule_input: ScheduleInput) -> ScoringConstants:
     """The scoring constants of an input."""
     problem = build_problem(schedule_input)
-    return build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots, problem.domains)
+    return build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                           problem.scoring_domains)
 
 
 @pytest.mark.parametrize("schedule_input", small_inputs())
