@@ -156,6 +156,14 @@ benchmark inputs, under CPython and PyPy:
 Final comparison (3 rounds, per-input medians): CPython 509 s, CPython with mypyc 218 s, PyPy 156 s, all with the
 kept changes but the first, which is CPython before them.
 
+An optional idea, not tried (2026-11-14): **domains as bitsets.** Each slot's domain, the workers who can still fill
+it, held as the bits of one integer instead of a tuple: dropping a worker is one operation, a domain's size (for
+choosing the next slot) a bit count (`int.bit_count()`), and an emptied domain a test for zero, so many workers are
+handled per machine instruction. Python integers do this well and PyPy compiles it to tight code, unlike a numeric
+library such as NumPy, which pays a fixed cost per call that's larger than the work on arrays this small, and is
+slow on PyPy. Whether it pays off has to be measured: domain handling is only part of the cost per node, the
+incremental scores being the other large part.
+
 ## Incremental scoring
 
 > [!NOTE]

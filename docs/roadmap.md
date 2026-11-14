@@ -186,7 +186,8 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Faster search: stronger pruning, e.g. a rest look-ahead or a tighter workload bound (tried 2026-11-13 and not worth
       it: workload caps that account for overlaps; symmetry between identical workers, rare in the benchmark)
-- [ ] Faster search by non-heuristic means: parallelization, a compiled core (PyPy adopted for development runs, ADR 0033)
+- [ ] Faster search by non-heuristic means: parallelization, a compiled core, optionally domains as bitsets (PyPy
+      adopted for development runs, ADR 0033)
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
 - [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them
