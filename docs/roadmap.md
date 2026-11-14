@@ -170,9 +170,9 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
 
 - [ ] **Search progress and Ctrl+C** ([ADR 0035](decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md))
     - [x] The share of the search space finished, tracked by the search, which only observes
-    - [ ] Command line: a two-line block redrawn in place on a terminal (the best schedule so far, and the progress
+    - [x] Command line: a two-line block redrawn in place on a terminal (the best schedule so far, and the progress
       with a rough time left); plain lines otherwise
-    - [ ] Ctrl+C writes the best schedule found so far, marked as not proven the best
+    - [x] Ctrl+C writes the best schedule found so far, marked as not proven the best
 - [ ] **Rest targets derived from the input** (prototypes in progress): a target after each shift proportional to its
   length, by the schedule's own ratio of free time to work, instead of a rest factor chosen by hand
 - [ ] **Each worker's worst rest deficit from scratch over the history:** a history slot counts for everyone who was

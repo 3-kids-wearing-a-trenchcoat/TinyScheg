@@ -6,7 +6,14 @@ import pytest
 from openpyxl import load_workbook
 
 from schedule_checker import hard_constraint_violations
-from tinyscheg.cli import EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path, describe_penalty, main
+import io
+import os
+
+from tinyscheg import cli
+from tinyscheg.cli import (EXIT_INTERRUPTED, EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path,
+                           describe_penalty, duration, main, percent)
+from tinyscheg.csp import search as search_module
+from tinyscheg.csp.search import SearchProgress, SearchResult
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_best_schedule
 from tinyscheg.output.writers import WRITERS, UnsupportedFormatError, writer_for
@@ -97,6 +104,102 @@ def test_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) 
     assert progress and all(line.startswith("tinyscheg: found penalty ") for line in progress)
     assert progress[-1].startswith(f"tinyscheg: found penalty {score(constants, assignment).total:.2f} after ")
 
+
+
+# --- progress and Ctrl+C (ADR 0035) ---
+
+PENALTY = Penalty(8.38, 2.0, 30.0, 1.0)
+
+
+def test_ctrl_c_writes_the_best_schedule_found_so_far(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str],
+                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+
+    def stop_once_a_schedule_is_found(display: cli._ProgressDisplay, progress: SearchProgress) -> None:
+        if display.best is not None:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli._ProgressDisplay, "progress", stop_once_a_schedule_is_found)
+    input_path, output = write(tmp_path, SMALL), tmp_path / "schedule.csv"
+    assert main([str(input_path), "-o", str(output)]) == EXIT_INTERRUPTED
+    wrote, penalty = capsys.readouterr().out.splitlines()
+    assert wrote.startswith(f"wrote {output}: ")
+    assert penalty.endswith("of the search finished)") and "not proven the best" in penalty
+    schedule_input = read_input(input_path)
+    problem = build_problem(schedule_input)
+    assignment = read_schedule(output, schedule_input).assignment
+    assert hard_constraint_violations(schedule_input, problem.slots, assignment) == []
+
+
+def test_ctrl_c_before_any_schedule_writes_nothing(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str],
+                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+
+    def stop(display: cli._ProgressDisplay, progress: SearchProgress) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli._ProgressDisplay, "progress", stop)
+    output = tmp_path / "schedule.csv"
+    assert main([str(write(tmp_path, SMALL)), "-o", str(output)]) == EXIT_INTERRUPTED
+    assert "interrupted before any schedule was found; no schedule written" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_plain_progress_lines(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str],
+                              monkeypatch: pytest.MonkeyPatch) -> None:
+    # not on a terminal: each better schedule on its own line, and a progress line now and then
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+    monkeypatch.setattr(cli, "PLAIN_PROGRESS_SECONDS", 0)
+    assert main([str(write(tmp_path, SMALL)), "-o", str(tmp_path / "schedule.csv")]) == EXIT_SUCCESS
+    lines = capsys.readouterr().err.splitlines()
+    progress = [line for line in lines if "of the search finished after" in line]
+    assert progress and all(line.startswith("tinyscheg: ") and " nodes, " in line for line in progress)
+    assert all(line.startswith("tinyscheg: found penalty ") for line in lines if line not in progress)
+
+
+def test_live_block_is_redrawn_in_place(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "REDRAW_SECONDS", 0)
+    monkeypatch.setattr(cli.shutil, "get_terminal_size", lambda fallback: os.terminal_size((60, 24)))
+    stream = io.StringIO()
+    display = cli._ProgressDisplay(stream, live=True, codes=True)
+    display.improvement(PENALTY)
+    first = stream.getvalue()
+    assert cli.CURSOR_UP.format(1) not in first and first.count(cli.CLEAR_LINE) == 2 and "\n" in first
+    display.progress(SearchProgress(0.5, 12345))
+    second = stream.getvalue()[len(first):]
+    assert second.startswith("\r" + cli.CURSOR_UP.format(1))  # back up to the first line, then over it
+    display.close(SearchResult(None, 0, None, nodes=20000))
+    assert stream.getvalue().endswith("\n")
+    final = stream.getvalue().split("\r")[-1]
+    for line in final.replace(cli.CURSOR_UP.format(1), "").split("\n"):
+        assert len(line.replace(cli.CLEAR_LINE, "")) <= 59  # cut to the terminal's width
+    assert display.lines("done")[0].startswith("best:     penalty 8.38 (likes 2.00, workload 30.00, rest 1.00)")
+    assert display.lines("done")[1].startswith("progress: 100.0% finished, 20,000 nodes, ")
+    assert display.lines("done")[1].endswith(" elapsed, done")
+
+
+def test_live_line_without_terminal_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "REDRAW_SECONDS", 0)
+    stream = io.StringIO()
+    display = cli._ProgressDisplay(stream, live=True, codes=False)
+    display.improvement(PENALTY)
+    display.progress(SearchProgress(0.25, 100))
+    assert cli.CLEAR_LINE not in stream.getvalue() and "\n" not in stream.getvalue()
+    assert stream.getvalue().count("\r") == 2
+    assert stream.getvalue().split("\r")[-1].startswith("25.0% finished, 100 nodes, ")
+    assert display.compact_line().endswith(" | best 8.38 after 0:00")
+
+
+def test_time_left_is_estimated_once_enough_is_finished() -> None:
+    display = cli._ProgressDisplay(io.StringIO(), live=False)
+    assert display._time_left(0.001, 10) == ", estimating the time left"
+    assert display._time_left(0.25, 60) == ", about 3:00 left (rough)"
+    assert display._time_left(0.25, 60, " s") == ", about 180 s left (rough)"
+
+
+def test_duration_and_percent() -> None:
+    assert [duration(seconds) for seconds in (7.9, 133, 3723)] == ["0:07", "2:13", "1:02:03"]
+    assert [percent(share) for share in (0.372, 1.0000000001)] == ["37.2%", "100.0%"]
 
 
 def test_end_to_end_xlsx(tmp_path: pathlib.Path) -> None:
