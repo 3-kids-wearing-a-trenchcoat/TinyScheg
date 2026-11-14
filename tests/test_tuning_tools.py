@@ -178,10 +178,10 @@ def test_unit_tradeoffs_follow_the_formulas() -> None:
     assert tradeoffs["extra_shift"] == pytest.approx(parameters.workload_weight)
     assert tradeoffs["outrage"] == pytest.approx(2 * parameters.workload_weight)
     assert tradeoffs["second_short_rest"] == pytest.approx(3 * tradeoffs["first_short_rest"])  # squared: 4 - 1
-    # the defaults let three dislikes outweigh an outrage; a heavier workload weight doesn't
-    assert not tradeoffs["outrage_outweighs_pairings"]
-    heavier = tune.Setting("heavier", workload_weight=0.6)
-    assert tune.unit_tradeoffs(heavier)["outrage_outweighs_pairings"]
+    # at the defaults an outrage outweighs three dislikes; at a much lighter workload weight it doesn't
+    assert tradeoffs["outrage_outweighs_pairings"]
+    lighter = tune.Setting("lighter", workload_weight=0.2)
+    assert not tune.unit_tradeoffs(lighter)["outrage_outweighs_pairings"]
 
 
 def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Path,

@@ -11,7 +11,7 @@ from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.model.post import Post, ShiftRules
-from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Settings
+from tinyscheg.model.schedule_input import DEFAULT_NEUTRAL_PARTNER, ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import ScoringConstants, build_constants, rest_target
@@ -20,7 +20,7 @@ from tinyscheg.scoring.penalty import (_water_level, likes_penalty, rest_deficit
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
-ALPHA = 1 / 3  # the default neutral partner, relative to a disliked one (beta = 1)
+ALPHA = DEFAULT_NEUTRAL_PARTNER  # the default neutral partner, relative to a disliked one (beta = 1)
 
 
 def constants_for(workers: list[Worker], roles: dict[str, int], length: int, period_hours: int,
@@ -163,10 +163,11 @@ def test_total_is_the_weighted_sum() -> None:
 
 def test_a_zero_weight_ignores_that_part() -> None:
     workers = [Worker("Anne", dislikes=frozenset({"Bob"})), Worker("Bob")]
-    constants = constants_for(workers, {"any": 2}, 4, 4, parameters=ScoringParameters(likes_weight=0))
+    constants = constants_for(workers, {"any": 2}, 4, 4,
+                              parameters=ScoringParameters(likes_weight=0, workload_weight=1, rest_weight=1))
     penalty = score(constants, [0, 1])
     assert penalty.likes > 0
-    assert penalty.total == pytest.approx(penalty.workload / 2 + penalty.rest / 2)  # the other two weights are equal
+    assert penalty.total == pytest.approx(penalty.workload / 2 + penalty.rest / 2)
 
 
 # --- properties, on the example ---

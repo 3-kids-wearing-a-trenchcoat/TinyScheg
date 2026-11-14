@@ -11,13 +11,15 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 
 DEFAULT_MIN_REST = dt.timedelta(hours=6)
 
-# Scoring parameter defaults (ADR 0022). Weights are relative: they're divided by their sum. With the flat penalty
-# (ADR 0032) they're set so that, on the tuning inputs, one event of each kind costs what it did before.
-DEFAULT_LIKES_WEIGHT = 0.57
-DEFAULT_WORKLOAD_WEIGHT = 0.215
-DEFAULT_REST_WEIGHT = 0.215
+# Scoring parameter defaults (ADR 0022). Weights are relative: they're divided by their sum. Set on 2026-11-14
+# (ADR 0039) from the user's trade-offs, checked on the example (tests/test_default_tradeoffs.py): a like is worth
+# about one short rest, and an avoidable gap of two shifts outweighs three pairings and one worker resting at the
+# minimum twice. The ratio tuned, likes : workload : rest = 0.45 : 1 : 0.25 (9 : 20 : 5), scaled to add up to 1.
+DEFAULT_LIKES_WEIGHT = 9 / 34
+DEFAULT_WORKLOAD_WEIGHT = 20 / 34
+DEFAULT_REST_WEIGHT = 5 / 34
 DEFAULT_WORKLOAD_POWER = 2       # phi(x) = x ** p (ADR 0021)
-DEFAULT_NEUTRAL_PARTNER = 1 / 3  # alpha / beta: a neutral shift partner's penalty relative to a disliked one's
+DEFAULT_NEUTRAL_PARTNER = 0.44   # alpha / beta: a neutral shift partner's penalty relative to a disliked one's
 DEFAULT_SHIFT_SHARE = 0.5        # sigma: how much a shift's load counts it as a shift, rather than by its hours
 
 # Limits on the scoring parameters

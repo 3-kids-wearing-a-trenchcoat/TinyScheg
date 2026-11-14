@@ -5,7 +5,7 @@ import textwrap
 
 import pytest
 
-from tinyscheg.model.schedule_input import ScoringParameters
+from tinyscheg.model.schedule_input import DEFAULT_REST_WEIGHT, DEFAULT_WORKLOAD_WEIGHT, ScoringParameters
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.parsing.validation import InputError
@@ -223,7 +223,8 @@ def test_rest_factor_is_no_longer_a_setting(tmp_path: pathlib.Path) -> None:
 def test_omitted_weights_keep_their_defaults(tmp_path: pathlib.Path) -> None:
     scoring = read_input(write(tmp_path, with_scoring("weights: {likes: 0}\n"))).settings.scoring
     assert scoring == ScoringParameters(likes_weight=0)
-    assert scoring.workload_weight == pytest.approx(0.5)  # the default workload and rest weights are equal
+    assert scoring.workload_weight == pytest.approx(DEFAULT_WORKLOAD_WEIGHT
+                                                    / (DEFAULT_WORKLOAD_WEIGHT + DEFAULT_REST_WEIGHT))
 
 
 def test_empty_scoring_section_keeps_the_defaults(tmp_path: pathlib.Path) -> None:
