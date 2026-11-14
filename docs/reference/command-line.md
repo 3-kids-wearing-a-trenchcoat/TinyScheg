@@ -25,20 +25,40 @@ file is written and an existing one is left as it was.
 The schedule written is the **best** legal one: the one with the lowest
 [penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
 The search runs to the end, with no limit, which can take a while: about 10 seconds for the 24-hour
-`exampleInput.yml`, and much longer for longer schedules. Ctrl+C stops it (see [Errors](#errors)).
+`exampleInput.yml`, and much longer for longer schedules. Its progress is shown as it goes (below), and Ctrl+C stops
+it, writing the best schedule found so far ([Stopping early](#stopping-early-ctrlc)).
 
 If the input has a [history](input-format.md#history), workers of a previous schedule who are no longer in the input
 are named in a warning on standard error first (`tinyscheg: warning: ...`); the run goes on.
 
-While it runs, each better schedule found is reported on standard error, with the time since the search started, so
-that a long run can be seen to be working:
+While it runs, its progress is shown on standard error
+([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)). On a terminal, it's a block of
+two lines redrawn in place: the best schedule found so far, and how far the search has got:
+
+```
+best:     penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), found after 0:04
+progress: 37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough)
+```
+
+* **Finished** is the share of the search space the search has finished: each partial schedule's share is split
+  equally among the workers tried for its next slot, and a branch's share counts once the branch is searched to the
+  end or pruned. It only rises, reaches 100% when the search ends, and can jump when a large branch is pruned.
+* **Time left** is the time elapsed times the share left over the share finished, shown once `ESTIMATE_MIN_FINISHED`
+  (1%) is finished. It's rough: the most promising workers are tried first, so the early branches take longest and
+  the later ones are pruned fast, and the estimate starts high and improves as the run goes on.
+* The block is redrawn at most every `REDRAW_SECONDS` (0.25 s), each line cut to the terminal's width. When the
+  search ends, it stays as last drawn, ending in `done` (or `interrupted`), and the summary follows. Where the
+  terminal doesn't understand the codes for redrawing several lines, one line is redrawn instead, the progress
+  first: `37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough) | best 8.38 after 0:04`.
+
+When standard error isn't a terminal (redirected to a file, say), each better schedule found is reported on a line
+of its own, with the seconds since the search started, and a progress line every `PLAIN_PROGRESS_SECONDS` (60 s):
 
 ```
 tinyscheg: found penalty 8.79 after 0 s
-tinyscheg: found penalty 8.61 after 0 s
 tinyscheg: found penalty 8.53 after 1 s
-tinyscheg: found penalty 8.45 after 2 s
 tinyscheg: found penalty 8.38 after 4 s
+tinyscheg: 81.3% of the search finished after 60 s, 9,118,208 nodes, about 14 s left (rough)
 ```
 
 The best schedule is often found long before the search ends: the rest of the time goes into making sure nothing
@@ -52,12 +72,25 @@ penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), the best possible
 
 The penalty and each part are at least 0, each part in its own units ([Scoring](../explanation/scoring.md)); only
 differences between schedules mean anything. They're shown to `PENALTY_DECIMALS` (2) decimals; the
-seconds in progress lines to `ELAPSED_DECIMALS` (0).
+seconds in plain progress lines to `ELAPSED_DECIMALS` (0), and the share finished to `PERCENT_DECIMALS` (1).
 
 With a [history](input-format.md#history), the schedule is searched as the continuation of the previous ones
 ([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): the file written holds the new period
 only, and the counts are the new period's, but the penalty is that of the whole schedule, history included, so it
 isn't comparable with a run without one.
+
+### Stopping early (Ctrl+C)
+
+Ctrl+C stops the search. If it has found a schedule by then, the best one found so far is written as usual, and the
+summary says that it isn't proven the best, and how much of the search was finished:
+
+```
+wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
+penalty 8.38 (likes 2.00, workload 32.77, rest 0.92), the best found before the search was interrupted, not proven the best (37.2% of the search finished)
+```
+
+The exit code is still 130, so a script can tell that the run didn't finish. If no schedule has been found yet,
+nothing is written: `interrupted before any schedule was found; no schedule written`.
 
 ## Errors
 
@@ -80,8 +113,9 @@ Every problem is reported on standard error, prefixed with `tinyscheg:`, and not
       ```
       This is where the search found out, not necessarily the cause, which may be a slot or two later. The search
       fills the most constrained slots first, so it usually gets stuck early, at or near the bottleneck.
-* **Interrupted** (Ctrl+C) — `interrupted; no schedule written`. Interrupting a search discards it, including the
-  best schedule found so far.
+* **Interrupted** (Ctrl+C) before the search, or before it found any schedule — `interrupted; no schedule written`,
+  or `interrupted before any schedule was found; no schedule written`. Interrupted after it found one, the best
+  schedule found so far is written ([Stopping early](#stopping-early-ctrlc)).
 
 ## Exit codes
 
@@ -90,4 +124,4 @@ Every problem is reported on standard error, prefixed with `tinyscheg:`, and not
 | 0    | A schedule was written. |
 | 1    | The input is valid, but no legal schedule exists. |
 | 2    | Invalid arguments or input, or the input or output file couldn't be read or written. |
-| 130  | Interrupted with Ctrl+C. |
+| 130  | Interrupted with Ctrl+C: the best schedule found so far was written, if the search had found one. |

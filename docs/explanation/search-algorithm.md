@@ -7,8 +7,8 @@ partial schedule, and branches that can't beat the best complete schedule found 
 > [!NOTE]
 > **Implemented** in [`csp/search.py`](../reference/api/search.md), tested, and used by the command line. The search
 > always runs to the end, with no limit: about 1½ minutes for the 24-hour example, while a 48-hour schedule can
-> take much longer; it can be interrupted with Ctrl+C. Making it faster is
-> [future work](future-work.md#search-performance).
+> take much longer. It shows its [progress](#progress) as it goes, and can be stopped with Ctrl+C, keeping the best
+> schedule found so far. Making it faster is [future work](future-work.md#search-performance).
 
 ## Overview
 
@@ -117,7 +117,7 @@ the result stays deterministic. When looking for the first legal schedule, worke
 ## Branch and bound: the pocket
 
 > [!NOTE]
-> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-incrementaltrue-searchresult),
+> **Implemented**, in [`find_best_schedule`](../reference/api/search.md#find_best_scheduleproblem-constants-prunetrue-on_improvementnone-incrementaltrue-on_progressnone-keep_best_on_interruptfalse-searchresult),
 > and tested against trying every schedule on small inputs, and on shortened versions of the example, where no single
 > legal move or swap of two workers beats the schedule it finds.
 
@@ -165,6 +165,27 @@ search makes exactly the same decisions as with scoring from scratch, and finds 
 the benchmark inputs, it visits the same nodes and finds the same schedules, about 1.7 times faster (2026-11-12).
 
 When the search ends, the pocket holds the best schedule.
+
+## Progress
+
+> [!NOTE]
+> **Implemented**, and covered by tests. See
+> [ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md).
+
+Since the search runs as long as it needs, it reports how far it has got: the **share of the search space
+finished**. The root counts as 1, and each partial schedule's share is split equally among the workers tried for its
+next slot. When a branch is finished (searched to the end, pruned because it can't beat the pocket, or a dead end),
+its share is added to a running total. The total only rises, and reaches 1 exactly when the search ends.
+
+The time left is estimated from it, as the time elapsed times the share left over the share finished. That's rough,
+and labelled so: branches are tried cheapest first, so the early ones, where the good schedules are, take longest,
+while later ones are mostly pruned at once; the estimate starts high and improves as the run goes on. The share
+also advances unevenly, jumping when a large branch is pruned.
+
+The tracking only observes the search: which branches are searched, the schedule found and the node counts are
+exactly the same with or without it (checked on the example and the benchmark inputs), and it costs one addition per
+node. Ctrl+C stops the search and returns the best schedule found so far, marked as not proven the best; the
+[command line](../reference/command-line.md#stopping-early-ctrlc) writes it.
 
 ## Undo
 

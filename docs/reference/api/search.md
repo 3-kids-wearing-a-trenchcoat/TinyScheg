@@ -58,7 +58,7 @@ Everything one `assign` changed. Immutable.
 Backtracking search with forward checking. Slots are chosen by `choose_slot` and workers tried in input order, so
 the result is deterministic. Stops at the first complete, legal schedule.
 
-### `find_best_schedule(problem, constants, prune=True, on_improvement=None, incremental=True) -> SearchResult`
+### `find_best_schedule(problem, constants, prune=True, on_improvement=None, incremental=True, on_progress=None, keep_best_on_interrupt=False) -> SearchResult`
 
 [Branch and bound](../../explanation/search-algorithm.md#branch-and-bound-the-pocket): the same search, run to the
 end, keeping the best complete schedule found so far in the pocket. At every partial schedule a
@@ -77,8 +77,14 @@ is computed from scratch, and so is every complete schedule's penalty
   ADR 0027. The result is the same either way.
 * `on_improvement` — `Callable[[Penalty], None] | None`: called with the penalty of each better schedule as it's
   put in the pocket, e.g. to show progress.
+* `on_progress` — `Callable[[SearchProgress], None] | None`: called with the search's progress every
+  `PROGRESS_INTERVAL_NODES` (4096) nodes ([ADR 0035](../../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)).
+* `keep_best_on_interrupt` — `True` to return the best schedule found so far when Ctrl+C (`KeyboardInterrupt`) stops
+  the search, with `complete` set to `False`; `False` to let the interruption through, as the development tools
+  do.
 
-The search always runs to the end, however long that takes.
+The search always runs to the end, however long that takes, unless it's interrupted. The progress only observes it:
+the branches searched, the schedule found and the node counts are the same with or without it.
 
 Returns the legal schedule with the lowest penalty; of equally good schedules, the first found, so the result is
 deterministic. If there's none, it reports where the search got stuck, as `find_first_schedule` does.
@@ -90,7 +96,17 @@ The next slot to fill, by [variable ordering](../../explanation/search-algorithm
 left in its domain; among those, the one constrained with the most unassigned slots; among those, the lowest index.
 `None` if every slot is assigned. Computed by scanning the state each time; nothing is stored.
 
-### `class SearchResult(assignment, deepest, stuck_slot, penalty=None, nodes=0, pruned=0)`
+### `class SearchProgress(finished, nodes)`
+
+How far a search has got ([ADR 0035](../../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)).
+
+* `finished` — `float`, the share of the search space finished so far, from 0 to 1. The root counts as 1; a
+  partial schedule's share is split equally among the workers tried for its next slot, and a branch's share is
+  added when the branch is finished: searched to the end, pruned, or a dead end (a domain emptied by forward
+  checking). It only ever rises, and reaches 1 (up to rounding) when the search ends.
+* `nodes` — `int`, the (partial) schedules visited so far.
+
+### `class SearchResult(assignment, deepest, stuck_slot, penalty=None, nodes=0, pruned=0, complete=True, finished=1.0)`
 
 * `assignment` — `tuple[int, ...] | None`: a worker index per slot, or `None` if no legal schedule exists.
 * `deepest` — `int`, the most slots the search had filled at once (all of them if it found a schedule).
@@ -101,6 +117,10 @@ left in its domain; among those, the one constrained with the most unassigned sl
   `find_first_schedule`, or if no legal schedule exists.
 * `nodes` — `int`, how many (partial) schedules the search visited.
 * `pruned` — `int`, how many branches branch and bound cut off because they couldn't beat the pocket.
+* `complete` — `bool`, `False` for a `find_best_schedule` search stopped by Ctrl+C with `keep_best_on_interrupt`:
+  `assignment` is then the best schedule found so far, not proven the best (`None` if none was found yet), and its
+  `penalty` is computed from scratch.
+* `finished` — `float`, the share of the search space finished: 1 for a search that ran to the end.
 
 The stuck slot is where the search found out, not necessarily the cause: forward checking stops an assignment as soon
 as it leaves some *other* slot with no workers, so the actual conflict may be a slot or two later. Since a slot with

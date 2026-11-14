@@ -57,7 +57,8 @@ minimal set of conflicting requirements.
 > blocked [tuning](tuning.md), and on 2026-11-12, symmetry breaking within shifts
 > ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)) and look-ahead bounds for likes and workload. The rest
 > below is deferred. Branch and bound runs
-> to the end with no limit and can be interrupted with Ctrl+C.
+> to the end with no limit; it shows its progress, and Ctrl+C stops it, keeping the best schedule found so far
+> ([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)).
 
 Measured on the example on 2026-11-11, with prototypes in which each idea was checked against brute force on small
 inputs (before ADR 0024, branch and bound proved the best 24-hour schedule, 17 slots, in about 200 s, but didn't
@@ -98,8 +99,10 @@ schedule. Still deferred:
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
-  runs for a single schedule aren't to be forbidden in real use, so the search runs to the end, and Ctrl+C stops it
-  without writing anything. Run times are watched during development instead.
+  runs for a single schedule aren't to be forbidden in real use, so the search runs to the end. Instead, since
+  2026-11-14 ([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)), it shows its
+  progress with a rough time left, and Ctrl+C stops it, writing the best schedule found so far: stopping is the
+  user's choice, made with the progress in view.
 
 ## Faster search by non-heuristic means
 

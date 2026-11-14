@@ -75,6 +75,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Input parsing and validation        | Implemented and tested    |
 | Search (backtracking, ordering)     | Implemented and tested    |
 | Branch and bound (pocket)           | Implemented and tested    |
+| Search progress, Ctrl+C keeps best  | Implemented and tested    |
 | Undo (change records)               | Implemented and tested    |
 | Scoring parameters and constants    | Implemented and tested    |
 | Scoring penalties                   | Implemented and tested    |
