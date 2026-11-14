@@ -182,15 +182,22 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
   everyone who was available for it and had its role that day, not only for whoever worked it
 - [x] **Rests measured in available time** ([ADR 0038](decisions/0038-rests-count-only-available-time.md)):
   unavailable time inside a rest counts as neither work nor rest; the hard minimum rest stays on the clock
-- [ ] Re-check the weights against the corrected audit
+- [x] **The weights re-checked** ([ADR 0039](decisions/0039-default-weights-from-the-users-trade-offs.md)): set from
+  the user's trade-offs, likes : workload : rest = 0.45 : 1 : 0.25 and neutral partner 0.44, judged by the
+  user's rules first, measures that don't come from the audit second and the audit last; the trade-offs tested at
+  the defaults
+- [ ] **A workload bound in whole slots**: the heavier workload weight made the search 3–7 times slower, and
+  `confirm_01` about 2.3 hours, probably because the bound spreads the remaining work as if it could be split
+  finely; a bound that hands it out in whole slots, exact, so that results stay the same
+  ([future work](explanation/future-work.md#search-performance))
 
 ## Later
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
-- [ ] Faster search: stronger pruning, e.g. a rest look-ahead or a tighter workload bound, one that hands out the
-      remaining work in whole slots (tried 2026-11-13 and not worth it: workload caps that account for overlaps;
-      symmetry between identical workers, rare in the benchmark)
+- [ ] Faster search: stronger pruning, e.g. a rest look-ahead (tried 2026-11-13 and not worth it: workload caps that
+      account for overlaps; symmetry between identical workers, rare in the benchmark; a workload bound in whole
+      slots is scheduled in Phase 8)
 - [ ] Faster search by non-heuristic means: parallelization, a compiled core, optionally domains as bitsets (PyPy
       adopted for development runs, ADR 0033)
 - [ ] Explaining more fully why an input is infeasible

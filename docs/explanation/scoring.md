@@ -94,21 +94,23 @@ $$
 such that $\alpha ,\beta \in \mathbb{R}$ and $0 < \alpha < \beta / 2$.
 That is, liked workers produce no penalty, workers who are neither liked nor disliked produce a relatively small
 penalty, and disliked workers produce a bigger penalty. Since the like score is divided by $\beta$ to normalize it
-(below), only the ratio $\alpha / \beta$ matters; it's a [parameter](#parameters), 1/3 by default. Dislikes are soft:
+(below), only the ratio $\alpha / \beta$ matters; it's a [parameter](#parameters), 0.44 by default. Dislikes are soft:
 they're discouraged, never forbidden.
 
 **A dislike outweighs a like** ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)). Each worker rates their
 partners from their own lists, so a pair costs the sum of both sides' ratings. Measured from a neutral pairing, a
 like saves $\alpha$ and a dislike costs $\beta - \alpha$; keeping $\alpha / \beta$ below 1/2 makes the dislike
-count more. With the default 1/3, a dislike counts twice as much as a like:
+count more. With the default 0.44, a dislike counts about 1.27 times as much as a like, enough that a pair where
+one likes the other and the other dislikes them costs more than a neutral pair
+([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)):
 
-| Pair (each side's view of the other) | Cost, with $\beta = 1$ and $\alpha = 1/3$ |
+| Pair (each side's view of the other) | Cost, with $\beta = 1$ and $\alpha = 0.44$ |
 |---|---|
 | both like each other | 0 |
-| one likes, the other is neutral | 1/3 |
-| both neutral | 2/3 |
+| one likes, the other is neutral | 0.44 |
+| both neutral | 0.88 |
 | one dislikes, the other likes them | 1 — worse than a neutral pair, not cancelled out |
-| one dislikes, the other is neutral | 4/3 |
+| one dislikes, the other is neutral | 1.44 |
 | both dislike each other | 2 |
 
 At $\alpha / \beta = 1/2$, a dislike and a like would cancel out exactly (a dislike/like pair would cost the same
@@ -464,7 +466,8 @@ worst-case sequence **must start with a shift within $m$ hours of the schedule s
 ## Total score for each state
 
 For an iteration $t \in \mathbb{N}$ and three weights $a,b,c \geq 0$ such that $a + b + c = 1$ (by default
-0.57, 0.215 and 0.215; see [Parameters](#parameters)), the penalty function $\mathcal{P}(t)$ is the weighted sum:
+9/34, 20/34 and 5/34, i.e. 0.45 : 1 : 0.25; see [Parameters](#parameters)), the penalty function $\mathcal{P}(t)$
+is the weighted sum:
 
 $$
 \mathcal{P}(t) = a \cdot \mathcal{L}^{**}(t) + b \cdot \mathcal{W}^*(t) + c \cdot \mathcal{R}^{**}(t)
@@ -490,37 +493,43 @@ Every parameter has a default, defined once as a named constant in the code, and
 
 | Parameter | Symbol | Default | Input field | Allowed values |
 |-----------|--------|---------|-------------|----------------|
-| Weights of likes, workload and rest | $a$, $b$, $c$ | 0.57, 0.215, 0.215 ([ADR 0032](../decisions/0032-flat-penalty-parts.md)) | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
+| Weights of likes, workload and rest | $a$, $b$, $c$ | 9/34, 20/34, 5/34, i.e. 0.45 : 1 : 0.25 ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) | `weights: {likes, workload, rest}` | at least 0, not all 0; divided by their sum |
 | Workload power | $p$ | 2 | `workload_power` | a whole number, at least 2 |
-| Neutral partner, relative to a disliked one | $\alpha / \beta$ | 1/3 | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
+| Neutral partner, relative to a disliked one | $\alpha / \beta$ | 0.44 ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) | `neutral_partner` | more than 0, less than 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)) |
 | Shift share of a slot's load | $\sigma$ | 0.5 | `shift_share` | from 0 to 1 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)) |
 
 The rest factor $\gamma$ is no longer a parameter: it's derived from the input ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md); before, it was set by hand,
 2.5 by default, [ADR 0028](../decisions/0028-rest-factor-default-2-5.md)).
 
-What the defaults mean on the example input (`exampleInput.yml`: 9 workers, 17 slots), as changes to a schedule
-with every parameter at its default: at 24 hours, the best schedule branch and bound finds; made 48 hours long, the
-first legal one (recomputed on 2026-11-12, after [ADR 0032](../decisions/0032-flat-penalty-parts.md)):
+What the defaults mean on the example input (`exampleInput.yml`: 9 workers, 17 slots, 24 hours), as what one event
+costs for a worker of average availability and worst case, with shifts of the average length (2.8 hours; computed
+by `tools/tune.py`'s unit trade-offs, 2026-11-14):
 
-| Change to the schedule | 24 h, before weights | 24 h, weighted | 48 h, weighted |
-|------------------------|----------------------|----------------|----------------|
-| Moving a 3-hour shift from one worker to another with the same load (a gap of two shifts) | +2.1 | +0.45 | +0.43 |
-| The same with a 4-hour shift | +2.9 | +0.62 | |
-| One worker paired with someone they dislike instead of a neutral partner | +0.67 | +0.38 | +0.38 |
-| One hour of rest below target (before ADR 0036) | +0.62 to +1.69 | +0.13 to +0.36 | +0.17 to +0.25 |
+| Event | Before weights | Weighted |
+|-------|----------------|----------|
+| A like, instead of a neutral partner | 0.44 | 0.12 |
+| A dislike, instead of a neutral partner | 0.56 | 0.15 |
+| A worker's first short rest (an average shift's length below target) | 0.82 | 0.12 |
+| Their second | 2.45 | 0.36 |
+| One worker resting at the minimum twice (6 hours, 3.8 below the target each time) | 5.81 | 0.85 |
+| One extra shift (the others taking one fewer between them) | 1 | 0.59 |
+| An avoidable gap of two shifts (one shift moved between two workers with the same load) | 2 | 1.18 |
 
-* **The same at any length:** a two-shift gap and a disliked pairing cost the same at 48 hours as at 24. An hour of
-  rest costs the same *on average*; for any one worker it depends on how short their rests could be compared with
-  the others', so the range shifts a little with the schedule.
-* **Rest, since [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md):** an hour short no longer costs a fixed amount. On the example, one typical target is
-  $\tau \approx 9.8$ hours, and for a worker with an average worst case, a worker's first hour short costs +0.10 before
-  weights (+0.02 weighted), the second +0.31 (+0.07), the fifth +0.92 (+0.20), the tenth +1.95 (+0.42). The weights
-  were set before this change, so they're to be checked again.
-* **Workload:** a gap in 4-hour shifts costs about 1.4 times a gap in 3-hour ones. With hours alone it would be
-  about 1.8 times ($(4/3)^2$); with the shift share at 0.5, part of each shift's load is the same whatever its length.
-* On this input, a two-shift gap costs a little more than a disliked pairing, and an hour of short rest a little
-  less. The weights were set on the tuning inputs, so these ratios differ somewhat from input to input;
-  [tuning](tuning.md) checks the outcome against the audit rather than these figures.
+* **The user's trade-offs** ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)), which the
+  defaults were chosen to keep, and `tests/test_default_tradeoffs.py` checks: a like is worth about one short rest;
+  a dislike a little more than a like; a second short rest more than any one pairing; and an avoidable gap of two
+  shifts more than three pairings, and more than one worker resting at the minimum twice.
+* **The same at any length** ([ADR 0032](../decisions/0032-flat-penalty-parts.md)): a gap of two shifts and a
+  pairing cost the same at 48 hours as at 24.
+* **Rest:** an hour short doesn't cost a fixed amount, since each worker's shortfall is squared
+  ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). On the example, one typical
+  target is $\tau \approx 9.8$ hours, and for a worker with an average worst case, the first hour short costs +0.10
+  before weights (+0.015 weighted), the second +0.31 (+0.045), the fifth +0.92 (+0.14), the tenth +1.95 (+0.29).
+* **Workload:** a gap in 4-hour shifts costs about 1.4 times a gap in 3-hour ones (2.9 against 2.1 before weights).
+  With hours alone it would be about 1.8 times ($(4/3)^2$); with the shift share at 0.5, part of each shift's load is
+  the same whatever its length.
+* On other inputs these ratios differ, most of all for rest: what resting at the minimum costs depends on how far
+  the minimum sits below the schedule's targets, which a gap of two shifts doesn't (see ADR 0039's consequences).
 
 Scores are floating-point numbers. Computed from scratch, with sums always taken in the same order, the same state
 always gets exactly the same score, and since every operation involved is monotone under rounding, a state never

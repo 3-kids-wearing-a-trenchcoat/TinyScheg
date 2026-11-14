@@ -43,7 +43,7 @@ ADR that supersedes the old one.
 | [0019](0019-output-as-a-time-by-post-grid.md) | Output the schedule as a time-by-post grid | Accepted |
 | [0020](0020-report-where-infeasibility-was-found.md) | Report where infeasibility was found | Accepted |
 | [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
-| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md), [0028](0028-rest-factor-default-2-5.md) and [0032](0032-flat-penalty-parts.md) |
+| [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md), [0028](0028-rest-factor-default-2-5.md), [0032](0032-flat-penalty-parts.md) and [0039](0039-default-weights-from-the-users-trade-offs.md) |
 | [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
 | [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted |
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
@@ -53,13 +53,14 @@ ADR that supersedes the old one.
 | [0029](0029-schedule-history-input.md) | Schedule history: previous inputs and their schedules, read back as fixed history | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
 | [0030](0030-history-in-scoring.md) | History in scoring: the history and the new schedule scored as one | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
 | [0031](0031-history-as-the-filled-part-of-one-schedule.md) | History as the already-filled part of one schedule | Accepted |
-| [0032](0032-flat-penalty-parts.md) | Flat penalty parts: one event costs the same at any schedule length | Accepted |
+| [0032](0032-flat-penalty-parts.md) | Flat penalty parts: one event costs the same at any schedule length | Accepted, amended by [0039](0039-default-weights-from-the-users-trade-offs.md) |
 | [0033](0033-pypy-for-development-runs.md) | PyPy for development runs; the code stays Python 3.11-compatible | Accepted |
 | [0034](0034-never-back-to-back.md) | A worker is never assigned back-to-back shifts, whatever the minimum rest | Accepted |
 | [0035](0035-search-progress-and-keeping-the-best-on-interrupt.md) | The search shows its progress, and Ctrl+C keeps the best schedule found so far | Accepted |
 | [0036](0036-rest-targets-from-the-input-convex-per-worker.md) | Rest targets derived from the input, for the rest between two shifts, with each worker's shortfall squared | Accepted |
 | [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md) | Each worker's worst rest deficit counts every history slot they could have filled | Accepted |
 | [0038](0038-rests-count-only-available-time.md) | A rest counts only the time the worker was available | Accepted |
+| [0039](0039-default-weights-from-the-users-trade-offs.md) | Default weights from the user's trade-offs: likes : workload : rest = 0.45 : 1 : 0.25, neutral partner 0.44 | Accepted |
 
 ## Template
 

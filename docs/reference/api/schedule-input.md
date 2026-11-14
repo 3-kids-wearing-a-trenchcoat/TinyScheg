@@ -12,8 +12,9 @@ the CSP and output code can use it without depending on `parsing`.
 
 * `DEFAULT_MIN_REST` — `datetime.timedelta(hours=6)`, the minimum rest period when the input doesn't set one.
 * Scoring parameter defaults ([ADR 0022](../../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md)):
-  `DEFAULT_LIKES_WEIGHT = 0.57`, `DEFAULT_WORKLOAD_WEIGHT = 0.215`, `DEFAULT_REST_WEIGHT = 0.215`,
-  `DEFAULT_WORKLOAD_POWER = 2`, `DEFAULT_NEUTRAL_PARTNER = 1/3`, `DEFAULT_SHIFT_SHARE = 0.5`.
+  `DEFAULT_LIKES_WEIGHT = 9/34`, `DEFAULT_WORKLOAD_WEIGHT = 20/34`, `DEFAULT_REST_WEIGHT = 5/34` (the ratio
+  0.45 : 1 : 0.25, scaled to add up to 1; ADR 0039), `DEFAULT_WORKLOAD_POWER = 2`, `DEFAULT_NEUTRAL_PARTNER = 0.44`,
+  `DEFAULT_SHIFT_SHARE = 0.5`.
 * Limits: `MIN_WORKLOAD_POWER = 2`, `MAX_NEUTRAL_PARTNER = 0.5`.
 
 ## `class ScoringParameters(likes_weight, workload_weight, rest_weight, workload_power, neutral_partner, shift_share)`

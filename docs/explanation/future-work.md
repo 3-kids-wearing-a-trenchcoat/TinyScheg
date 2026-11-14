@@ -119,7 +119,8 @@ schedule. Still deferred:
   cheap, since a worker can always get no further shifts), caps that account for overlapping slots, and a workload
   bound that hands out the remaining work in whole slots. Today's spreads it as if it could be split finely, and the
   workload weight multiplies that gap: raising the weight from 0.38 to 1.0 (2026-11-14) took the search to about 4.5
-  times the nodes on the tuning inputs (15.6 M to 70 M), probably for that reason.
+  times the nodes on the tuning inputs (15.6 M to 70 M), probably for that reason. Scheduled next (Phase 8 of the
+  [roadmap](../roadmap.md)).
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
@@ -304,6 +305,12 @@ On `sweep_11` over two days, $\sigma = 0$ gave one worker five 2-hour shifts (10
 another two 4-hour shifts (8 hours) with one rest of 16: hours alone see the 2 extra hours, but not that they came as
 three more, shorter shifts with shorter rests. At $\sigma = 0.5$, every fully available worker had 3 or 4 shifts. So
 $\sigma$ stays at 0.5 until the rest part keeps short shifts apart in tight schedules too; then it could go to 0.
+
+Counting shifts also works the other way round, with a [dangling shift](#dangling-shifts) (`sweep_06`,
+2026-11-14). One worker has a 6-hour shift and a 1-hour shift left over at the end of the period, 7 hours against a
+peer's 4, where an even share is 5. Moving the 1-hour shift to the peer evens the hours, but at $\sigma = 0.5$ it
+counts as 1.8 hours, and as a whole extra shift for the peer, so the model keeps it where it is, at every weight
+tried; at $\sigma = 0$ it moves it. All 12 of that input's complaints with an easy fix are this one move.
 
 ## Tuning on longer schedules
 

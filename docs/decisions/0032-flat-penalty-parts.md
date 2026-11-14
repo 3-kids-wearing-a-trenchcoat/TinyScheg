@@ -2,7 +2,8 @@
 
 **Status:** Accepted. Supersedes [0015](0015-normalize-workload-by-packable-maximum.md); amends
 [0005](0005-weighted-sum-of-normalized-penalties.md) (the parts are no longer normalized to $[0, k]$) and
-[0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) (the default weights).
+[0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) (the default weights). Amended by
+[0039](0039-default-weights-from-the-users-trade-offs.md) (the default weights).
 
 ## Context
 
