@@ -59,6 +59,7 @@ ADR that supersedes the old one.
 | [0035](0035-search-progress-and-keeping-the-best-on-interrupt.md) | The search shows its progress, and Ctrl+C keeps the best schedule found so far | Accepted |
 | [0036](0036-rest-targets-from-the-input-convex-per-worker.md) | Rest targets derived from the input, for the rest between two shifts, with each worker's shortfall squared | Accepted |
 | [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md) | Each worker's worst rest deficit counts every history slot they could have filled | Accepted |
+| [0038](0038-rests-count-only-available-time.md) | A rest counts only the time the worker was available | Accepted |
 
 ## Template
 

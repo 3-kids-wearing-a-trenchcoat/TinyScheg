@@ -316,11 +316,16 @@ $$
 
 (A worker's slots never overlap, so this order is strict and unambiguous.)
 
-For every $s_i \in A_t(w)$, define the **rest period** after $s_i$:
+For every $s_i \in A_t(w)$, define the **rest period** after $s_i$, the time between it and $w$'s next shift that
+$w$ is available ([ADR 0038](../decisions/0038-rests-count-only-available-time.md)):
 
 $$
-\Delta s_i = \begin{cases} [s_{i+1}]_\text{start} - [s_i]_\text{end} & i \neq n \\ \infty & i=n \end{cases}
+\Delta s_i = \begin{cases} [s_{i+1}]_\text{start} - [s_i]_\text{end} - u_w\big([s_i]_\text{end}, [s_{i+1}]_\text{start}\big) & i \neq n \\ \infty & i=n \end{cases}
 $$
+
+where $u_w(t_1, t_2)$ is how many hours of $w$'s unavailability fall between $t_1$ and $t_2$. Unavailable time is
+neither work nor rest, as in the workload part, whatever the reason for it: a rest spanning an absence is judged by
+the time available around it. (The hard minimum rest stays on the clock.)
 
 and, for $i \neq n$, the **rest target** between $s_i$ and $s_{i+1}$: the mean of the two shifts' durations times
 the **rest factor** $\gamma$,
@@ -380,8 +385,9 @@ $$
 #### Scaling the rest deficit
 
 The minimum possible deficit for any worker at any slot is 0. Since any two slots assigned to the same worker are at
-least $m$ hours apart, $\Delta s \geq m$, so the maximum possible deficit of a rest is reached when the next
-shift starts as soon as the minimum rest period is over:
+least $m$ hours apart on the clock, $\Delta s \geq m$ unless the worker is unavailable in between, so for a worker
+available throughout, the maximum possible deficit of a rest is reached when the next shift starts as soon as the
+minimum rest period is over:
 
 $$
 d_m(s) = \max \big(0, \; r(s) - m \big)
@@ -440,7 +446,8 @@ $M_w$ is calculated **exactly**, as the most expensive path in a
   ([ADR 0037](../decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md));
 * there is an edge $s \rightarrow s'$ whenever $w$ could work $s$ and then $s'$ as consecutive shifts, i.e.
   $[s']_\text{start} - [s]_\text{end} \geq m$;
-* the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot \frac{|s| + |s'|}{2} - ([s']_\text{start} - [s]_\text{end}) \big)$.
+* the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot \frac{|s| + |s'|}{2} - \Delta \big)$, where
+  $\Delta$ is the rest between $s$ and $s'$ in available time, as above.
 
 Every legal sequence of $w$'s shifts is a path in this graph, and its total deficit is the path's total weight, so
 $M_w$ is the weight of the heaviest path. Sorting the slots by time and applying a standard

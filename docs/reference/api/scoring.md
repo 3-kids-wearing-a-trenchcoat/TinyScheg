@@ -41,6 +41,9 @@ Immutable.
   the workers with some availability; 0 if there are none.
 * `rest_unit` — $\bar{M}$, the mean `worst_deficit` of the workers who could have one; 0 if none can.
 * `rest_factor` — $\gamma$, from `rest_factor` below ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)).
+* `unavailable_at_start`, `unavailable_at_end` — `tuple[tuple[float, ...], ...]`: for each worker and slot, the
+  worker's unavailable hours before the slot starts and ends, from `unavailable_before`; a rest's available time is
+  its length less the difference ([ADR 0038](../../decisions/0038-rests-count-only-available-time.md)).
 * `rest_scale` — $\tau = \gamma \cdot \overline{|s|}$, one typical rest target (the mean slot length times $\gamma$),
   the unit each worker's squared hours short are measured in.
 * `pair_values` — `tuple[tuple[float, ...], ...]`: `pair_values[w][p]` is what workers `w` and `p` add to the likes
@@ -75,7 +78,12 @@ The rest factor and the rest targets ([ADR 0036](../../decisions/0036-rest-targe
 * `rest_target` — the target for the rest between two consecutive shifts of a worker,
   $\gamma \cdot (\text{earlier} + \text{later}) / 2$: the same two shifts get the same target in either order.
 
-### `worst_deficit(ranges, min_rest, rest_factor) -> float`
+### `unavailable_before(unavailable, moment) -> float`
+
+How many hours of a worker's unavailability (sorted, as `Worker` keeps it; overlaps count once) fall before a
+moment; 0.0 exactly if none does ([ADR 0038](../../decisions/0038-rests-count-only-available-time.md)).
+
+### `worst_deficit(ranges, min_rest, rest_factor, unavailable=()) -> float`
 
 $M_w$, as the heaviest path through a worker's possible shifts
 ([ADR 0014](../../decisions/0014-exact-worst-rest-deficit.md)):
@@ -83,8 +91,9 @@ $M_w$, as the heaviest path through a worker's possible shifts
 * `ranges` — the distinct time ranges of the slots in the worker's domain, sorted. Slots at the same time count once,
   since a worker can only work one of them.
 * There's a step from one range to a later one when it starts at least `min_rest` after the first ends.
-* Each step weighs the deficit it causes, $\max(0, \text{rest target} - \text{rest})$, the target from `rest_target`.
-  A sequence's last shift has no rest after it, so no deficit.
+* Each step weighs the deficit it causes, $\max(0, \text{rest target} - \text{rest})$, the target from `rest_target`
+  and the rest in available time: less the worker's `unavailable` time within it (ADR 0038). Which steps are legal
+  stays on the clock. A sequence's last shift has no rest after it, so no deficit.
 
 It takes $O(n^2)$ time for $n$ ranges. Tests check it against trying every legal sequence.
 
@@ -184,7 +193,8 @@ worker's term.
 before dividing by their units), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
 look-ahead),
 `pair_like_value(constants, worker, partner)` (both workers' like values of each other, from `pair_values`), `normalized_likes(constants,
-total)`, `rest_deficit(constants, earlier, later)` (one rest's deficit), `worker_deficits` and `rest_term` (above). Both modules use them, so that they do the
+total)`, `rest_deficit(constants, worker, earlier, later)` (one rest's deficit, its rest in available time),
+`worker_deficits` and `rest_term` (above). Both modules use them, so that they do the
 same arithmetic.
 
 ## `incremental` module

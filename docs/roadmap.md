@@ -180,7 +180,8 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
 - [x] **Each worker's worst rest deficit from scratch over the history**
   ([ADR 0037](decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md)): a history slot counts for
   everyone who was available for it and had its role that day, not only for whoever worked it
-- [ ] **Rests measured in available time:** unavailable time inside a rest counts as neither work nor rest
+- [x] **Rests measured in available time** ([ADR 0038](decisions/0038-rests-count-only-available-time.md)):
+  unavailable time inside a rest counts as neither work nor rest; the hard minimum rest stays on the clock
 - [ ] Re-check the weights against the corrected audit
 
 ## Later

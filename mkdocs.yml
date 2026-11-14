@@ -95,6 +95,7 @@ nav:
       - 0035 Search progress and Ctrl+C: decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md
       - 0036 Rest targets from the input: decisions/0036-rest-targets-from-the-input-convex-per-worker.md
       - 0037 Worst rest deficit over the history: decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md
+      - 0038 Rests count only available time: decisions/0038-rests-count-only-available-time.md
 
 markdown_extensions:
   - admonition
