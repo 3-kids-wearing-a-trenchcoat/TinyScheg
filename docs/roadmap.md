@@ -116,8 +116,8 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
   3–4 minutes for 24 hours; 48 hours and more much longer) and can be interrupted with Ctrl+C; the measurements are
   in [Future work](explanation/future-work.md#search-performance). (Revisited during tuning, below: the 24-hour
   example took about 10 seconds after the tuning speed-ups; at the weights of ADR 0039, with the bound of ADR 0040,
-  it takes about half a minute, 9 seconds on PyPy (2026-11-15). 48 hours is still out of practical reach: the
-  48-hour example's progress estimate was about an hour on PyPy.)
+  it takes about half a minute in one process, 9 seconds on PyPy (2026-11-15). The 48-hour example takes about 12
+  minutes on PyPy with the parallel search of Phase 9, against an estimated hour in one process.)
 - [x] Use branch and bound on the command line, reporting each better schedule found as it goes; the example is
   now 24 hours long, so that it finishes
 - [x] Check that no simple legal swap lowers the chosen schedule's penalty: no single legal move or swap beats branch
@@ -220,7 +220,8 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example)
-- [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them
+- [ ] Tuning: check the defaults on 48-hour schedules, including load within a day (now within reach: the 48-hour
+      example takes about 12 minutes on PyPy in parallel, 2026-11-15)
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
       wrong (see `explanation/future-work.md`)
 - [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one

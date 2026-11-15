@@ -181,5 +181,6 @@ workload 0.38's first period, avoidable gap and all
 * The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
 * Benchmarks are small (16–24 hours) so that branch and bound finishes; the longer tiers check that results carry
   over. Since a period of 24 hours or less is itself the day, the audit's load in any day only adds anything on
-  longer inputs, so load within a day can only be studied on 48-hour inputs, if any finish (the 48-hour example
-  still didn't in 15 minutes on PyPy, 2026-11-15).
+  longer inputs, so load within a day can only be studied on 48-hour inputs. Those are now within reach: with the
+  parallel search ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), the 48-hour example
+  takes about 12 minutes on PyPy (2026-11-15).

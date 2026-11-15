@@ -100,7 +100,9 @@ finish a 48-hour one, 32 slots, in 5 minutes, nor a 72-hour one, 47 slots, in 10
 As implemented then, the command line proved the 24-hour example in about 100 s. Cheapest-first finds good schedules
 far sooner, but costs time per step, so on some inputs the bound alone would be faster. Neither finished a 48-hour
 schedule. (On 2026-11-15, with everything below and the weights of ADR 0039, the 24-hour example takes about 30 s, 9 s
-on PyPy; the 48-hour example still didn't finish in 15 minutes on PyPy, its progress estimating about an hour.)
+on PyPy, in one process; the 48-hour example still didn't finish in 15 minutes, its progress estimating about an
+hour. In parallel, [ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md), it takes about 12
+minutes on PyPy, its best schedule found at 9½.)
 Still deferred:
 
 * **Symmetry breaking between workers.** Within a shift it's done (ADR 0025): on the one benchmark input with
@@ -337,12 +339,14 @@ tried; at $\sigma = 0$ it moves it. All 12 of that input's complaints with an ea
 ## Tuning on longer schedules
 
 > [!WARNING]
-> **Not yet done.** Deferred 2026-11-12, until the search can finish 48-hour inputs.
+> **Not yet done.** Deferred 2026-11-12, until the search could finish 48-hour inputs; it can now, in parallel
+> (2026-11-15).
 
 The defaults were tuned on schedules of 16 to 24 hours ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md),
 [ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)), the longest branch and bound could finish
-(the 48-hour example still didn't finish in 15 minutes on PyPy on 2026-11-15, its progress estimating about an
-hour). On those, the whole schedule is the day, so the audit's comparison of load
+(in one process, the 48-hour example still didn't finish in 15 minutes on PyPy on 2026-11-15; in parallel,
+[ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md), it takes about 12 minutes). On those,
+the whole schedule is the day, so the audit's comparison of load
 in any 24 hours adds nothing to its overall comparison. Whether the scoring keeps load even within each day of a
 longer schedule, as well as overall, can only be checked on 48-hour inputs (the multiday tier, dropped for now). The
 check: generate the tier, run the defaults on it, and see whether day-load complaints with an easy fix appear.
