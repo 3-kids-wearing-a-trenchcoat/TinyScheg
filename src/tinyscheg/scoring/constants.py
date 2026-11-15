@@ -50,7 +50,8 @@ class ScoringConstants:
     hours before slot i starts and ends, so that a rest counts only the time they were available (ADR 0038).
     pair_values[w][p] is what workers w and p add to the likes total as a pair, before
     dividing by the shift's other slots: both workers' like values of each other, computed once since the search asks
-    for them at every step.
+    for them at every step. load_classes holds the schedule's distinct slot loads, ascending, and slot_load_class[i]
+    the index of slot i's load among them, for the workload bound in whole slots (ADR 0040).
     """
     parameters: ScoringParameters
     min_rest: float
@@ -67,6 +68,8 @@ class ScoringConstants:
     unavailable_at_start: tuple[tuple[float, ...], ...]
     unavailable_at_end: tuple[tuple[float, ...], ...]
     pair_values: tuple[tuple[float, ...], ...]
+    load_classes: tuple[float, ...]
+    slot_load_class: tuple[int, ...]
 
 
 def hours(length: dt.timedelta) -> float:
@@ -99,6 +102,8 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
 
     available = [availability(worker, settings.period) for worker in workers]
     factor = rest_factor(available, slot_hours)
+    loads = tuple(load(slot.time) for slot in slots)
+    classes, slot_classes = load_classes(loads)
     worker_constants = []
     for index, worker in enumerate(workers):
         ranges = sorted({slot.time for slot, domain in zip(slots, domains) if index in domain})
@@ -113,10 +118,10 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
         slots=tuple(slots),
         shifts=tuple(shifts),
         slot_hours=slot_hours,
-        slot_load=tuple(load(slot.time) for slot in slots),
+        slot_load=loads,
         workers=tuple(worker_constants),
         shared_slots=sum(len(shift.slots) for shift in shifts if len(shift.slots) > 1),
-        workload_unit=workload_unit(worker_constants, [load(slot.time) for slot in slots], parameters.workload_power),
+        workload_unit=workload_unit(worker_constants, list(loads), parameters.workload_power),
         rest_unit=rest_unit(worker_constants),
         rest_factor=factor,
         rest_scale=factor * mean_hours,
@@ -124,7 +129,22 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
                                    for worker in workers),
         unavailable_at_end=tuple(tuple(unavailable_before(worker.unavailable, slot.time.end) for slot in slots)
                                  for worker in workers),
-        pair_values=pair_values(worker_constants, parameters.neutral_partner))
+        pair_values=pair_values(worker_constants, parameters.neutral_partner),
+        load_classes=classes,
+        slot_load_class=slot_classes)
+
+
+def load_classes(loads: Sequence[float]) -> tuple[tuple[float, ...], tuple[int, ...]]:
+    """
+    Group the slots by their load, for the workload bound in whole slots (ADR 0040). Loads are grouped only when
+    exactly equal, as slots of the same length are: a load a rounding apart gets a class of its own, which only
+    makes the bound a little looser
+    :param loads: each slot's load, in stable slot order
+    :return: (the distinct loads, ascending; for each slot, the index of its load among them)
+    """
+    classes = tuple(sorted(set(loads)))
+    index_of = {load: index for index, load in enumerate(classes)}
+    return classes, tuple(index_of[load] for load in loads)
 
 
 def like_value(worker: WorkerConstants, partner: int, neutral_partner: float) -> float:

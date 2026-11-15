@@ -11,9 +11,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tinyscheg.scoring.constants import ScoringConstants, integer_power
-from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, _water_level, likes_total, normalized_likes,
+from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, likes_total, normalized_likes,
                                        pair_like_value, rest_deficit, rest_penalty, rest_term, shift_likes_lower_bound,
-                                       worker_deficits, workload_total)
+                                       worker_deficits, workload_bound_total, workload_total)
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +24,7 @@ class _Saved:
     rest: float
     likes_bound: float
     remaining: float
+    load_class: int                              # the index of the slot's load among the load classes
     worker: int                                  # the worker assigned
     load: float                                  # their load before
     deficit: float                               # their rest deficit before
@@ -37,7 +38,8 @@ class IncrementalScore:
     The running totals of one search: the likes total over the filled pairs, the workload and rest totals, and each
     worker's load, rest deficit and slots in time order; and for the lower bound, each shift's likes look-ahead and each
     worker's workload cap. assign updates them, undo restores them; both must be called in step with the search's
-    own assignments, the latest assignment undone first.
+    own assignments, the latest assignment undone first. For the workload bound in whole slots (ADR 0040), it also
+    counts the unfilled slots of each load.
     """
 
     def __init__(self, constants: ScoringConstants, assignment: Sequence[int | None],
@@ -65,9 +67,11 @@ class IncrementalScore:
             self.likes_bound += shift_bound
         self.caps = [0.0] * len(constants.workers)
         self.remaining = 0.0
+        self.class_counts = [0] * len(constants.load_classes)  # unfilled slots per load class
         for slot, domain in enumerate(domains):
             if assignment[slot] is None:
                 self.remaining += constants.slot_load[slot]
+                self.class_counts[constants.slot_load_class[slot]] += 1
                 for worker in domain:
                     self.caps[worker] += constants.slot_load[slot]
         self._saved: list[_Saved] = []
@@ -101,19 +105,12 @@ class IncrementalScore:
                 + parameters.rest_weight * self.rest)
 
     def _workload_bound(self) -> float:
-        """workload_lower_bound, from the running loads, caps and remaining load."""
+        """workload_lower_bound, from the running loads, caps, remaining load and counts of unfilled slots."""
         constants = self.constants
         if constants.workload_unit == 0:
             return 0.0
-        power = constants.parameters.workload_power
-        pool = [(self.load[index] / worker.availability, worker.availability,
-                 (self.load[index] + self.caps[index]) / worker.availability)
-                for index, worker in enumerate(constants.workers) if worker.availability > 0]
-        level = _water_level(pool, self.remaining)
-        filled = 0.0
-        for ratio, availability, highest in pool:  # a plain loop rounds the same on every interpreter, like fsum
-            filled += availability * integer_power(min(max(ratio, level), highest), power)
-        return filled / constants.workload_unit
+        return (workload_bound_total(constants, self.load, self.caps, self.remaining, self.class_counts)
+                / constants.workload_unit)
 
     # --- assigning and undoing ---
 
@@ -146,6 +143,7 @@ class IncrementalScore:
         # from a narrowed domain can no longer take that slot's load
         caps_before: dict[int, float] = {}
         self.remaining -= constants.slot_load[slot]
+        self.class_counts[constants.slot_load_class[slot]] -= 1
         for candidate in self.domains[slot]:
             caps_before.setdefault(candidate, self.caps[candidate])
             self.caps[candidate] -= constants.slot_load[slot]
@@ -161,14 +159,15 @@ class IncrementalScore:
             self.likes_bound += new - self.shift_bounds[shift]
             self.shift_bounds[shift] = new
         likes, workload, rest, likes_bound, remaining, load, deficit = old
-        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, worker, load, deficit, position,
-                                  tuple(caps_before.items()), old_shift_bounds))
+        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, constants.slot_load_class[slot],
+                                  worker, load, deficit, position, tuple(caps_before.items()), old_shift_bounds))
 
     def undo(self) -> None:
         """Undo the latest assignment, restoring every total exactly as it was."""
         saved = self._saved.pop()
         self.likes, self.workload, self.rest = saved.likes, saved.workload, saved.rest
         self.likes_bound, self.remaining = saved.likes_bound, saved.remaining
+        self.class_counts[saved.load_class] += 1
         self.load[saved.worker] = saved.load
         self.deficits[saved.worker] = saved.deficit
         del self.slots[saved.worker][saved.position]

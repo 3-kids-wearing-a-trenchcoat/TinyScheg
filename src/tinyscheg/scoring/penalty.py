@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from tinyscheg.model.shift import Shift
 from tinyscheg.scoring.constants import (DISLIKED_PARTNER, ScoringConstants, hours, integer_power, like_value,
                                          rest_target)
+from tinyscheg.scoring.whole_slots import whole_slot_bound
 
 
 # Each worker's rest shortfall goes through deficit ** REST_POWER (ADR 0036): squared, so that the same shortfall
@@ -110,7 +111,7 @@ def lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
     """
     A lower bound on the total penalty of every complete schedule that extends a partial one (ADR 0024): the lowest
     likes penalty the shifts' pairings could still give (likes_lower_bound), the lowest workload penalty the remaining
-    hours could give (workload_lower_bound), and the rest penalty so far, which filling slots never lowers. Neither
+    slots could give (workload_lower_bound), and the rest penalty so far, which filling slots never lowers. Neither
     look-ahead assumes anything about shift lengths, so the bound holds for asymmetric schedules too.
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None for an unfilled slot
@@ -181,11 +182,10 @@ def normalized_likes(constants: ScoringConstants, total: float) -> float:
 def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int | None],
                          domains: Sequence[Sequence[int]]) -> float:
     """
-    The lowest workload penalty any completion of a partial schedule could have. The load of the unfilled
-    slots must go to workers in their domains, each worker gaining at most the load of the unfilled slots they're in
-    the domain of. Since each worker's term av * (load / av) ** p is convex, the total is lowest when the load tops
-    up the least-loaded workers to a common level of load / av, each only up to their cap, as water fills vessels of
-    different heights (Jensen's inequality). Which slots overlap is ignored, so the bound may be lower than reachable.
+    The lowest workload penalty any completion of a partial schedule could have: the higher of two bounds
+    (workload_bound_total) on how the load of the unfilled slots could go to workers in their domains, each worker
+    gaining at most the load of the unfilled slots they're in the domain of. Which slots overlap is ignored, so the
+    bound may be lower than reachable.
     :param constants: ScoringConstants
     :param assignment: a worker index per slot, or None
     :param domains: for each slot, the workers who can still fill it
@@ -193,15 +193,35 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
     """
     if constants.workload_unit == 0:
         return 0.0
-    power = constants.parameters.workload_power
     assigned_load = _assigned_load(constants, assignment)
     caps = [0.0] * len(constants.workers)
+    class_counts = [0] * len(constants.load_classes)
     remaining = 0.0
     for slot, worker in enumerate(assignment):
         if worker is None:
             remaining += constants.slot_load[slot]
+            class_counts[constants.slot_load_class[slot]] += 1
             for candidate in domains[slot]:
                 caps[candidate] += constants.slot_load[slot]
+    return workload_bound_total(constants, assigned_load, caps, remaining, class_counts) / constants.workload_unit
+
+
+def workload_bound_total(constants: ScoringConstants, assigned_load: Sequence[float], caps: Sequence[float],
+                         remaining: float, class_counts: Sequence[int]) -> float:
+    """
+    workload_lower_bound before normalizing, from the loads so far and what's left to hand out; the higher of:
+    * water-filling (ADR 0024): each worker's term av * (load / av) ** p is convex, so the total is lowest when the
+      load tops up the least-loaded workers to a common level of load / av, each only up to their cap, as water
+      fills vessels of different heights (Jensen's inequality);
+    * whole slots (ADR 0040, tinyscheg.scoring.whole_slots): each unfilled slot's load goes whole to one worker.
+    :param constants: ScoringConstants
+    :param assigned_load: each worker's load so far
+    :param caps: each worker's cap, the load of the unfilled slots in their domains
+    :param remaining: the load of the unfilled slots
+    :param class_counts: for each of constants.load_classes, how many unfilled slots have that load
+    :return: at least workload_total(assignment)
+    """
+    power = constants.parameters.workload_power
     pool: list[tuple[float, float, float]] = []  # (load / av, av, highest load / av) per worker
     for index, worker in enumerate(constants.workers):
         if worker.availability > 0:
@@ -210,7 +230,10 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
     level = _water_level(pool, remaining)
     filled = math.fsum(availability * integer_power(min(max(ratio, level), highest), power)
                        for ratio, availability, highest in pool)
-    return filled / constants.workload_unit
+    classes = [(load, count) for load, count in zip(constants.load_classes, class_counts) if count > 0]
+    whole = whole_slot_bound(power, [worker.availability for worker in constants.workers], assigned_load, caps,
+                             remaining, classes, level)
+    return filled if whole is None else max(filled, whole)
 
 
 def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> float:
