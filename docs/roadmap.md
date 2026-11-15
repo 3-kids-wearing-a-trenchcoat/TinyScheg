@@ -215,8 +215,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Faster search: stronger pruning, e.g. a rest look-ahead, or whole-slot sets per worker's own domains (a
       workload bound in whole slots was done in Phase 8, ADR 0040; tried 2026-11-13 and not worth it: workload caps
       that account for overlaps, and symmetry between identical workers, rare in the benchmark)
-- [ ] Faster search by non-heuristic means: a compiled core, optionally domains as bitsets (PyPy adopted for
-      development runs, ADR 0033; parallel search done in Phase 9, ADR 0041)
+- [x] Faster search by non-heuristic means, as far as it's worth going: PyPy for development runs (ADR 0033),
+      parallel search (Phase 9, ADR 0041), and the bound without its whole-slot part checked first (2026-11-15); a
+      compiled core and domains as bitsets decided against for now (see future work)
 - [ ] Parallel search where processes are spawned (Windows, macOS): measure the start-up cost, and reconsider the
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible

@@ -155,11 +155,13 @@ Still deferred:
 
 ## Faster search by non-heuristic means
 
-> [!IMPORTANT]
-> **Partially implemented.** Deferred 2026-11-12; PyPy adopted for development runs on 2026-11-13
-> ([ADR 0033](../decisions/0033-pypy-for-development-runs.md)); parallel search on 2026-11-15
-> ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)). A compiled core is still open, and
-> so is measuring parallel search where processes are spawned (below).
+> [!NOTE]
+> **Done, as far as it's worth going** (2026-11-15). Deferred 2026-11-12; PyPy adopted for development runs on
+> 2026-11-13 ([ADR 0033](../decisions/0033-pypy-for-development-runs.md)); parallel search on 2026-11-15
+> ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), and the same day the bound without
+> its whole-slot part checked first ([Search performance](#search-performance)). A compiled core and domains as
+> bitsets were decided against for now (below). Still open: measuring parallel search where processes are spawned
+> (below).
 
 Everything under [Search performance](#search-performance) speeds the search up by searching smarter: finding a good
 pocket sooner, or pruning more. The other way is to run the same search faster, without changing what it explores:
@@ -173,7 +175,13 @@ pocket sooner, or pruning more. The other way is to run the same search faster, 
   macOS), each loads and warms up on its own, a cost short runs would feel; it should be measured there, and the
   default reconsidered if need be, before [distribution](#accessibility-for-non-technical-users).
 * **Rewriting the hot modules in another language**, such as the search and scoring in a compiled language, called
-  from Python.
+  from Python. *Decided against for now (2026-11-15).* It's the one option with much potential left, but it needs a
+  build toolchain, either gives up PyPy or keeps two implementations, complicates the simple
+  [distribution](#accessibility-for-non-technical-users) wanted, and would have to match Python's arithmetic exactly
+  for the results to stay the same. The profile then showed one hot function (the whole-slot estimate), since made
+  cheaper, rather than a slow language throughout; with the example taking about 2 seconds in parallel, and long
+  schedules limited by how much is pruned rather than by the cost of each node, it isn't worth that cost. To be
+  reconsidered only if a real need appears that pruning can't meet.
 
 Any of these must keep the result deterministic and exactly the same (the same best penalty, and the same schedule
 among equally good ones, or a rule for which one is kept), and adding a library needs the usual justification
@@ -219,7 +227,9 @@ choosing the next slot) a bit count (`int.bit_count()`), and an emptied domain a
 handled per machine instruction. Python integers do this well and PyPy compiles it to tight code, unlike a numeric
 library such as NumPy, which pays a fixed cost per call that's larger than the work on arrays this small, and is
 slow on PyPy. Whether it pays off has to be measured: domain handling is only part of the cost per node, the
-incremental scores being the other large part.
+incremental scores being the other large part. *Decided against (2026-11-15):* profiled, forward checking was 4–7%
+of the time on PyPy and choosing the next slot 1–2%, so even a large gain there would be worth perhaps 5–10% in
+all, against rewriting every domain operation and its undo.
 
 ## Incremental scoring
 
