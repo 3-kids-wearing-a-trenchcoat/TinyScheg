@@ -28,3 +28,13 @@ confirm_01,confirm,False,2001,24,16:00,12,9,3,2,common,common,medium,18,8,1.5,68
 ,confirm,,2003,24,00:00,12,12,0,3,scarce,common,dense,,,,,,over 600 s
 confirm_02,confirm,False,2004,24,16:00,10,8,2,2,common,scarce,sparse,19,16,1.9,4.98,2.7987,
 confirm_03,confirm,True,2005,24,08:00,11,8,3,2,common,scarce,sparse,15,8,1.36,4.9,1.8411,
+,multiday,,3000,48,,,,,,,,,,,,,,no legal schedule even with the most workers
+multiday_01,multiday,False,3001,48,08:00,12,8,4,2,scarce,common,medium,27,12,2.25,406.0,37.8157,
+,multiday,,3002,48,,,,,,,,,,,,,,no legal schedule even with the most workers
+multiday_02,multiday,False,3003,48,16:00,9,9,0,2,common,common,medium,36,24,4.0,96.0,87.0741,
+multiday_03,multiday,True,3004,48,08:00,11,6,5,2,common,scarce,medium,25,12,2.27,372.0,35.3439,
+,multiday,,3005,48,,,,,,,,,,,,,,no legal schedule even with the most workers
+,multiday,,3006,48,,,,,,,,,,,,,,no legal schedule even with the most workers
+multiday_04,multiday,False,3007,48,16:00,12,11,1,2,scarce,common,sparse,31,12,2.58,1247.2,50.4008,
+multiday_05,multiday,False,3008,48,08:00,12,9,3,2,common,common,sparse,31,12,2.58,3236.4,51.9278,
+,multiday,,3009,48,,,,,,,,,,,,,,no time limit: stopped by hand after 2.5 hours
