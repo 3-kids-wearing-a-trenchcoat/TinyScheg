@@ -110,7 +110,7 @@ class _Stopped(Exception):
 class _SubtreeResult:
     """What a process found in one subtree."""
     index: int
-    best: tuple[float, tuple[int, ...]] | None  # (penalty total, assignment): the subtree's best, its first among equals
+    best: tuple[float, tuple[int, ...]] | None  # (penalty total, assignment): its best, the first among equals
     nodes: int
     pruned: int
     deepest: int
