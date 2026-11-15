@@ -21,6 +21,8 @@ def assert_matches(incremental: IncrementalScore, state: SearchState) -> None:
     constants = incremental.constants
     assert incremental.total() == pytest.approx(score(constants, state.assigned).total, abs=TOLERANCE)
     assert incremental.bound() == pytest.approx(lower_bound(constants, state.assigned, state.domains), abs=TOLERANCE)
+    # the bound without its whole-slot part, which the search checks first, is never above the full one
+    assert incremental.bound_without_whole_slots() <= incremental.bound()
 
 
 @pytest.mark.parametrize("schedule_input", small_inputs())

@@ -221,6 +221,21 @@ def workload_bound_total(constants: ScoringConstants, assigned_load: Sequence[fl
     :param class_counts: for each of constants.load_classes, how many unfilled slots have that load
     :return: at least workload_total(assignment)
     """
+    filled, level = water_filling(constants, assigned_load, caps, remaining)
+    whole = whole_slots(constants, assigned_load, caps, remaining, class_counts, level)
+    return filled if whole is None else max(filled, whole)
+
+
+def water_filling(constants: ScoringConstants, assigned_load: Sequence[float], caps: Sequence[float],
+                  remaining: float) -> tuple[float, float]:
+    """
+    The water-filling part of workload_bound_total, before normalizing
+    :param constants: ScoringConstants
+    :param assigned_load: each worker's load so far
+    :param caps: each worker's cap
+    :param remaining: the load of the unfilled slots
+    :return: (the bound, the water level the remaining load raises the workers to)
+    """
     power = constants.parameters.workload_power
     pool: list[tuple[float, float, float]] = []  # (load / av, av, highest load / av) per worker
     for index, worker in enumerate(constants.workers):
@@ -230,10 +245,24 @@ def workload_bound_total(constants: ScoringConstants, assigned_load: Sequence[fl
     level = _water_level(pool, remaining)
     filled = math.fsum(availability * integer_power(min(max(ratio, level), highest), power)
                        for ratio, availability, highest in pool)
+    return filled, level
+
+
+def whole_slots(constants: ScoringConstants, assigned_load: Sequence[float], caps: Sequence[float], remaining: float,
+                class_counts: Sequence[int], level: float) -> float | None:
+    """
+    The whole-slot part of workload_bound_total, before normalizing (tinyscheg.scoring.whole_slots)
+    :param constants: ScoringConstants
+    :param assigned_load: each worker's load so far
+    :param caps: each worker's cap
+    :param remaining: the load of the unfilled slots
+    :param class_counts: for each of constants.load_classes, how many unfilled slots have that load
+    :param level: the water level, from water_filling
+    :return: the bound, or None where it doesn't apply
+    """
     classes = [(load, count) for load, count in zip(constants.load_classes, class_counts) if count > 0]
-    whole = whole_slot_bound(power, [worker.availability for worker in constants.workers], assigned_load, caps,
-                             remaining, classes, level)
-    return filled if whole is None else max(filled, whole)
+    return whole_slot_bound(constants.parameters.workload_power, [worker.availability for worker in constants.workers],
+                            assigned_load, caps, remaining, classes, level)
 
 
 def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> float:

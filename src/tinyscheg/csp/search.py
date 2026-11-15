@@ -224,6 +224,10 @@ class _Search:
         if pocket is None:
             return False
         if self.scores is not None:
+            # The bound without its costly whole-slot part first: never above the full one, so where it already
+            # prunes, the full one would too, and the decision is the same (2026-11-15)
+            if self.scores.bound_without_whole_slots() >= pocket + NEAR_TIE_MARGIN:
+                return True
             # ADR 0027: the incremental bound decides, unless it's within NEAR_TIE_MARGIN of the pocket's penalty
             bound = self.scores.bound()
             if bound >= pocket + NEAR_TIE_MARGIN:

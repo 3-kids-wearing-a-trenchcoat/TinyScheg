@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from tinyscheg.scoring.constants import ScoringConstants, integer_power
 from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, likes_total, normalized_likes,
                                        pair_like_value, rest_deficit, rest_penalty, rest_term, shift_likes_lower_bound,
-                                       worker_deficits, workload_bound_total, workload_total)
+                                       water_filling, whole_slots, worker_deficits, workload_total)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +75,7 @@ class IncrementalScore:
                 for worker in domain:
                     self.caps[worker] += constants.slot_load[slot]
         self._saved: list[_Saved] = []
+        self._water: tuple[float, float] | None = None  # the current state's water-filling, once computed
 
     # --- the value order ---
 
@@ -98,19 +99,40 @@ class IncrementalScore:
     def bound(self) -> float:
         """The lower bound on every completion of the current schedule, as lower_bound() would give it, up to
         rounding."""
+        return self._weighted_bound(self._workload_bound())
+
+    def bound_without_whole_slots(self) -> float:
+        """
+        bound() with the workload part's water-filling alone, without its whole-slot part, which costs most of the
+        search's time. It's computed with the same expression, so it's never above bound(): where it already reaches
+        the pocket, so does bound(), and the search can decide without the whole-slot part. The water-filling is kept
+        for bound() until the next assign or undo.
+        """
+        unit = self.constants.workload_unit
+        return self._weighted_bound(self._water_filling()[0] / unit if unit else 0.0)
+
+    def _weighted_bound(self, workload: float) -> float:
+        """The bound's weighted sum, from its workload part (normalized); the same expression for both bounds."""
         constants = self.constants
         parameters = constants.parameters
         likes = normalized_likes(constants, self.likes_bound)
-        return (parameters.likes_weight * likes + parameters.workload_weight * self._workload_bound()
+        return (parameters.likes_weight * likes + parameters.workload_weight * workload
                 + parameters.rest_weight * self.rest)
+
+    def _water_filling(self) -> tuple[float, float]:
+        """water_filling of the running loads, caps and remaining load: computed once per state."""
+        if self._water is None:
+            self._water = water_filling(self.constants, self.load, self.caps, self.remaining)
+        return self._water
 
     def _workload_bound(self) -> float:
         """workload_lower_bound, from the running loads, caps, remaining load and counts of unfilled slots."""
         constants = self.constants
         if constants.workload_unit == 0:
             return 0.0
-        return (workload_bound_total(constants, self.load, self.caps, self.remaining, self.class_counts)
-                / constants.workload_unit)
+        filled, level = self._water_filling()
+        whole = whole_slots(constants, self.load, self.caps, self.remaining, self.class_counts, level)
+        return (filled if whole is None else max(filled, whole)) / constants.workload_unit
 
     # --- assigning and undoing ---
 
@@ -123,6 +145,7 @@ class IncrementalScore:
         lists them (a slot may appear more than once; its first entry holds the domain from before the assignment)
         """
         constants = self.constants
+        self._water = None
         before: dict[int, Sequence[int]] = {}
         for narrowed_slot, domain in narrowed:
             before.setdefault(narrowed_slot, domain)
@@ -165,6 +188,7 @@ class IncrementalScore:
     def undo(self) -> None:
         """Undo the latest assignment, restoring every total exactly as it was."""
         saved = self._saved.pop()
+        self._water = None
         self.likes, self.workload, self.rest = saved.likes, saved.workload, saved.rest
         self.likes_bound, self.remaining = saved.likes_bound, saved.remaining
         self.class_counts[saved.load_class] += 1

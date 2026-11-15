@@ -173,23 +173,48 @@ def _exact_evaluator(power: int, availabilities: Sequence[float], loads: Sequenc
             combinations = [(total + taken * load, used + taken)
                             for total, used in combinations for taken in range(count + 1)]
     free_load, free_count = classes[free]
+    # what doesn't change with mu, per worker with some availability: (av, x, cap, n_w, cap with the tolerance)
+    workers = [(availability, load, cap, most_slots, cap + LOAD_TOLERANCE)
+               for availability, load, cap, most_slots in zip(availabilities, loads, caps, counts) if availability > 0]
+    floor = math.floor
 
     def evaluate(mu: float) -> tuple[float, float]:
-        """LB(mu) and the load handed out, over the exact combinations."""
+        """
+        LB(mu) and the load handed out, over the exact combinations. This is most of the search's time (2026-11-15),
+        so it's written for speed: plain comparisons rather than min and max, each candidate's term computed in place
+        (as _term does, with the same arithmetic, so the same results), and the second candidate only where it
+        differs from the first.
+        """
         value, handed = mu * remaining, 0.0
-        for availability, load, cap, most_slots in zip(availabilities, loads, caps, counts):
-            if availability <= 0:
-                continue
+        for availability, load, cap, most_slots, cap_limit in workers:
             ideal = _ideal_extra(mu, power, availability, load)
             best, best_extra = _term(power, availability, load, 0.0, mu), 0.0
             for partial, used in combinations:
-                if used > most_slots or partial > cap + LOAD_TOLERANCE:
+                if used > most_slots or partial > cap_limit:
                     continue
-                most = max(0, min(free_count, most_slots - used, int((cap - partial) / free_load + LOAD_TOLERANCE)))
-                below = min(max(math.floor((ideal - partial) / free_load), 0), most)
-                for taken in (below, min(below + 1, most)):
-                    extra = partial + taken * free_load
-                    term = _term(power, availability, load, extra, mu)
+                most = int((cap - partial) / free_load + LOAD_TOLERANCE)  # the free load's count: at most this,
+                if most > most_slots - used:                              # the slots left and the count remaining
+                    most = most_slots - used
+                if most > free_count:
+                    most = free_count
+                if most < 0:
+                    most = 0
+                below = floor((ideal - partial) / free_load)  # the count just below the ideal, within [0, most]
+                if below < 0:
+                    below = 0
+                elif below > most:
+                    below = most
+                extra = partial + below * free_load
+                total = load + extra
+                term = (total * total / availability if power == 2
+                        else availability * integer_power(total / availability, power)) - mu * extra
+                if term < best:
+                    best, best_extra = term, extra
+                if below < most:  # and the count just above it
+                    extra = partial + (below + 1) * free_load
+                    total = load + extra
+                    term = (total * total / availability if power == 2
+                            else availability * integer_power(total / availability, power)) - mu * extra
                     if term < best:
                         best, best_extra = term, extra
             value += best
