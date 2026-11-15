@@ -1,7 +1,9 @@
 # `scoring` package
 
-Sources: [`src/tinyscheg/scoring/constants.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/constants.py) and
-[`src/tinyscheg/scoring/penalty.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/penalty.py)
+Sources: [`src/tinyscheg/scoring/constants.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/constants.py),
+[`src/tinyscheg/scoring/penalty.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/penalty.py),
+[`src/tinyscheg/scoring/whole_slots.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/whole_slots.py) and
+[`src/tinyscheg/scoring/incremental.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/scoring/incremental.py)
 
 See [Scoring](../../explanation/scoring.md) for the formulas and why, and
 [`ScoringParameters`](schedule-input.md#class-scoringparameterslikes_weight-workload_weight-rest_weight-workload_power-neutral_partner-shift_share)
@@ -49,6 +51,9 @@ Immutable.
 * `pair_values` — `tuple[tuple[float, ...], ...]`: `pair_values[w][p]` is what workers `w` and `p` add to the likes
   total as a pair, before dividing by the shift's other slots: both their like values of each other, from
   `pair_values`. Computed once, since the search asks for them at every step.
+* `load_classes`, `slot_load_class` — the distinct slot loads, ascending, and for each slot the index of its load
+  among them, from `load_classes`, for the workload bound in whole slots
+  ([ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md)).
 
 ### `class WorkerConstants`
 
@@ -116,6 +121,11 @@ and the average hour short cost the same at any schedule length.
 are named constants with $\beta$ as the unit: `LIKED_PARTNER = 0.0`, `DISLIKED_PARTNER = 1.0`. `pair_values` gives
 the table of every pair's value, the same worker twice included (the likes look-ahead may ask for it).
 
+### `load_classes(loads) -> tuple[tuple[float, ...], tuple[int, ...]]`
+
+The distinct loads, ascending, and each slot's index among them. Loads are grouped only when exactly equal, as slots
+of the same length are; a load a rounding apart gets a class of its own, which only loosens the bound a little.
+
 ### `hours(length) -> float`
 
 A `datetime.timedelta` in hours.
@@ -167,11 +177,24 @@ $\mathcal{L}^{**}(\text{partial})$.
 
 ### `workload_lower_bound(constants, assignment, domains) -> float`
 
-The lowest workload penalty any completion could have: the unfilled slots' load spread so that the least
-loaded workers are topped up to a common level of load per available hour ("water-filling"), which minimizes the
-sum of convex terms. Each worker can gain at most the load of the unfilled slots whose domain they're in, so a worker
-who could take little stops rising early. Which slots overlap is ignored, so it may be lower than anything
-reachable. At least $\mathcal{W}^*(\text{partial})$.
+The lowest workload penalty any completion could have: `workload_bound_total` of the loads so far, the caps and the
+unfilled slots, divided by `workload_unit`. Each worker can gain at most the load of the unfilled slots whose domain
+they're in. Which slots overlap is ignored, so it may be lower than anything reachable. At least
+$\mathcal{W}^*(\text{partial})$.
+
+### `workload_bound_total(constants, assigned_load, caps, remaining, class_counts) -> float`
+
+The workload bound before normalizing, the higher of two:
+
+* **water-filling** ([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)): the unfilled
+  slots' load spread so that the least loaded workers are topped up to a common level of load per available hour,
+  which minimizes the sum of convex terms; a worker who could take little stops rising early;
+* **whole slots** (`whole_slot_bound`, [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md)): each
+  unfilled slot's load goes whole to one worker.
+
+Parameters: `assigned_load`, each worker's load so far; `caps`, the load of the unfilled slots in each worker's
+domains; `remaining`, the load of the unfilled slots; `class_counts`, the number of unfilled slots of each of
+`load_classes`. Both `workload_lower_bound` and the `incremental` module call it, so they do the same arithmetic.
 
 ### `likes_penalty(constants, assignment) -> float`
 
@@ -205,6 +228,31 @@ total)`, `rest_deficit(constants, worker, earlier, later)` (one rest's deficit, 
 `worker_deficits` and `rest_term` (above). Both modules use them, so that they do the
 same arithmetic.
 
+## `whole_slots` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_whole_slots.py`, against brute force).
+> See [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md).
+
+### `whole_slot_bound(power, availabilities, loads, caps, remaining, classes, level) -> float | None`
+
+A lower bound on the sum of $\mathrm{av} \cdot (\text{load} / \mathrm{av})^p$ over every completion, handing out
+the unfilled slots whole, by Lagrangian relaxation: for any $\mu$,
+$LB(\mu) = \mu R + \sum_w \min_{z \in T_w} (f_w(z) - \mu z)$ is at most every completion's sum, where
+$f_w(z) = \mathrm{av}_w ((x_w + z) / \mathrm{av}_w)^p$ and $T_w$ holds every extra load worker $w$ could get.
+$T_w$ is the exact combinations of the remaining slot loads (at most `MAX_LOAD_COMBINATIONS`), or else the intervals
+$\lbrace 0 \rbrace \cup [u, L] \cup [2u, 2L] \cup \dots$; both are cut at the worker's cap and at
+$\lfloor \mathrm{cap} / u \rfloor$ slots. $\mu$ is searched from the water level's marginal cost, in `MU_STEPS`
+steps of `MU_GROWTH` times to bracket it and `MU_STEPS` halvings.
+
+* `classes` — (load, count) for every load at least one unfilled slot has, ascending.
+* `level` — the water-filling bound's level.
+* Returns the bound lowered by a relative `ROUNDING_MARGIN`, or `None` if nothing is left to fill, or a worker with
+  no availability (whose term isn't counted) could take load.
+
+Named constants: `MAX_LOAD_COMBINATIONS = 64`, `MU_STEPS = 3`, `MU_GROWTH = 1.5`, `LOAD_TOLERANCE = 1e-9` (hours;
+so that a count or cap rounding put a hair short of a whole slot still allows it), `ROUNDING_MARGIN = 1e-9`.
+
 ## `incremental` module
 
 > [!NOTE]
@@ -226,7 +274,8 @@ Methods:
 * `bound()` — the lower bound, as `lower_bound` would give it.
 * `assign(slot, worker, narrowed)` — update the totals after the search assigned the slot; `narrowed` is the change
   record's `saved_domains`, (slot, domain before) pairs. Only the assigned worker's load and rest, the shifts with a
-  slot assigned or narrowed, and the caps of the workers dropped from a domain change.
+  slot assigned or narrowed, the caps of the workers dropped from a domain, and the count of unfilled slots of the
+  slot's load change.
 * `undo()` — restore the totals from before the latest `assign`, exactly: saved values are put back, never
   subtracted.
 

@@ -45,7 +45,7 @@ ADR that supersedes the old one.
 | [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
 | [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md), [0028](0028-rest-factor-default-2-5.md), [0032](0032-flat-penalty-parts.md) and [0039](0039-default-weights-from-the-users-trade-offs.md) |
 | [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
-| [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted |
+| [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted, amended by [0040](0040-workload-bound-in-whole-slots.md) |
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
 | [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
 | [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Accepted |
@@ -61,6 +61,7 @@ ADR that supersedes the old one.
 | [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md) | Each worker's worst rest deficit counts every history slot they could have filled | Accepted |
 | [0038](0038-rests-count-only-available-time.md) | A rest counts only the time the worker was available | Accepted |
 | [0039](0039-default-weights-from-the-users-trade-offs.md) | Default weights from the user's trade-offs: likes : workload : rest = 0.45 : 1 : 0.25, neutral partner 0.44 | Accepted |
+| [0040](0040-workload-bound-in-whole-slots.md) | A workload bound in whole slots | Accepted |
 
 ## Template
 

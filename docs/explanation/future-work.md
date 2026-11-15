@@ -76,8 +76,9 @@ minimal set of conflicting requirements.
 > **Partially implemented.** Cheapest-first value ordering and a lower bound on workload were implemented on
 > 2026-11-11 ([ADR 0024](../decisions/0024-cheapest-first-value-order-and-workload-bound.md)), when search speed
 > blocked [tuning](tuning.md), and on 2026-11-12, symmetry breaking within shifts
-> ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)) and look-ahead bounds for likes and workload. The rest
-> below is deferred. Branch and bound runs
+> ([ADR 0025](../decisions/0025-order-interchangeable-slots.md)) and look-ahead bounds for likes and workload, and on
+> 2026-11-15 a workload bound in whole slots ([ADR 0040](../decisions/0040-workload-bound-in-whole-slots.md)). The
+> rest below is deferred. Branch and bound runs
 > to the end with no limit; it shows its progress, and Ctrl+C stops it, keeping the best schedule found so far
 > ([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)).
 
@@ -115,12 +116,19 @@ schedule. Still deferred:
   | + both (as implemented) | 117 s | 2.8 M | 7.1 s |
 
   (Run 12 at a time, so times are noisy; node counts aren't. Alone, the caps cost more than they save; with the
-  likes look-ahead, they cut the nodes by another 3½ times.) Still open: a rest look-ahead (none is valid that's
-  cheap, since a worker can always get no further shifts), caps that account for overlapping slots, and a workload
-  bound that hands out the remaining work in whole slots. Today's spreads it as if it could be split finely, and the
-  workload weight multiplies that gap: raising the weight from 0.38 to 1.0 (2026-11-14) took the search to about 4.5
-  times the nodes on the tuning inputs (15.6 M to 70 M), probably for that reason. Scheduled next (Phase 8 of the
-  [roadmap](../roadmap.md)).
+  likes look-ahead, they cut the nodes by another 3½ times.)
+
+  Done on 2026-11-15: a workload bound in whole slots
+  ([ADR 0040](../decisions/0040-workload-bound-in-whole-slots.md)). Water-filling spreads the remaining work as if
+  it could be split finely, and the workload weight multiplies that gap: raising the weight from 0.38 to 1.0
+  (2026-11-14) took the search to about 4.5 times the nodes on the tuning inputs (15.6 M to 70 M). Measured, almost
+  all of the slack was whole slots; roles and rest between the unfilled slots added about nothing. With the bound,
+  every benchmark input gives the same schedules, alone and as day 2, with 3–75 times fewer nodes (see the ADR);
+  `confirm_01` takes 4½ minutes instead of 2 hours.
+
+  Still open: a rest look-ahead (none is valid that's cheap, since a worker can always get no further shifts), caps
+  that account for overlapping slots, and whole-slot sets per worker that count only the slots in their own domains
+  (tighter, but they'd have to be kept up to date as forward checking narrows the domains).
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long

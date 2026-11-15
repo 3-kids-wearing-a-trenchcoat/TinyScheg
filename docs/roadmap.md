@@ -7,7 +7,7 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–7 complete; the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)). Phase 8 in progress.
+Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)).
 
 ## Phase 1: Walking skeleton
 
@@ -186,18 +186,18 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
   the user's trade-offs, likes : workload : rest = 0.45 : 1 : 0.25 and neutral partner 0.44, judged by the
   user's rules first, measures that don't come from the audit second and the audit last; the trade-offs tested at
   the defaults
-- [ ] **A workload bound in whole slots**: the heavier workload weight made the search 3–7 times slower, and
-  `confirm_01` about 2.3 hours, probably because the bound spreads the remaining work as if it could be split
-  finely; a bound that hands it out in whole slots, exact, so that results stay the same
-  ([future work](explanation/future-work.md#search-performance))
+- [x] **A workload bound in whole slots** ([ADR 0040](decisions/0040-workload-bound-in-whole-slots.md)): the heavier
+  workload weight made the search 3–7 times slower, and `confirm_01` about 2 hours, because the bound spread the
+  remaining work as if it could be split finely; the bound now also hands it out in whole slots, with exactly the
+  same results on every benchmark input
 
 ## Later
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
-- [ ] Faster search: stronger pruning, e.g. a rest look-ahead (tried 2026-11-13 and not worth it: workload caps that
-      account for overlaps; symmetry between identical workers, rare in the benchmark; a workload bound in whole
-      slots is scheduled in Phase 8)
+- [ ] Faster search: stronger pruning, e.g. a rest look-ahead, or whole-slot sets per worker's own domains (tried
+      2026-11-13 and not worth it: workload caps that account for overlaps; symmetry between identical workers, rare
+      in the benchmark; a workload bound in whole slots done in Phase 8, ADR 0040)
 - [ ] Faster search by non-heuristic means: parallelization, a compiled core, optionally domains as bitsets (PyPy
       adopted for development runs, ADR 0033)
 - [ ] Explaining more fully why an input is infeasible
