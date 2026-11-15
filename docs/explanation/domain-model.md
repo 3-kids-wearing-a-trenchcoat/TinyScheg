@@ -82,10 +82,15 @@ Slots are the unit TinyScheg actually schedules: they are the variables of the
 
 ## Schedule
 
-> [!WARNING]
-> **Not yet implemented.**
+> [!NOTE]
+> **Implemented.** See [`SearchState`](../reference/api/search.md#class-searchstateproblem) and
+> [`SearchResult`](../reference/api/search.md#class-searchresultassignment-deepest-stuck_slot-penaltynone-nodes0-pruned0-completetrue-finished10).
 
-A **schedule** is an assignment of workers to slots. While searching, the current (partial) schedule is part of the
-explicit [search state](search-algorithm.md#search-state); the [change records](search-algorithm.md#undo) used to
-undo assignments are kept by the search itself, not by the schedule. The best complete schedule found is written as
-the [output](../reference/output-format.md).
+A **schedule** is an assignment of workers to slots: a worker index per slot, in stable slot order. While searching,
+the current (partial) schedule is part of the explicit [search state](search-algorithm.md#search-state); the
+[change records](search-algorithm.md#undo) used to undo assignments are kept by the search itself, not by the
+schedule. The best complete schedule found is written as the [output](../reference/output-format.md).
+
+A schedule can continue earlier ones: with a [history](../reference/input-format.md#history), the previous schedules'
+shifts are the already-filled first part of one schedule, which the search completes
+([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)).

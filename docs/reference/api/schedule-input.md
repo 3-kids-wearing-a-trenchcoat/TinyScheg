@@ -23,15 +23,15 @@ The parameters of the [penalty score](../../explanation/scoring.md#parameters). 
 its constant above. There's no rest factor: the rest targets are derived from the input ([ADR 0036](../../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)).
 
 * `likes_weight`, `workload_weight`, `rest_weight` — the weights $a$, $b$, $c$. Each at least 0, not all 0. They're
-  **relative**: they're stored divided by their sum, so `ScoringParameters(1, 2, 1) == ScoringParameters()`.
+  **relative**: they're stored divided by their sum, so `ScoringParameters(9, 20, 5) == ScoringParameters()`.
 * `workload_power` — $p$ in $\varphi(x) = x^p$, a whole number of at least `MIN_WORKLOAD_POWER`.
 * `neutral_partner` — $\alpha / \beta$, more than 0 and less than `MAX_NEUTRAL_PARTNER` (1/2), so that a dislike
   outweighs a like ([ADR 0023](../../decisions/0023-dislikes-outweigh-likes.md)).
 * `shift_share` — $\sigma$, from 0 to 1: how much a slot's load for the workload penalty counts it as one average
   slot rather than by its hours ([ADR 0026](../../decisions/0026-workload-counts-shifts-and-hours.md)).
 
-**Raises** `TypeError` for a value that isn't a number (or, for `workload_power`, a whole number), and `ValueError`
-for one out of range; the message names the parameter.
+**Raises** `TypeError` for a value that isn't a finite number, and `ValueError` for one out of range, or a
+`workload_power` that isn't a whole number; the message names the parameter.
 
 ## `class Settings(period, min_rest=DEFAULT_MIN_REST, scoring=ScoringParameters())`
 

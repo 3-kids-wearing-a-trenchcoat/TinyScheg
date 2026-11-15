@@ -24,9 +24,10 @@ file is written and an existing one is left as it was.
 
 The schedule written is the **best** legal one: the one with the lowest
 [penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
-The search runs to the end, with no limit, which can take a while: about 10 seconds for the 24-hour
-`exampleInput.yml`, and much longer for longer schedules. Its progress is shown as it goes (below), and Ctrl+C stops
-it, writing the best schedule found so far ([Stopping early](#stopping-early-ctrlc)).
+The search runs to the end, with no limit, which can take a while: about half a minute for the 24-hour
+`exampleInput.yml` (9 seconds on [PyPy](../how-to/use-pypy.md)), and much longer for longer schedules. Its progress
+is shown as it goes (below), and Ctrl+C stops it, writing the best schedule found so far
+([Stopping early](#stopping-early-ctrlc)).
 
 If the input has a [history](input-format.md#history), workers of a previous schedule who are no longer in the input
 are named in a warning on standard error first (`tinyscheg: warning: ...`); the run goes on.
@@ -36,8 +37,8 @@ While it runs, its progress is shown on standard error
 two lines redrawn in place: the best schedule found so far, and how far the search has got:
 
 ```
-best:     penalty 8.72 (likes 2.67, workload 32.65, rest 0.85), found after 0:05
-progress: 37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough)
+best:     penalty 20.26 (likes 3.52, workload 32.65, rest 0.87), found after 0:23
+progress: 81.0% finished, 293,888 nodes, 0:26 elapsed, about 0:06 left (rough)
 ```
 
 * **Finished** is the share of the search space the search has finished: each partial schedule's share is split
@@ -49,17 +50,19 @@ progress: 37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough)
 * The block is redrawn at most every `REDRAW_SECONDS` (0.25 s), each line cut to the terminal's width. When the
   search ends, it stays as last drawn, ending in `done` (or `interrupted`), and the summary follows. Where the
   terminal doesn't understand the codes for redrawing several lines, one line is redrawn instead, the progress
-  first: `37.2% finished, 1,423,912 nodes, 0:07 elapsed, about 0:11 left (rough) | best 8.72 after 0:05`.
+  first: `81.0% finished, 293,888 nodes, 0:26 elapsed, about 0:06 left (rough) | best 20.26 after 0:23`.
 
 When standard error isn't a terminal (redirected to a file, say), each better schedule found is reported on a line
 of its own, with the seconds since the search started, and a progress line every `PLAIN_PROGRESS_SECONDS` (60 s):
 
 ```
-tinyscheg: found penalty 9.66 after 0 s
-tinyscheg: found penalty 8.81 after 1 s
-tinyscheg: found penalty 8.72 after 5 s
+tinyscheg: found penalty 20.92 after 0 s
+tinyscheg: found penalty 20.38 after 6 s
+tinyscheg: found penalty 20.26 after 23 s
 tinyscheg: 81.3% of the search finished after 60 s, 9,118,208 nodes, about 14 s left (rough)
 ```
+
+(The example ends before a minute; the last line is from a longer run.)
 
 The best schedule is often found long before the search ends: the rest of the time goes into making sure nothing
 beats it. When it ends, two lines are printed on standard output: what was written, and the schedule's penalty —
@@ -67,7 +70,7 @@ lower is better — with its three parts before weighting, e.g.:
 
 ```
 wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
-penalty 8.72 (likes 2.67, workload 32.65, rest 0.85), the best possible
+penalty 20.26 (likes 3.52, workload 32.65, rest 0.87), the best possible
 ```
 
 The penalty and each part are at least 0, each part in its own units ([Scoring](../explanation/scoring.md)); only
@@ -86,7 +89,7 @@ summary says that it isn't proven the best, and how much of the search was finis
 
 ```
 wrote exampleInput_schedule.csv: 12 shifts, 17 slots, 9 workers
-penalty 8.72 (likes 2.67, workload 32.65, rest 0.85), the best found before the search was interrupted, not proven the best (37.2% of the search finished)
+penalty 20.26 (likes 3.52, workload 32.65, rest 0.87), the best found before the search was interrupted, not proven the best (81.0% of the search finished)
 ```
 
 The exit code is still 130, so a script can tell that the run didn't finish. If no schedule has been found yet,

@@ -6,22 +6,22 @@ partial schedule, and branches that can't beat the best complete schedule found 
 
 > [!NOTE]
 > **Implemented** in [`csp/search.py`](../reference/api/search.md), tested, and used by the command line. The search
-> always runs to the end, with no limit: about 1½ minutes for the 24-hour example, while a 48-hour schedule can
-> take much longer. It shows its [progress](#progress) as it goes, and can be stopped with Ctrl+C, keeping the best
-> schedule found so far. Making it faster is [future work](future-work.md#search-performance).
+> always runs to the end, with no limit: about half a minute for the 24-hour example (9 seconds on PyPy), while a
+> 48-hour schedule can take much longer. It shows its [progress](#progress) as it goes, and can be stopped with
+> Ctrl+C, keeping the best schedule found so far. Making it faster is [future work](future-work.md#search-performance).
 
 ## Overview
 
 ```
 search(state):
-    penalty = score(state)                      # from scratch; never decreases as slots are assigned
-    if pocket exists and penalty >= pocket.penalty:
-        return                                  # prune: this branch can't beat the pocket
+    if pocket exists and lower_bound(state) >= pocket.penalty:
+        return                                  # prune: no completion of this branch can beat the pocket
     if every slot is assigned:
-        pocket = copy of state, with its penalty
+        if penalty(state) < pocket.penalty:     # scored from scratch; on a tie, the pocket stays
+            pocket = copy of state, with its penalty
         return
     slot = next slot to assign                  # MRV, then degree, then stable slot order
-    for worker in slot's domain, in stable (input) order:
+    for worker in slot's domain, cheapest first:  # by the penalty with them assigned, ties in input order
         changes = assign worker to slot, then forward check
         if no domain became empty:
             search(state)
@@ -42,11 +42,12 @@ deepest point the search reached and the slot it couldn't fill there
 The search is recursive, much like a depth-first search
 ([ADR 0002](../decisions/0002-backtracking-with-forward-checking.md)):
 
-1. Score the current state, and prune it if it can't beat the pocket (see
-   [Branch and bound](#branch-and-bound-the-pocket)).
+1. Compute a lower bound on the penalty of every completion of the current state, and prune it if it can't beat
+   the pocket (see [Branch and bound](#branch-and-bound-the-pocket)).
 2. If every slot is assigned, the state is a complete, legal schedule; compare it with the pocket.
 3. Otherwise, choose the next slot to assign (see [Variable ordering](#variable-ordering)).
-4. Try each worker in its domain in turn: assign it and propagate the effects (see
+4. Try each worker in its domain in turn (cheapest first, see [Value ordering](#value-ordering)): assign it and
+   propagate the effects (see
    [Constraint propagation](#constraint-propagation)). If no domain became empty, continue from step 1 with the
    new state.
 5. Undo the assignment and its effects before trying the next worker (see [Undo](#undo)).

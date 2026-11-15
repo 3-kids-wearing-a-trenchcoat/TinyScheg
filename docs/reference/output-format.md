@@ -1,6 +1,6 @@
 # Output format
 
-> [!IMPORTANT]
+> [!NOTE]
 > **Implemented.** The grid, the three formats and choosing the format by extension ([`output`](api/output.md)).
 
 TinyScheg writes the finished schedule as a grid of time against post
@@ -36,8 +36,8 @@ of 4-hour shifts open from 08:00 to 20:00, a schedule starting at 06:00 begins:
 | 2025-01-01T06:00:00 | 2025-01-01T07:00:00 | Enkidu & Anne |      |
 | 2025-01-01T07:00:00 | 2025-01-01T08:00:00 | Jack          |      |
 | 2025-01-01T08:00:00 | 2025-01-01T10:00:00 | Jack          | Jill |
-| 2025-01-01T10:00:00 | 2025-01-01T12:00:00 | Anne          | Jill |
-| 2025-01-01T12:00:00 | 2025-01-01T13:00:00 | Anne          | Bob  |
+| 2025-01-01T10:00:00 | 2025-01-01T12:00:00 | Siduri        | Jill |
+| 2025-01-01T12:00:00 | 2025-01-01T13:00:00 | Siduri        | Bob  |
 
 Here the front gate's 06:00–07:00 shift is cut short at the end of the night variation (Enkidu fills its
 `security` slot, which comes first in the night variation's roles, and Anne its `any` slot), its 07:00–10:00 shift covers
@@ -45,9 +45,8 @@ two rows, and so do the desk's 08:00–12:00 and the front gate's 10:00–13:00 
 
 ## Reading the output back
 
-The output is meant to be read back in by the planned
-[schedule history](../explanation/future-work.md#schedule-history) feature, so post and worker names match the input
-exactly and times are absolute. This is also why worker names must not contain `" & "`.
+The output is meant to be read back in as a [history](input-format.md#history) for the next schedule, so post and
+worker names match the input exactly and times are absolute. This is also why worker names must not contain `" & "`.
 
 A schedule is read back together with the input it was made for
 ([`read_schedule`](api/parsing.md#read_schedulepath-schedule_input-readschedule)): each shift generated from the

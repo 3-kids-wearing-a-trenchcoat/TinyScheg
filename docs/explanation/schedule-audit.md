@@ -10,9 +10,9 @@ unfairness concentrated on a few workers. It isn't part of TinyScheg's regular o
 
 ## Why a separate audit
 
-The internal penalty has to be cheap, monotone along the search and normalized, so it's a compressed summary of
-fairness. The audit has none of those constraints: it can be slow and detailed, and it describes each worker's
-experience in the terms workers actually use. Comparing the two shows where the summary misses something.
+The internal penalty has to be cheap, monotone along the search and measured in fixed units, so it's a compressed
+summary of fairness. The audit has none of those constraints: it can be slow and detailed, and it describes each
+worker's experience in the terms workers actually use. Comparing the two shows where the summary misses something.
 
 To keep the comparison meaningful, the audit is **independent**: it uses `tinyscheg.model` and `tinyscheg.parsing`
 to read the input and list the shifts, the written schedule file for the assignment

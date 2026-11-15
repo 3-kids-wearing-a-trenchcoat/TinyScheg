@@ -18,7 +18,7 @@ state, starting from `domains`.
 * `shifts` — `tuple[Shift, ...]`, in stable order.
 * `slots` — `tuple[Slot, ...]`, in stable order; `slots[i].index == i`.
 * `domains` — `tuple[tuple[int, ...], ...]`: for each slot, the indexes of the workers who can fill it, ascending.
-  Ascending worker index is input order, which is the order workers are tried in
+  Ascending worker index is input order, which breaks ties in the order workers are tried in
   (see [Search algorithm](../../explanation/search-algorithm.md#value-ordering)).
 * `neighbours` — `tuple[tuple[int, ...], ...]`: for each slot, the indexes of the slots that must get a different
   worker, ascending. Constraints are symmetric, and a slot is never its own neighbour.

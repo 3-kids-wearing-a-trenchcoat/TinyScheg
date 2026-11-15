@@ -46,7 +46,7 @@ Lays a schedule out as a grid.
   (`Problem.new_shifts`).
 * `workers` — all workers, in input order.
 * `assignment` — a worker index per slot (by `slot.index`), in stable slot order, as found by the
-  [search](search.md#find_first_scheduleproblem-searchresult).
+  [search](search.md#search-module).
 
 Every shift's start and end is a row boundary, so each shift covers whole, consecutive rows.
 

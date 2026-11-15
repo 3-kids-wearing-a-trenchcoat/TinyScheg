@@ -18,8 +18,10 @@ point, not final, but they shape how every later output is read, so the method i
 > **The audit changed on 2026-11-13** (load compared with no exchange rate between shifts and hours, shifts counted in
 > every day they overlap, short rests judged by the audited schedule's norm, and no fix that hands out a new short
 > straw; see [the audit](schedule-audit.md#load)). Every result on this page from before then was measured with the
-> old audit, so its numbers aren't comparable with later ones, and the conclusions drawn from them (the rest factor,
-> the weights) may need checking again.
+> old audit, so its numbers aren't comparable with later ones. The conclusions drawn from them have since been
+> replaced: the rest factor by one derived from the input
+> ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)), and the weights by the re-check
+> with the new audit ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).
 
 ## What's tuned, against what
 
@@ -160,8 +162,9 @@ that came out are in [ADR 0039](../decisions/0039-default-weights-from-the-users
 4. **`s4-check`** (the choice, C1 at workload 0.38 and the old defaults, on the held-back and confirm inputs, with a
    30-minute limit per solve): the same schedules as the old defaults on most inputs, better on two, worse on none;
    no 2-2-4 on the two loosest inputs, where the rule's margin is lowest. The search took 3–7 times as long as at
-   workload 0.38, and didn't prove the best schedule of `confirm_01` within the limit (about 2.3 hours, by an
-   uncapped run's progress).
+   workload 0.38, and didn't prove the best schedule of `confirm_01` within the limit (an uncapped run took 1.9
+   hours). The workload bound in whole slots ([ADR 0040](../decisions/0040-workload-bound-in-whole-slots.md)) then
+   brought it to 4½ minutes, with the same schedules on every input.
 
 A first period that's better alone can leave the next one worse: on `sweep_02`, from the same first period every
 setting gave the same second, and by the chosen setting's own scoring, the two periods together were better after
@@ -178,4 +181,5 @@ workload 0.38's first period, avoidable gap and all
 * The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
 * Benchmarks are small (16–24 hours) so that branch and bound finishes; the longer tiers check that results carry
   over. Since a period of 24 hours or less is itself the day, the audit's load in any day only adds anything on
-  longer inputs, so load within a day can only be studied on 48-hour inputs, if any finish.
+  longer inputs, so load within a day can only be studied on 48-hour inputs, if any finish (the 48-hour example
+  still didn't in 15 minutes on PyPy, 2026-11-15).

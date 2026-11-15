@@ -114,7 +114,9 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
   limit) that it needs. **None for now:** get it working first. The search runs to the end with no limit (about
   3–4 minutes for 24 hours; 48 hours and more much longer) and can be interrupted with Ctrl+C; the measurements are
   in [Future work](explanation/future-work.md#search-performance). (Revisited during tuning, below: the 24-hour
-  example now takes about 10 seconds; 48 hours is still out of reach.)
+  example took about 10 seconds after the tuning speed-ups; at the weights of ADR 0039, with the bound of ADR 0040,
+  it takes about half a minute, 9 seconds on PyPy (2026-11-15). 48 hours is still out of practical reach: the
+  48-hour example's progress estimate was about an hour on PyPy.)
 - [x] Use branch and bound on the command line, reporting each better schedule found as it goes; the example is
   now 24 hours long, so that it finishes
 - [x] Check that no simple legal swap lowers the chosen schedule's penalty: no single legal move or swap beats branch
@@ -195,18 +197,19 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
 
-- [ ] Faster search: stronger pruning, e.g. a rest look-ahead, or whole-slot sets per worker's own domains (tried
-      2026-11-13 and not worth it: workload caps that account for overlaps; symmetry between identical workers, rare
-      in the benchmark; a workload bound in whole slots done in Phase 8, ADR 0040)
+- [ ] Faster search: stronger pruning, e.g. a rest look-ahead, or whole-slot sets per worker's own domains (a
+      workload bound in whole slots was done in Phase 8, ADR 0040; tried 2026-11-13 and not worth it: workload caps
+      that account for overlaps, and symmetry between identical workers, rare in the benchmark)
 - [ ] Faster search by non-heuristic means: parallelization, a compiled core, optionally domains as bitsets (PyPy
       adopted for development runs, ADR 0033)
 - [ ] Explaining more fully why an input is infeasible
-- [ ] Audit: why some samples have no easy fix at all (seed 16 of the example)
+- [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example)
 - [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
       wrong (see `explanation/future-work.md`)
 - [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one
-      convex function, so that a liked shift makes up for a short straw (after the weight re-check)
+      convex function, so that a liked shift makes up for a short straw (deferred until the weight re-check, now
+      done)
 - [ ] Scoring: workload in hours only (shift share 0), once the rest part keeps short shifts apart in tight schedules
       too (deferred 2026-11-14)
 - [ ] A schedule that leaves the next period with no legal schedule, or a worse one: check or avoid it (found

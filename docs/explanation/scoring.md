@@ -1,6 +1,6 @@
 # Scoring
 
-> [!IMPORTANT]
+> [!NOTE]
 > **Implemented.** This page is the specification for TinyScheg's scoring, implemented in
 > [`scoring`](../reference/api/scoring.md) and used by branch and bound to find the best schedule.
 > See [ADR 0005](../decisions/0005-weighted-sum-of-normalized-penalties.md),
@@ -10,8 +10,13 @@
 > [ADR 0014](../decisions/0014-exact-worst-rest-deficit.md),
 > [ADR 0021](../decisions/0021-power-function-for-workload-fairness.md),
 > [ADR 0022](../decisions/0022-scoring-parameters-with-defaults-and-input-overrides.md),
-> [ADR 0032](../decisions/0032-flat-penalty-parts.md) and
-> [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md).
+> [ADR 0023](../decisions/0023-dislikes-outweigh-likes.md),
+> [ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md),
+> [ADR 0032](../decisions/0032-flat-penalty-parts.md),
+> [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md),
+> [ADR 0037](../decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md),
+> [ADR 0038](../decisions/0038-rests-count-only-available-time.md) and
+> [ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md).
 > This page was corrected on 2026-11-10 and the corrections confirmed on 2026-11-11; see [Corrections](#corrections).
 > Parameter defaults are listed under [Parameters](#parameters).
 
@@ -22,12 +27,13 @@ Each schedule state — **including incomplete schedules** — has a score. Scor
 
 The penalty is a sum of the penalties given by each worker, which is analogous to each worker saying how much they
 *dislike* the schedule as it currently stands. Each worker's penalty is calculated separately, from the current
-assignment and constants computed for that worker before the search. This is done by a planned `scoring` package;
+assignment and constants computed for that worker before the search. This is done by the `scoring` package;
 workers themselves hold no scoring state.
 
 The penalty is what makes the [pocket](search-algorithm.md#branch-and-bound-the-pocket) work: once a complete,
-legal schedule has been found, any partial schedule whose penalty is already higher can be pruned, since its
-penalty can only grow.
+legal schedule has been found, any partial schedule whose penalty is already as high can be pruned, since its
+penalty can only grow. (The search prunes on a lower bound that also looks ahead at the slots still unfilled; see
+[Search algorithm](search-algorithm.md#branch-and-bound-the-pocket).)
 
 The penalty must also be **deterministic and path-independent**: for a given configuration of weights and
 parameters, every state maps to exactly one penalty, regardless of how the search reached it
@@ -184,7 +190,7 @@ $\sigma \in [0, 1]$ is the **shift share** (by default 0.5; see [Parameters](#pa
 hours count; with $\sigma = 1$ every shift counts the same, however long. The blend keeps the total: the load of all
 slots together equals their hours. Naturally, $h_t(w_i)=0$ iff $A_t(w_i) = \emptyset$. With $\sigma = 0$,
 $h_t(w_i) \leq 1$, since a worker's slots lie within their availability and never overlap; with $\sigma > 0$, a
-worker with many short shifts can exceed 1, which the normalization below takes care of.
+worker with many short shifts can exceed 1, which doesn't matter, since nothing assumes a bound on it.
 Workers with $\mathrm{av}_i = 0$ can't be assigned anywhere and are left out of the workload penalty.
 
 The absolute workload of each worker doesn't matter; what matters is that it's as **fair** as possible, meaning
@@ -225,8 +231,8 @@ $\sum h_t(w_i)$ were fixed, which it isn't: when availabilities differ, the unwe
 disproportionately many hours to the most available workers (see
 [ADR 0013](../decisions/0013-availability-weighted-workload.md)).
 
-It also behaves well step by step. Assigning a slot of duration $|s|$ to $w_i$ increases $\mathcal{W}$ by
-$\mathrm{av}_i \big( \varphi(h + |s|/\mathrm{av}_i) - \varphi(h) \big) \approx |s| \cdot \varphi'(h)$, where $h$ is
+It also behaves well step by step. Assigning a slot of load $\ell(s)$ to $w_i$ increases $\mathcal{W}$ by
+$\mathrm{av}_i \big( \varphi(h + \ell(s)/\mathrm{av}_i) - \varphi(h) \big) \approx \ell(s) \cdot \varphi'(h)$, where $h$ is
 $w_i$'s current workload. Since $\varphi$ is convex, $\varphi'$ is increasing: **the higher a worker's workload, the
 higher the penalty for giving them another assignment**, regardless of how available they are.
 
@@ -447,7 +453,8 @@ $M_w$ is calculated **exactly**, as the most expensive path in a
   not only for the one who did: being passed over doesn't change a worker's worst case, being unavailable does
   ([ADR 0037](../decisions/0037-worst-rest-deficit-from-scratch-over-the-history.md));
 * there is an edge $s \rightarrow s'$ whenever $w$ could work $s$ and then $s'$ as consecutive shifts, i.e.
-  $[s']_\text{start} - [s]_\text{end} \geq m$;
+  $[s']_\text{start} - [s]_\text{end} \geq m$ and $> 0$ (never back to back,
+  [ADR 0034](../decisions/0034-never-back-to-back.md));
 * the edge's weight is the deficit it causes, $\max \big(0, \; \gamma \cdot \frac{|s| + |s'|}{2} - \Delta \big)$, where
   $\Delta$ is the rest between $s$ and $s'$ in available time, as above.
 
@@ -545,12 +552,14 @@ the corrections were confirmed on 2026-11-11:
    $\gamma$ times the rest period itself, which made the deficit $(\gamma - 1) \cdot \Delta s_i$: the longer the
    rest, the larger the penalty, and the target could never be met. It's now $\gamma \cdot |s_i|$, as the text
    ("shift length times $\gamma$") and the normalization already intended. The same typo appeared in the derivation
-   of $d_m(s)$.
+   of $d_m(s)$. *Changed on 2026-11-14* ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)):
+   the target is now $\gamma$ times the mean of the two shifts around the rest, with $\gamma$ derived from the input.
 2. **Workload weighting.** The penalty was the unweighted $\sum \varphi(h_t(w_i))$, which isn't minimized by equal
    workloads when availabilities differ. It's now weighted by availability; see
    [ADR 0013](../decisions/0013-availability-weighted-workload.md).
 3. **Workload normalization.** The two choices of $\varphi$ were normalized inconsistently ($[0,1]$ for $x^p$,
-   $[0,k]$ for $e^{ax} - 1$). Both are now normalized to $[0, k]$.
+   $[0,k]$ for $e^{ax} - 1$). Both are now normalized to $[0, k]$. *Replaced on 2026-11-12* by fixed workload units
+   ([ADR 0032](../decisions/0032-flat-penalty-parts.md)); see item 9.
 4. **Likes normalization.** $\mathcal{L}^*/\beta$ grew with the number of shifts rather than being bounded by $k$,
    so the weights' meaning depended on the schedule's size. It was then divided by its maximum,
    $\beta \cdot n_\text{shared}$, and scaled to $[0,k]$. *Undone on 2026-11-12*

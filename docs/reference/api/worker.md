@@ -15,7 +15,7 @@ Source: [`src/tinyscheg/model/worker.py`](https://github.com/3-kids-wearing-a-tr
 ## `class Worker(name, roles=frozenset(), unavailable=(), likes=frozenset(), dislikes=frozenset())`
 
 A worker who can be assigned to slots. Workers are immutable and hashable, and hold no scoring or search state:
-each worker's penalty is calculated by the planned `scoring` package (see
+each worker's penalty is calculated by the [`scoring`](scoring.md) package (see
 [Scoring](../../explanation/scoring.md)), and domains and assignments belong to the search state.
 
 **Parameters**
@@ -38,6 +38,7 @@ Any iterable is accepted for the collections; they're converted to the stored ty
 | `likes_worker(other)` | `bool` | `True` if this worker likes the `Worker` `other` (by name). |
 | `dislikes_worker(other)` | `bool` | `True` if this worker dislikes the `Worker` `other` (by name). |
 
-Workers don't need any CSP-specific ordering or comparison: since the search doesn't stop at the first solution,
-the order in which values (workers) are tried doesn't matter. See
-[ADR 0003](../../decisions/0003-variable-ordering-mrv-degree.md).
+Workers don't need any CSP-specific ordering or comparison: the search tries a slot's workers cheapest first, by the
+penalty with each assigned, ties in input order, which needs nothing from `Worker`. See
+[ADR 0003](../../decisions/0003-variable-ordering-mrv-degree.md) and
+[ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md).

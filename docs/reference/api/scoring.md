@@ -95,7 +95,8 @@ $M_w$, as the heaviest path through a worker's possible shifts
 
 * `ranges` — the distinct time ranges of the slots in the worker's domain, sorted. Slots at the same time count once,
   since a worker can only work one of them.
-* There's a step from one range to a later one when it starts at least `min_rest` after the first ends.
+* There's a step from one range to a later one when it starts at least `min_rest` after the first ends, and never
+  right as it ends ([ADR 0034](../../decisions/0034-never-back-to-back.md)).
 * Each step weighs the deficit it causes, $\max(0, \text{rest target} - \text{rest})$, the target from `rest_target`
   and the rest in available time: less the worker's `unavailable` time within it (ADR 0038). Which steps are legal
   stays on the clock. A sequence's last shift has no rest after it, so no deficit.

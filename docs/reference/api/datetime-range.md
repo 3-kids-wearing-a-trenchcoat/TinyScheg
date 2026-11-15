@@ -50,7 +50,8 @@ Ranges are immutable: their ends can't be changed after creation.
 `overlaps`, `intersection` and `gap` are symmetric: `a.gap(b) == b.gap(a)`, and so on.
 
 Two slots get a [difference constraint](../../explanation/csp-formulation.md#binary-difference-constraints) exactly
-when `a.overlaps(b) or a.gap(b) < min_rest`.
+when `a.gap(b) <= timedelta(0) or a.gap(b) < min_rest`: they overlap or touch (back to back, never allowed), or are
+less than `min_rest` apart.
 
 ## `parse_range(str_pair)`
 

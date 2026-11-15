@@ -14,25 +14,32 @@ has to be put on the import path with `PYTHONPATH=src`.
    ```bash
    python src/main.py exampleInput.yml -o schedule.csv
    ```
-   This finds the best schedule, which takes about 10 seconds (see [Command line](../reference/command-line.md)).
+   This finds the best schedule, which takes about half a minute (see [Command line](../reference/command-line.md)).
 2. Audit it against the same input:
    ```bash
    PYTHONPATH=src python tools/audit.py exampleInput.yml schedule.csv
    ```
 
-The report has a card per worker, then the group summary. On the example's best schedule, the only complaints left
-are about liked partners, which are [counted apart](../explanation/schedule-audit.md#liked-partner-complaints-are-counted-apart).
-A card looks like this:
+The report has a card per worker, then the group summary. On the example's best schedule, no worker has any
+complaint (2026-11-15). A card looks like this:
 
 ```
-Jill: 2 shifts, 7 h; available 24 h
-  rests: 9 h
+Gilgamesh: 2 shifts, 6 h; available 24 h
+  rests: 13 h
   short straws: 0 (short rest 0, disliked partner 0)
-  partners: Ninsun ×1; with someone they like: 0, with someone they dislike: 0
+  partners: Enkidu ×1, Siduri ×1; with someone they like: 1, with someone they dislike: 0
+  complaints: none
+```
+
+A worker's complaints are listed under `complaints:`, one per line, e.g. from an earlier schedule of the example:
+
+```
   complaints:
     - [1] shifts with someone they like: 0, against Gilgamesh's 2; easy fix: swapping Ninsun's front gate 2025-01-01 00:00–03:00 with Gilgamesh's front gate 2025-01-01 06:00–07:00
-    - [1] shifts with someone they like: 0, against Enkidu's 2; easy fix: swapping Ninsun's front gate 2025-01-01 00:00–03:00 with Gilgamesh's front gate 2025-01-01 06:00–07:00
 ```
+
+Liked-partner complaints like this one are
+[counted apart](../explanation/schedule-audit.md#liked-partner-complaints-are-counted-apart) in the summary.
 
 For a schedule longer than 24 hours, the card also shows the worker's busiest 24 hours.
 
@@ -61,7 +68,7 @@ This samples 30 schedules (20 by default) by shuffling the workers' order before
 penalty first, with its audit summary. It ends with the rank correlations between the penalty and the severity with
 an easy fix, and between the penalty and the total severity, and the **disagreements**: schedules among the best
 quarter by penalty with the most severity with an easy fix, named by the seed of their shuffle. 30 samples of
-the example take about 5 seconds.
+the example take about a second.
 
 The audit's thresholds are named constants at the top of `tools/audit.py`, and the sampler's at the top of
 `tools/audit_sample.py`.

@@ -7,9 +7,9 @@ score that never decreases along the search, allowing hopeless partial schedules
 
 > [!WARNING]
 > TinyScheg is a **work in progress**. It runs end to end and writes the fairest schedule that meets every hard
-> constraint, but slowly: a 24-hour schedule takes seconds to minutes, and longer ones much more. Code described as implemented
-> exists but, unless its page says it's covered by tests, **has not been tested**; an audit on 2026-11-10 found bugs
-> in all of the original code, which is being rebuilt bottom-up, module by module with tests. See the
+> constraint, but slowly: a 24-hour schedule takes seconds to minutes, and longer ones much more. The original code,
+> in which an audit on 2026-11-10 found bugs throughout, has been rebuilt bottom-up, module by module with tests;
+> every component in the [status table](#implementation-status) is now covered by them. See the
 > [Roadmap](roadmap.md).
 
 ## Roadmap
@@ -46,7 +46,7 @@ Architecture Decision Records (ADRs).
   * [Future work](explanation/future-work.md)
 * **[Decisions](decisions/README.md)** — the design decisions made so far and the reasoning behind them.
 
-Tutorials will be added once TinyScheg runs end-to-end.
+There are no tutorials yet ([future work](explanation/future-work.md#documentation)).
 
 ## Implementation status
 

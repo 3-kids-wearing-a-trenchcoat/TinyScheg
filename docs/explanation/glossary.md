@@ -9,13 +9,19 @@ checking. See [Search algorithm](search-algorithm.md#constraint-propagation).
 the shift length.
 
 **Difference constraint** (diff constraint) — A binary constraint between two slots that must be assigned
-different workers, because they overlap in time or are less than the minimum rest period apart.
+different workers, because they overlap in time, are back to back, or are less than the minimum rest period apart.
 See [CSP formulation](csp-formulation.md#binary-difference-constraints).
 
 **Domain** — The set of workers who can still be assigned to a slot.
 
 **Grid** — The output's layout: a row per time interval, a column per post, and the assigned workers' names in each
 cell. See [Output format](../reference/output-format.md).
+
+**History** — Previous schedules that a new one continues, read back from their input and schedule files: the
+already-filled first part of one schedule. See [Input format](../reference/input-format.md#history).
+
+**Lower bound** — A number no completion of a partial schedule can score below, compared with the pocket's penalty to
+prune branches that can't beat it. See [Search algorithm](search-algorithm.md#branch-and-bound-the-pocket).
 
 **Minimum rest period** — The least amount of time, in hours, that must separate two shifts assigned to the same
 worker. A hard constraint, set in the input (`min_rest`) and defaulting to 6 hours. Even at 0, a worker's shifts
@@ -26,7 +32,8 @@ broken by the **degree heuristic**: the slot with the most constraints with unas
 See [Search algorithm](search-algorithm.md#variable-ordering).
 
 **Penalty** — The score of a schedule state: lower is better, and it never decreases as more slots are assigned.
-It's the sum of each worker's own penalty. See [Scoring](scoring.md).
+It's the weighted sum of three parts, likes, workload and rest, each measured in fixed units. See
+[Scoring](scoring.md).
 
 **Pocket** — The best complete, legal schedule found so far during the search, kept for comparison with other
 schedules and for pruning. See [Search algorithm](search-algorithm.md#branch-and-bound-the-pocket).

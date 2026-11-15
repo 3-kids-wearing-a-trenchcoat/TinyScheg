@@ -1,20 +1,21 @@
 # Future work
 
-Ideas and features that have been discussed and deliberately **deferred**. Nothing on this page is implemented or
-decided; each item would get its own ADR when it's taken up. Items are listed in priority order.
+Ideas and features that have been discussed and deliberately **deferred**; each item would get its own ADR when it's
+taken up. Items are listed in priority order. Some have since been taken up, in whole or in part: their status notes
+say so, and they keep the measurements and reasoning that led there.
 
 When and in what order items are taken up is in the [Roadmap](../roadmap.md); each item deferred here is also listed
 in its "Later" section.
 
 ## Schedule history
 
-> [!WARNING]
-> **Partially implemented.** Built on 2026-11-12 ([ADR 0029](../decisions/0029-schedule-history-input.md),
-> [ADR 0030](../decisions/0030-history-in-scoring.md), [ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md));
-> the audit across schedules is still to come (Phase 7 of the [roadmap](../roadmap.md)).
+> [!NOTE]
+> **Implemented** on 2026-11-12 ([ADR 0029](../decisions/0029-schedule-history-input.md),
+> [ADR 0030](../decisions/0030-history-in-scoring.md), [ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)),
+> with the audit across schedules (Phase 7 of the [roadmap](../roadmap.md)). What's still open is below.
 
-Currently every run creates a **new** schedule, in which every worker is "fresh". When schedules are created for
-consecutive periods (typically 24–48 hours), this causes two problems at the boundary between periods:
+Without a history, every run creates a **new** schedule, in which every worker is "fresh". When schedules are created
+for consecutive periods (typically 24–48 hours), this causes two problems at the boundary between periods:
 
 * **Rest:** a worker who took the last shift of the previous schedule could be given the first shift of the new one,
   breaking the minimum rest period.
@@ -31,8 +32,10 @@ and which is scored as a whole, from scratch, so the algorithm effectively *exte
   each, so a worker who carried more before is given less now, and being away is never a debt;
 * the rest after each worker's last history shift counts like any other.
 
-Past short straws (disliked pairings, short rests) aren't compensated by this; whether they need to be is for the
-audit across schedules to show (ADR 0030).
+Past short straws are partly compensated: each worker's rest shortfall is squared over the whole schedule, history
+included ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)), so a worker who had short
+rests is spared more of them. Disliked pairings aren't; making up for them across the parts of the penalty is
+[deferred](#compensation-across-the-parts-of-the-penalty).
 
 ### A schedule that leaves the next one with no legal schedule
 
@@ -94,9 +97,11 @@ finish a 48-hour one, 32 slots, in 5 minutes, nor a 72-hour one, 47 slots, in 10
 | Both (as implemented) | 93 s | 2.53 | 2.90 (after 1.5 s) |
 | Symmetry breaking | — | — | 3.28 |
 
-As implemented, the command line proves the 24-hour example in about 100 s. Cheapest-first finds good schedules far
-sooner, but costs time per step, so on some inputs the bound alone would be faster. Neither finishes a 48-hour
-schedule. Still deferred:
+As implemented then, the command line proved the 24-hour example in about 100 s. Cheapest-first finds good schedules
+far sooner, but costs time per step, so on some inputs the bound alone would be faster. Neither finished a 48-hour
+schedule. (On 2026-11-15, with everything below and the weights of ADR 0039, the 24-hour example takes about 30 s, 9 s
+on PyPy; the 48-hour example still didn't finish in 15 minutes on PyPy, its progress estimating about an hour.)
+Still deferred:
 
 * **Symmetry breaking between workers.** Within a shift it's done (ADR 0025): on the one benchmark input with
   interchangeable slots, 43 times fewer nodes (174 s down to 4.5 s); none of the example's shifts have any. Two
@@ -139,7 +144,7 @@ schedule. Still deferred:
 
 ## Faster search by non-heuristic means
 
-> [!NOTE]
+> [!IMPORTANT]
 > **Partially implemented.** Deferred 2026-11-12; PyPy adopted for development runs on 2026-11-13
 > ([ADR 0033](../decisions/0033-pypy-for-development-runs.md)). Parallelization and a compiled core are still open.
 
@@ -154,8 +159,9 @@ pocket sooner, or pruning more. The other way is to run the same search faster, 
 
 Any of these must keep the result deterministic and exactly the same (the same best penalty, and the same schedule
 among equally good ones, or a rule for which one is kept), and adding a library needs the usual justification
-(see the project's working rules). Profiling first would show where the time actually goes: most of it is probably
-the penalty and bound, computed from scratch at every node (see [Incremental scoring](#incremental-scoring)).
+(see the project's working rules). Profiling first would show where the time actually goes (when this was written,
+the penalty and bound were computed from scratch at every node; they're now kept incrementally, see
+[Incremental scoring](#incremental-scoring)).
 
 Profiled on 2026-11-13: on the slower inputs, the search finds its best schedule within the first 10% of the run
 (59% at most); the rest is proving that nothing beats it, so a better first pocket would hardly help. A table of every
@@ -217,7 +223,7 @@ incremental updates, the workload bound's pool and the search's own bookkeeping,
 ## Dangling shifts
 
 > [!WARNING]
-> **Not decided.** Deferred until TinyScheg works end to end.
+> **Not decided.** Deferred (2026-11-10, when TinyScheg didn't yet run end to end; it does now).
 
 When a segment's length isn't a multiple of the shift length, its last shift is cut short
 ([ADR 0018](../decisions/0018-slot-generation-by-segments.md)). This is expected to be rare in real use. Options if it
@@ -271,7 +277,8 @@ a check that the penalty stays monotone along the search, and new tuning runs.
 ## Compensation across the parts of the penalty
 
 > [!WARNING]
-> **Not yet implemented.** Deferred on 2026-11-14, until the weights have been checked again.
+> **Not yet implemented.** Deferred on 2026-11-14, until the weights had been checked again; they have since
+> ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).
 
 The user (2026-11-14): a shift with someone a worker likes "is in and of itself making up for drawing the short
 straw": a liked pairing can make up for one short rest, or for being the one who has to take the extra shift in an
@@ -325,8 +332,10 @@ tried; at $\sigma = 0$ it moves it. All 12 of that input's complaints with an ea
 > [!WARNING]
 > **Not yet done.** Deferred 2026-11-12, until the search can finish 48-hour inputs.
 
-The defaults were tuned on schedules of 16 to 24 hours ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)),
-the longest branch and bound could finish. On those, the whole schedule is the day, so the audit's comparison of load
+The defaults were tuned on schedules of 16 to 24 hours ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md),
+[ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)), the longest branch and bound could finish
+(the 48-hour example still didn't finish in 15 minutes on PyPy on 2026-11-15, its progress estimating about an
+hour). On those, the whole schedule is the day, so the audit's comparison of load
 in any 24 hours adds nothing to its overall comparison. Whether the scoring keeps load even within each day of a
 longer schedule, as well as overall, can only be checked on 48-hour inputs (the multiday tier, dropped for now). The
 check: generate the tier, run the defaults on it, and see whether day-load complaints with an easy fix appear.
@@ -336,16 +345,17 @@ check: generate the tier, run the defaults on it, and see whether day-load compl
 > [!WARNING]
 > **Not yet implemented.** Low priority; deferred 2026-11-11.
 
-* **Samples with no easy fix at all.** In one sample of the example (seed 16 of `tools/audit_sample.py`), none of
-  its 74 complaints had an easy fix, though most samples have many. Worth finding out why: whether the greedy chain
-  search misses fixes there, or the schedule really has none.
+* **Samples with no easy fix at all.** In one sample of the example (seed 16 of `tools/audit_sample.py`, 2026-11-11),
+  none of its 74 complaints had an easy fix, though most samples have many. With the audit and search of 2026-11-15,
+  seed 16 has fixes, but 4 of 200 samples have none (seeds 150, 165, 174 and 190; seed 150 has 18 complaints). Worth
+  finding out why: whether the greedy chain search misses fixes there, or the schedule really has none.
 
 ## Documentation
 
 > [!WARNING]
 > **Not yet implemented.** Low priority.
 
-* **Tutorials**, once TinyScheg runs end to end.
+* **Tutorials**, now that TinyScheg runs end to end.
 * **A generated API reference** (e.g. mkdocstrings), replacing the hand-written pages in `docs/reference/api/`.
 * **Publishing the docs site**, e.g. to GitHub Pages.
 
