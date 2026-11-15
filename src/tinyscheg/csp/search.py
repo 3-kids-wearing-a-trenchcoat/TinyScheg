@@ -1,7 +1,7 @@
 """Backtracking search with forward checking: for the first legal schedule, or the best one by branch and bound."""
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from tinyscheg.csp.problem import Problem
@@ -116,6 +116,12 @@ class _Search:
         self.finished = 0.0  # the share of the search space finished (ADR 0035); it only observes the search
         self.scores = (IncrementalScore(constants, self.state.assigned, self.state.domains)
                        if constants is not None and incremental else None)
+        # Cutting the tree into subtrees for the parallel search (ADR 0041): with cut_depth set, a branch reaching
+        # that many assignments (or a complete schedule above it) isn't searched but recorded in cut, as its path of
+        # (slot, worker) assignments, in order, and its share of the search space
+        self.cut_depth: int | None = None
+        self.cut: list[tuple[tuple[tuple[int, int], ...], float]] = []
+        self.path: list[tuple[int, int]] = []  # the assignments made so far, kept only while cutting
 
     def search(self, weight: float = 1.0) -> bool:
         """
@@ -135,6 +141,9 @@ class _Search:
             self.finished += weight
             return False
         slot_index = choose_slot(self.state)
+        if self.cut_depth is not None and (slot_index is None or self.filled == self.cut_depth):
+            self.cut.append((tuple(self.path), weight))  # handed out whole; its share is finished where it's searched
+            return False
         if slot_index is None:
             self.finished += weight
             return self._complete()
@@ -150,7 +159,11 @@ class _Search:
             if changes.emptied is None:
                 if self.scores is not None:
                     self.scores.assign(slot_index, worker, changes.saved_domains)
+                if self.cut_depth is not None:
+                    self.path.append((slot_index, worker))
                 stop = self.search(share)
+                if self.cut_depth is not None:
+                    self.path.pop()
                 if self.scores is not None:
                     self.scores.undo()
                 if stop:
@@ -160,6 +173,18 @@ class _Search:
             self.state.undo(changes)
             self.filled -= 1
         return False
+
+    def start_from(self, path: Sequence[tuple[int, int]]) -> None:
+        """
+        Make the assignments of a path, as the search made them on the way to a subtree (ADR 0041): in the same order,
+        so that the incremental totals, and with them the order workers are tried in below, are exactly the same
+        :param path: (slot, worker) assignments, as cut records them
+        """
+        for slot_index, worker in path:
+            changes = self.state.assign(slot_index, worker)
+            self.filled += 1
+            if self.scores is not None:
+                self.scores.assign(slot_index, worker, changes.saved_domains)
 
     def _value_order(self, slot_index: int) -> list[int]:
         """
@@ -193,9 +218,11 @@ class _Search:
         (ADR 0027), so the decision is the same as from scratch.
         Ties keep the pocket, so a branch that can at best tie is pruned too (ADR 0017).
         """
-        if self.constants is None or self.pocket_penalty is None or not self.prune:
+        if self.constants is None or not self.prune:
             return False
-        pocket = self.pocket_penalty.total
+        pocket = self._pocket_total()
+        if pocket is None:
+            return False
         if self.scores is not None:
             # ADR 0027: the incremental bound decides, unless it's within NEAR_TIE_MARGIN of the pocket's penalty
             bound = self.scores.bound()
@@ -203,7 +230,17 @@ class _Search:
                 return True
             if bound <= pocket - NEAR_TIE_MARGIN:
                 return False
-        return lower_bound(self.constants, self.state.assigned, self.state.domains) >= pocket
+        exact = lower_bound(self.constants, self.state.assigned, self.state.domains)
+        return exact >= pocket if self._ties_lose() else exact > pocket
+
+    def _pocket_total(self) -> float | None:
+        """The penalty a schedule must beat, or None while there's nothing to beat."""
+        return self.pocket_penalty.total if self.pocket_penalty is not None else None
+
+    def _ties_lose(self) -> bool:
+        """Whether a schedule with exactly the pocket's penalty loses to it: always here (ADR 0017), not always in a
+        subtree of the parallel search (ADR 0041)."""
+        return True
 
     def _complete(self) -> bool:
         """

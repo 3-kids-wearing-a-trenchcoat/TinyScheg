@@ -1,6 +1,6 @@
 """
 The command-line interface: read an input file, search for a schedule and write it.
-Usage: python src/main.py INPUT [-o OUTPUT]
+Usage: python src/main.py INPUT [-o OUTPUT] [-j JOBS]
 """
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ import time
 from collections.abc import Sequence
 from typing import TextIO
 
+from tinyscheg.csp.parallel import default_processes, find_best_schedule_in_parallel
 from tinyscheg.csp.problem import Problem, build_problem, unfillable_slots
-from tinyscheg.csp.search import SearchProgress, SearchResult, find_best_schedule
+from tinyscheg.csp.search import SearchProgress, SearchResult
 from tinyscheg.model.shift import Slot
 from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import DEFAULT_EXTENSION, UnsupportedFormatError, write_schedule, writer_for
@@ -58,8 +59,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     input_path = pathlib.Path(arguments.input)
     output_path = pathlib.Path(arguments.output) if arguments.output else default_output_path(input_path)
+    jobs = arguments.jobs if arguments.jobs is not None else default_processes()
     try:
-        return _run(input_path, output_path)
+        return _run(input_path, output_path, jobs)
     except KeyboardInterrupt:
         _error("interrupted; no schedule written")
         return EXIT_INTERRUPTED
@@ -77,14 +79,30 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("-o", "--output",
                         help=f"the schedule file to write; its extension sets the format (default: next to the "
                              f"input, named <input name>_schedule{DEFAULT_EXTENSION})")
+    parser.add_argument("-j", "--jobs", type=_positive_int,
+                        help=f"how many processes search in parallel (default: one per processor, here "
+                             f"{default_processes()}); 1 searches in a single process. The schedule is the same "
+                             f"either way (ADR 0041)")
     return parser
 
 
-def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
+def _positive_int(text: str) -> int:
+    """An argument that must be a whole number of at least 1."""
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be a whole number of at least 1, got {text!r}")
+    return value
+
+
+def _run(input_path: pathlib.Path, output_path: pathlib.Path, jobs: int) -> int:
     """
     Read, search and write, reporting any problem on standard error
     :param input_path: pathlib.Path of the input file
     :param output_path: pathlib.Path of the schedule file to write
+    :param jobs: how many processes search in parallel (ADR 0041)
     :return: the exit code
     """
     try:
@@ -109,8 +127,8 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path) -> int:
     settings = problem.settings or schedule_input.settings
     constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
     display = _ProgressDisplay(sys.stderr)
-    result = find_best_schedule(problem, constants, on_improvement=display.improvement, on_progress=display.progress,
-                                keep_best_on_interrupt=True)
+    result = find_best_schedule_in_parallel(problem, constants, jobs, on_improvement=display.improvement,
+                                            on_progress=display.progress, keep_best_on_interrupt=True)
     display.close(result)
     if result.assignment is None or result.penalty is None:
         if not result.complete:
