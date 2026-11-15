@@ -2,7 +2,9 @@
 Generate the benchmark inputs used to tune the scoring (docs/explanation/tuning.md): varied, mostly loose schedules
 that branch and bound can solve. Deterministic: the same seeds always give the same inputs.
 Usage: PYTHONPATH=src python tools/benchmarks/generate.py [--tier NAME ...] [--jobs N]
-Candidates are tried in parallel, but taken in seed order, so the result doesn't depend on the number of jobs.
+Candidates are tried in parallel, but taken in seed order, so the result doesn't depend on the number of jobs. A
+tier searched one input at a time (the multiday tier) instead tries its candidates in turn, each search running in
+parallel processes itself (one per processor); --jobs doesn't apply to it.
 Writes tools/benchmarks/inputs/<name>.yml and tools/benchmarks/manifest.csv; existing inputs of a tier are replaced.
 """
 from __future__ import annotations
@@ -23,7 +25,8 @@ from typing import Any
 import yaml
 
 from tinyscheg.csp.problem import build_problem, unfillable_slots
-from tinyscheg.csp.search import find_best_schedule, find_first_schedule
+from tinyscheg.csp.parallel import default_processes, find_best_schedule_in_parallel
+from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.parsing.input_reader import parse_input
 from tinyscheg.scoring.constants import build_constants
 
@@ -77,20 +80,24 @@ SHIFTS = Profile(scarcity=("common",), away_chance=0.1, slack=(1, 1, 2), gate_le
 
 @dataclass(frozen=True, slots=True)
 class Tier:
-    """A group of benchmarks: their length, how many, the first seed, how long branch and bound may take, and the
-    knobs they're generated with."""
+    """
+    A group of benchmarks: their length, how many, the first seed, how long branch and bound may take, the knobs
+    they're generated with, and whether they're searched one at a time, each search in parallel processes (for inputs
+    too long to search many at once, each in one process)
+    """
     name: str
     hours: tuple[int, ...]
     count: int
     first_seed: int
     time_limit: float
     profile: Profile
+    one_at_a_time: bool = False
 
 
 TIERS = {
     "sweep": Tier("sweep", (16, 20, 24), 12, 4000, 300.0, SHIFTS),
     "confirm": Tier("confirm", (24,), 3, 2000, 600.0, STAFFED),
-    "multiday": Tier("multiday", (48,), 2, 3000, 600.0, STAFFED),
+    "multiday": Tier("multiday", (48,), 6, 3000, 1800.0, STAFFED, one_at_a_time=True),
 }
 
 
@@ -246,9 +253,11 @@ def check_requirements(document: dict[str, Any]) -> None:
 
 # --- accepting inputs ---
 
-def solve_time(document: dict[str, Any]) -> tuple[float, float, int, int]:
+def solve_time(document: dict[str, Any], processes: int = 1) -> tuple[float, float, int, int]:
     """
     Run branch and bound on an input at the default parameters
+    :param document: the input document
+    :param processes: int, how many processes the search runs in (1: the sequential search)
     :return: (seconds, penalty, slots, shared slots)
     """
     schedule_input = parse_input(document)
@@ -256,14 +265,14 @@ def solve_time(document: dict[str, Any]) -> tuple[float, float, int, int]:
     constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
                                 problem.domains)
     started = time.perf_counter()
-    result = find_best_schedule(problem, constants)
+    result = find_best_schedule_in_parallel(problem, constants, processes)
     assert result.penalty is not None
     return time.perf_counter() - started, result.penalty.total, len(problem.slots), constants.shared_slots
 
 
-def solve_within(document: dict[str, Any], limit: float) -> tuple[float, float, int, int] | None:
+def solve_within(document: dict[str, Any], limit: float, processes: int = 1) -> tuple[float, float, int, int] | None:
     """solve_time, or None if branch and bound takes longer than limit seconds."""
-    return _within(lambda: solve_time(document), limit)
+    return _within(lambda: solve_time(document, processes), limit)
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,11 +285,12 @@ class Candidate:
     solved: tuple[float, float, int, int] | None
 
 
-def try_candidate(tier: Tier, seed: int) -> Candidate:
+def try_candidate(tier: Tier, seed: int, processes: int = 1) -> Candidate:
     """
     Generate one seed's input and solve it within the tier's time limit
     :param tier: Tier
     :param seed: int
+    :param processes: int, how many processes the search runs in (1: the sequential search)
     :return: Candidate
     """
     hours = tier.hours[seed % len(tier.hours)]
@@ -288,7 +298,7 @@ def try_candidate(tier: Tier, seed: int) -> Candidate:
     if generated is None:
         return Candidate(seed, hours, None, None)
     check_requirements(generated[0])
-    return Candidate(seed, hours, generated, solve_within(generated[0], tier.time_limit))
+    return Candidate(seed, hours, generated, solve_within(generated[0], tier.time_limit, processes))
 
 
 def write_input(path: pathlib.Path, document: dict[str, Any], knobs: dict[str, Any]) -> None:
@@ -303,12 +313,17 @@ def build_tier(tier: Tier, jobs: int = DEFAULT_JOBS) -> list[dict[str, Any]]:
     Generate a tier's inputs, keeping only those branch and bound solves within the tier's time limit. Seeds are
     tried several at a time, but taken strictly in order, so the inputs kept are the same for any number of jobs.
     :param tier: Tier
-    :param jobs: int, how many candidates are tried at once
+    :param jobs: int, how many candidates are tried at once (not for a tier searched one input at a time)
     :return: a manifest row per input kept, and one per input skipped (with the reason)
     """
     rows: list[dict[str, Any]] = []
     kept = 0
     seeds = iter(range(tier.first_seed, tier.first_seed + 2 ** 31))
+    if tier.one_at_a_time:
+        # in the main process: the pool's processes couldn't start the search's own processes
+        while kept < tier.count:
+            kept += _record(tier, try_candidate(tier, next(seeds), default_processes()), kept, rows)
+        return rows
     with multiprocessing.Pool(jobs) as pool:  # leaving the block stops the candidates still running
         queued: collections.deque[Any] = collections.deque(
             pool.apply_async(try_candidate, (tier, next(seeds))) for _ in range(jobs * QUEUED_PER_JOB))

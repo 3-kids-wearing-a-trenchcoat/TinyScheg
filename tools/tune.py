@@ -10,8 +10,11 @@ Usage:
   PYTHONPATH=src python tools/tune.py reaudit STAGE          re-audit a finished stage's schedules, after the audit
                                                              changed (no new search; the old file is kept as .bak)
   PYTHONPATH=src python tools/tune.py round NAME --setting PARAM=VALUE,... [--setting ...] [--inputs GROUP]
-                                                             run a tuning round: the settings given, on a group of
-                                                             inputs (tuning, holdout or confirm), as stage NAME
+                                                 [--processes N]
+                                                             run a tuning round: the settings given ("defaults" for
+                                                             the defaults), on a group of inputs (tuning, holdout,
+                                                             confirm or multiday), as stage NAME; with --processes,
+                                                             one run at a time, each search in N processes
 Stages: baseline (the defaults, on every input), sensitivity (one parameter at a time, on the tuning inputs), and
 any number of named rounds.
 """
@@ -31,13 +34,14 @@ import signal
 import statistics
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from audit import build_context, evaluate, find_fixes, summarize, with_history
 from tinyscheg.csp.problem import Problem, build_problem
-from tinyscheg.csp.search import SearchResult, find_best_schedule
+from tinyscheg.csp.parallel import find_best_schedule_in_parallel
+from tinyscheg.csp.search import SearchResult
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_NEUTRAL_PARTNER, DEFAULT_REST_WEIGHT,
                                             DEFAULT_SHIFT_SHARE, DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT,
                                             PreviousSchedule, ScheduleInput, ScoringParameters)
@@ -50,10 +54,11 @@ BENCHMARKS = pathlib.Path(__file__).parent / "benchmarks"
 MANIFEST = BENCHMARKS / "manifest.csv"
 RESULTS = BENCHMARKS / "results"
 JOB_TIME_LIMIT = 600.0   # seconds; a run taking longer is recorded as timed out, so one setting can't stall a stage
+ONE_AT_A_TIME_TIME_LIMIT = 3600.0  # seconds; the same, for a search run in parallel processes, one run at a time
 DEFAULT_JOBS = max(1, (os.cpu_count() or 2) - 2)  # parallel runs, leaving a little of the machine free
 FIXED_STAGES = ("baseline", "sensitivity")        # every other stage is a named round
 ROUND_NAME = re.compile(r"[A-Za-z0-9_-]+")        # a round's name is also its results file's name
-INPUT_GROUPS = ("tuning", "holdout", "confirm")   # the inputs a round can run on (see group_inputs)
+INPUT_GROUPS = ("tuning", "holdout", "confirm", "multiday")  # the inputs a round can run on (see group_inputs)
 
 # sensitivity: each parameter over these values, the others at their defaults
 LIKES_SHARES = (0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6)   # the likes weight's share; workload and rest keep their ratio
@@ -162,7 +167,7 @@ def group_inputs(group: str) -> list[Benchmark]:
     """
     A group of benchmark inputs, in manifest order
     :param group: "tuning" (the sweep tier without the held-back inputs), "holdout" (the held-back inputs of every
-    tier) or "confirm" (the confirm tier)
+    tier), "confirm" (the confirm tier) or "multiday" (the multiday tier, held-back inputs included)
     :return: list of Benchmark
     """
     if group == "tuning":
@@ -171,17 +176,22 @@ def group_inputs(group: str) -> list[Benchmark]:
         return [benchmark for benchmark in benchmarks() if benchmark.holdout]
     if group == "confirm":
         return [benchmark for benchmark in benchmarks() if benchmark.tier == "confirm"]
+    if group == "multiday":
+        return [benchmark for benchmark in benchmarks() if benchmark.tier == "multiday"]
     raise ValueError(f"unknown input group {group!r}; expected one of {', '.join(INPUT_GROUPS)}")
 
 
 def parse_setting(text: str) -> Setting:
     """
     A setting from the command line: comma-separated PARAM=VALUE pairs, each PARAM a ScoringParameters field, the
-    others at their defaults; named by its pairs in field order, so that the same setting always gets the same name
+    others at their defaults; named by its pairs in field order, so that the same setting always gets the same name.
+    "defaults" is the defaults.
     :param text: str, e.g. "neutral_partner=0.25,shift_share=0.5"
     :return: Setting
     :raise ValueError: on an unknown parameter, a value of the wrong type or out of range, or a parameter given twice
     """
+    if text.strip() == DEFAULTS.name:
+        return DEFAULTS
     fields = [field.name for field in dataclasses.fields(Setting) if field.name != "name"]
     values: dict[str, float | int] = {}
     for pair in filter(None, (part.strip() for part in text.split(","))):
@@ -217,11 +227,16 @@ def _on_alarm(signum: int, frame: Any) -> None:
     raise _TimedOut
 
 
-def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any]:
+def run_one(stage: str, setting: Setting, benchmark: Benchmark, processes: int = 1) -> dict[str, Any]:
     """
     Find the best schedule for one input at one setting and audit it; then continue it for a second period, with the
     first as history, and do the same for the whole of both (a first period that leaves the second no legal schedule
     is recorded as day 2's "no schedule": a failure, since in real use the next schedule couldn't be made)
+    :param stage: str, the stage's name
+    :param setting: Setting
+    :param benchmark: Benchmark
+    :param processes: int, how many processes each search runs in (1: the sequential search, within JOB_TIME_LIMIT;
+    more: within ONE_AT_A_TIME_TIME_LIMIT)
     :return: the results row
     """
     row: dict[str, Any] = {"stage": stage, "setting": setting.name, "input": benchmark.name, "tier": benchmark.tier,
@@ -231,7 +246,7 @@ def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any
     schedule_input = read_input(benchmark.path)
     schedule_input = dataclasses.replace(schedule_input, settings=dataclasses.replace(
         schedule_input.settings, scoring=setting.parameters()))
-    problem, constants, status, seconds, result = _solve(schedule_input)
+    problem, constants, status, seconds, result = _solve(schedule_input, processes)
     row |= {"status": status, "seconds": seconds}
     if result is None or result.assignment is None or result.penalty is None:
         return row
@@ -241,7 +256,7 @@ def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any
             **measure_fields(problem, constants, result.assignment),
             "assignment": " ".join(map(str, result.assignment))}
     second = next_period(schedule_input, result.assignment)
-    problem, constants, status, seconds, result = _solve(second)
+    problem, constants, status, seconds, result = _solve(second, processes)
     row |= {f"{DAY2}status": status, f"{DAY2}seconds": seconds}
     if result is None or result.assignment is None or result.penalty is None:
         return row
@@ -251,9 +266,12 @@ def run_one(stage: str, setting: Setting, benchmark: Benchmark) -> dict[str, Any
             f"{DAY2}assignment": " ".join(map(str, result.assignment))}
 
 
-def _solve(schedule_input: ScheduleInput) -> tuple[Problem, ScoringConstants, str, float, SearchResult | None]:
+def _solve(schedule_input: ScheduleInput,
+           processes: int = 1) -> tuple[Problem, ScoringConstants, str, float, SearchResult | None]:
     """
-    Find the best schedule of an input within JOB_TIME_LIMIT
+    Find the best schedule of an input within the time limit
+    :param schedule_input: ScheduleInput
+    :param processes: int, how many processes the search runs in (see run_one)
     :return: (its Problem, its ScoringConstants, the status: "done", "no schedule" or "timed out", the seconds taken,
     the SearchResult or None if timed out)
     """
@@ -262,9 +280,9 @@ def _solve(schedule_input: ScheduleInput) -> tuple[Problem, ScoringConstants, st
     constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
     started = time.perf_counter()
     signal.signal(signal.SIGALRM, _on_alarm)
-    signal.setitimer(signal.ITIMER_REAL, JOB_TIME_LIMIT)
+    signal.setitimer(signal.ITIMER_REAL, JOB_TIME_LIMIT if processes == 1 else ONE_AT_A_TIME_TIME_LIMIT)
     try:
-        result = find_best_schedule(problem, constants)
+        result = find_best_schedule_in_parallel(problem, constants, processes)
     except _TimedOut:
         return problem, constants, "timed out", round(time.perf_counter() - started, 2), None
     finally:
@@ -404,13 +422,16 @@ def read_results(stage: str) -> list[dict[str, str]]:
         return list(csv.DictReader(file))
 
 
-def run_stage(stage: str, jobs: int, planned: list[tuple[Setting, Benchmark]] | None = None) -> None:
+def run_stage(stage: str, jobs: int, planned: list[tuple[Setting, Benchmark]] | None = None,
+              processes: int = 1) -> None:
     """
     Run every run of a stage not yet in its results file, in parallel, appending each result as it finishes and
     keeping the status file up to date
     :param stage: str, the stage's name
-    :param jobs: int, parallel runs
+    :param jobs: int, parallel runs (with processes 1)
     :param planned: the stage's runs; by default, those of a fixed stage (stage_jobs)
+    :param processes: int, 1 to run jobs runs at once, each search in one process; more to run one at a time, each
+    search in that many processes
     """
     RESULTS.mkdir(exist_ok=True)
     if results_path(stage).exists():
@@ -424,21 +445,41 @@ def run_stage(stage: str, jobs: int, planned: list[tuple[Setting, Benchmark]] | 
     new_file = not path.exists()
     started = time.time()
     status = {"stage": stage, "total": len(planned), "done_before": len(planned) - len(todo), "done": 0,
-              "timed_out": 0, "started": time.strftime("%Y-%m-%d %H:%M:%S"), "jobs": jobs, "finished": False}
+              "timed_out": 0, "started": time.strftime("%Y-%m-%d %H:%M:%S"), "jobs": jobs, "processes": processes,
+              "finished": False}
     _write_status(stage, status, started)
-    with open(path, "a", encoding="utf-8", newline="") as file, multiprocessing.Pool(jobs) as pool:
+    with open(path, "a", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, RESULT_FIELDS)
         if new_file:
             writer.writeheader()
-        for row in pool.imap_unordered(_run_job, todo):
+        for row in _finished_runs(todo, jobs, processes):
             writer.writerow(row)
             file.flush()
             status["done"] += 1
-            status["timed_out"] += row["status"] == "timed out"
+            # searches timed out, day 2's counted too
+            status["timed_out"] += (row["status"] == "timed out") + (row.get(f"{DAY2}status") == "timed out")
             status["last"] = f"{row['setting']} on {row['input']}: {row['status']}, {row['seconds']} s"
             _write_status(stage, status, started)
     status["finished"] = True
     _write_status(stage, status, started)
+
+
+def _finished_runs(todo: Sequence[tuple[str, Setting, Benchmark]], jobs: int,
+                   processes: int) -> Iterator[dict[str, Any]]:
+    """
+    The results rows of a stage's runs, as they finish
+    :param todo: the runs, each (stage, setting, benchmark)
+    :param jobs: int, parallel runs (with processes 1)
+    :param processes: int, 1 for runs in a pool of jobs processes; more for one run at a time in the main process,
+    since the pool's processes couldn't start the search's own processes
+    :return: an iterator of results rows
+    """
+    if processes > 1:
+        for job in todo:
+            yield run_one(*job, processes=processes)
+        return
+    with multiprocessing.Pool(jobs) as pool:
+        yield from pool.imap_unordered(_run_job, todo)
 
 
 def reaudit_stage(stage: str, jobs: int) -> None:
@@ -606,18 +647,19 @@ def stages() -> list[str]:
     return [*FIXED_STAGES, *sorted(rounds)]
 
 
-def run_round(name: str, settings: list[str], group: str, jobs: int) -> None:
+def run_round(name: str, settings: list[str], group: str, jobs: int, processes: int = 1) -> None:
     """
     Run a tuning round as its own stage, resumable like the others; running it again with more settings adds them
     :param name: str, the round's name
     :param settings: list of str, each a setting as parse_setting reads it
     :param group: str, the input group
     :param jobs: int, parallel runs
+    :param processes: int, see run_stage
     :raise ValueError: on a bad name, setting or group
     """
     if name in FIXED_STAGES or not ROUND_NAME.fullmatch(name):
         raise ValueError(f"a round's name must be letters, digits, - or _, and not {' or '.join(FIXED_STAGES)}")
-    run_stage(name, jobs, round_jobs([parse_setting(text) for text in settings], group))
+    run_stage(name, jobs, round_jobs([parse_setting(text) for text in settings], group), processes)
 
 
 def describe_status(stage: str) -> Iterator[str]:
@@ -654,10 +696,13 @@ def main(argv: list[str] | None = None) -> int:
     tuning_round = commands.add_parser("round", help="run a tuning round: the settings given, on a group of inputs")
     tuning_round.add_argument("name", help="the round's name, also its results file's")
     tuning_round.add_argument("--setting", action="append", required=True, metavar="PARAM=VALUE,...",
-                              help="a setting to run (repeatable); parameters not given keep their defaults")
+                              help="a setting to run (repeatable); parameters not given keep their defaults; "
+                                   "\"defaults\" for the defaults")
     tuning_round.add_argument("--inputs", choices=INPUT_GROUPS, default="tuning",
                               help="the inputs to run on (default: tuning)")
     tuning_round.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel runs (default {DEFAULT_JOBS})")
+    tuning_round.add_argument("--processes", type=int, default=1,
+                              help="run one run at a time, each search in this many processes (for long inputs)")
     arguments = parser.parse_args(argv)
     if arguments.command == "run":
         try:
@@ -667,7 +712,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
     elif arguments.command == "round":
         try:
-            run_round(arguments.name, arguments.setting, arguments.inputs, arguments.jobs)
+            if arguments.processes < 1:
+                raise ValueError("the number of processes must be at least 1")
+            run_round(arguments.name, arguments.setting, arguments.inputs, arguments.jobs, arguments.processes)
         except ValueError as exc:
             print(f"tune: {exc}", file=sys.stderr)
             return 1

@@ -1,8 +1,10 @@
 """Tests for the tuning tools: tools/benchmarks/generate.py and tools/tune.py."""
 import copy
 import csv
+import dataclasses
 import pathlib
 import statistics
+import sys
 
 import pytest
 
@@ -64,16 +66,22 @@ def test_written_inputs_read_back_the_same(tmp_path: pathlib.Path) -> None:
 def test_a_tier_keeps_the_same_inputs_for_any_number_of_jobs(tmp_path: pathlib.Path,
                                                               monkeypatch: pytest.MonkeyPatch) -> None:
     # solving is faked (an odd number of workers is "over the limit"), so the test is fast and doesn't depend on timing
-    def fake_solve(document: dict, limit: float) -> tuple[float, float, int, int] | None:
+    processes_used = set()
+
+    def fake_solve(document: dict, limit: float, processes: int = 1) -> tuple[float, float, int, int] | None:
+        processes_used.add(processes)
         return None if len(document["workers"]) % 2 else (1.0, 0.5, 10, 2)
     monkeypatch.setattr(generate, "solve_within", fake_solve)
+    monkeypatch.setattr(generate, "default_processes", lambda: 4)
     tier = generate.Tier("test", (HOURS,), 3, 0, 1.0, generate.STAFFED)
+    one_at_a_time = dataclasses.replace(tier, one_at_a_time=True)  # tried in turn, each search in 4 processes
     results = {}
-    for jobs in (1, 3):
+    for jobs, each_tier in ((1, tier), (3, tier), ("in turn", one_at_a_time)):
         monkeypatch.setattr(generate, "INPUTS", tmp_path / str(jobs))
         (tmp_path / str(jobs)).mkdir()
-        results[jobs] = generate.build_tier(tier, jobs)
-    assert results[1] == results[3]
+        results[jobs] = generate.build_tier(each_tier, 3 if jobs == "in turn" else jobs)
+    assert results[1] == results[3] == results["in turn"]
+    assert processes_used == {4}  # the pool's searches ran in other processes, out of this set's reach
     assert sum(1 for row in results[1] if row["name"]) == tier.count
     assert sorted(path.name for path in (tmp_path / "3").iterdir()) == ["test_01.yml", "test_02.yml", "test_03.yml"]
 
@@ -230,6 +238,7 @@ def test_a_setting_from_the_command_line_is_named_by_its_parameters_in_field_ord
     setting = tune.parse_setting("shift_share=0.25, neutral_partner=0.25")
     assert setting == tune.Setting("neutral_partner=0.25,shift_share=0.25", neutral_partner=0.25, shift_share=0.25)
     assert tune.parse_setting("workload_power=3").workload_power == 3
+    assert tune.parse_setting("defaults") is tune.DEFAULTS
     for bad in ("", "shift_share", "speed=2", "rest_factor=2.5", "shift_share=0.2,shift_share=0.3", "shift_share=2",
                 "workload_power=2.5"):
         with pytest.raises(ValueError):
@@ -237,11 +246,13 @@ def test_a_setting_from_the_command_line_is_named_by_its_parameters_in_field_ord
 
 
 def test_input_groups_split_the_manifest() -> None:
-    tuning, holdout, confirm = (tune.group_inputs(group) for group in tune.INPUT_GROUPS)
+    tuning, holdout, confirm, multiday = (tune.group_inputs(group) for group in tune.INPUT_GROUPS)
     assert tuning and holdout and confirm
     assert all(b.tier == "sweep" and not b.holdout for b in tuning)
     assert all(b.holdout for b in holdout) and all(b.tier == "confirm" for b in confirm)
-    assert not {b.name for b in tuning} & ({b.name for b in holdout} | {b.name for b in confirm})
+    assert all(b.tier == "multiday" for b in multiday)
+    assert not {b.name for b in tuning} & ({b.name for b in holdout} | {b.name for b in confirm}
+                                           | {b.name for b in multiday})
 
 
 def test_a_round_runs_its_settings_as_its_own_resumable_stage(tmp_path: pathlib.Path,
@@ -263,3 +274,22 @@ def test_a_round_runs_its_settings_as_its_own_resumable_stage(tmp_path: pathlib.
     for bad_name in ("baseline", "two words", "../escape"):
         with pytest.raises(ValueError, match="name"):
             tune.run_round(bad_name, ["shift_share=0.5"], "tuning", 1)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="forks a parallel search inside the test process")
+def test_a_round_run_one_at_a_time_in_parallel_gives_the_same_results(tmp_path: pathlib.Path,
+                                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    generated = next(generate.generate(seed, HOURS) for seed in SEEDS if generate.generate(seed, HOURS))
+    assert generated is not None
+    (tmp_path / "inputs").mkdir()
+    generate.write_input(tmp_path / "inputs" / "small.yml", *generated)
+    monkeypatch.setattr(tune, "BENCHMARKS", tmp_path)
+    monkeypatch.setattr(tune, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(tune, "benchmarks", lambda: [tune.Benchmark("small", "sweep", False)])
+    tune.run_round("alone", ["defaults"], "tuning", 1)
+    tune.run_round("together", ["defaults"], "tuning", 1, processes=2)
+    timing = {"stage", "seconds", "nodes", f"{tune.DAY2}seconds", f"{tune.DAY2}nodes"}
+    alone, together = tune.read_results("alone"), tune.read_results("together")
+    assert len(alone) == len(together) == 1 and alone[0]["setting"] == "defaults"
+    assert ({key: value for key, value in alone[0].items() if key not in timing}
+            == {key: value for key, value in together[0].items() if key not in timing})
