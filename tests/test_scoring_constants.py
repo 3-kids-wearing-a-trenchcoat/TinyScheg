@@ -12,8 +12,8 @@ from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Set
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import (DISLIKED_PARTNER, LIKED_PARTNER, availability, build_constants, hours,
-                                         like_value, rest_factor, rest_unit, slot_load, unavailable_before,
-                                         workload_unit, worst_deficit)
+                                         like_value, load_classes, rest_factor, rest_unit, slot_load,
+                                         unavailable_before, workload_unit, worst_deficit)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -177,3 +177,15 @@ def test_a_slots_load_blends_its_hours_and_one_average_slot() -> None:
     assert slot_load(1, 3, 0) == 1      # hours only
     assert slot_load(1, 3, 1) == 3      # every shift counts as one average shift
     assert slot_load(1, 3, 0.5) == 2
+
+
+def test_slots_of_the_same_load_share_a_load_class() -> None:
+    # ADR 0040: the distinct loads, ascending, and each slot's index among them
+    assert load_classes([2.5, 1.0, 2.5, 4.0]) == ((1.0, 2.5, 4.0), (1, 0, 1, 2))
+    assert load_classes([]) == ((), ())
+    schedule_input = read_input(EXAMPLE_INPUT)
+    problem = build_problem(schedule_input)
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.scoring_domains)
+    assert len(constants.load_classes) == len(set(constants.slot_hours))  # one class per slot length
+    assert [constants.load_classes[index] for index in constants.slot_load_class] == list(constants.slot_load)
