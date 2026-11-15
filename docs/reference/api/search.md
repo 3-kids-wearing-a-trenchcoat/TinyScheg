@@ -1,7 +1,8 @@
-# `state` and `search` modules
+# `state`, `search` and `parallel` modules
 
-Sources: [`src/tinyscheg/csp/state.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/state.py) and
-[`src/tinyscheg/csp/search.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/search.py)
+Sources: [`src/tinyscheg/csp/state.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/state.py),
+[`src/tinyscheg/csp/search.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/search.py) and
+[`src/tinyscheg/csp/parallel.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/parallel.py)
 
 See [Search algorithm](../../explanation/search-algorithm.md) for how the search works and why. As in
 [`Problem`](problem.md), workers and slots are referred to by index.
@@ -125,3 +126,52 @@ How far a search has got ([ADR 0035](../../decisions/0035-search-progress-and-ke
 The stuck slot is where the search found out, not necessarily the cause: forward checking stops an assignment as soon
 as it leaves some *other* slot with no workers, so the actual conflict may be a slot or two later. Since a slot with
 an empty domain is always chosen next, a slot no worker can fill is reported before anything is filled.
+
+For the parallel search, the search itself can also stop at a cut depth, recording each branch reaching it as a
+subtree (its path of assignments and its share of the search space), start from a path, and compare with a pocket
+through two overridable hooks (the pocket's penalty, and whether a tie loses). Unset, it behaves exactly as described
+above.
+
+## `parallel` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_parallel.py`). The command line uses
+> `find_best_schedule_in_parallel`. See
+> [ADR 0041](../../decisions/0041-parallel-search-with-the-sequential-result.md) and
+> [Search algorithm](../../explanation/search-algorithm.md#parallel-search).
+
+### `find_best_schedule_in_parallel(problem, constants, processes, on_improvement=None, on_progress=None, keep_best_on_interrupt=False) -> SearchResult`
+
+`find_best_schedule`, run by `processes` processes, with the same schedule and penalty (or, with none, the same
+deepest point and stuck slot), however the processes' timing falls. With `processes` 1, it's `find_best_schedule`
+itself.
+
+* `on_improvement` — called with each strictly better shared best's penalty, as the main process sees it.
+* `on_progress` — called every `POLL_SECONDS` (0.25 s) with the share finished and the nodes of all processes
+  together; the share only rises, and reaches 1 at the end.
+* `keep_best_on_interrupt` — as for `find_best_schedule`. On Ctrl+C, the main process asks the processes to stop
+  through a shared flag (they ignore the interrupt themselves), lets them finish, and returns the shared best.
+
+The result's `nodes` and `pruned` are those of all processes together, and vary from run to run.
+
+How it works: the tree is cut (`cut_tree`) into subtrees numbered in the sequential order, which a pool of processes
+takes from a queue. The processes share the best schedule so far (its penalty and parts, its assignment, and its
+subtree's number) under one lock, each reading it into a copy every `SHARE_INTERVAL_NODES` (4096) nodes. Subtree *i*
+prunes on a bound above the best's penalty, or at least it when *i* comes at or after the best's subtree; a complete
+schedule replaces the best if its penalty is lower, or equal and from an earlier subtree; each subtree's best is
+merged by (penalty, subtree).
+
+### `cut_tree(problem, constants, target) -> _Search`
+
+Cuts the tree at the first depth giving at least `target` subtrees (or where only complete schedules are left above
+it). The returned run's `cut` lists each subtree's path of (slot, worker) assignments and share of the search space,
+in the sequential order; its `finished` and `nodes` are those of the branches ending above the cut.
+
+### `default_processes() -> int`
+
+The number of processes used unless told otherwise: `os.cpu_count()`, at least 1.
+
+Named constants: `SUBTREES_PER_PROCESS = 32`, `SHARE_INTERVAL_NODES = 4096`, `POLL_SECONDS = 0.25`,
+`LOCK_TIMEOUT_SECONDS = 5.0` (reading the shared best gives up waiting for its lock and reads it anyway, only possible
+if a process was killed holding it). Processes are forked on Linux, inheriting the main process's state, and spawned
+elsewhere.

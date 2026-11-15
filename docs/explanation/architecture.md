@@ -57,8 +57,9 @@ See [Domain model](domain-model.md) and [CSP formulation](csp-formulation.md).
 
 Search for the best schedule: a backtracking search with forward checking, slots ordered by MRV and the degree
 heuristic and workers tried cheapest first, pruned by comparing a lower bound on each partial schedule's penalty
-against the best complete schedule found so far. Its progress is reported as it goes, and Ctrl+C stops it, keeping
-the best schedule found. See [Search algorithm](search-algorithm.md) and [Scoring](scoring.md).
+against the best complete schedule found so far, in parallel processes by default. Its progress is reported as it
+goes, and Ctrl+C stops it, keeping the best schedule found. See [Search algorithm](search-algorithm.md) and
+[Scoring](scoring.md).
 
 ## 4. Build output
 
@@ -99,6 +100,7 @@ entry point.
 | `csp/problem.py` | [`Problem`](../reference/api/problem.md): domains and difference constraints, by slot and worker index. |
 | `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module): MRV/degree ordering, branch and bound, and the search's progress. |
+| `csp/parallel.py` | [Branch and bound in parallel processes](../reference/api/search.md#parallel-module), with the same result (ADR 0041). |
 | `scoring/constants.py` | [The constants of the penalty score](../reference/api/scoring.md#constants-module), calculated once per run. |
 | `scoring/penalty.py` | [The penalty of a (partial) schedule](../reference/api/scoring.md#penalty-module): likes, workload, rest and their weighted sum. |
 | `scoring/whole_slots.py` | [The workload bound in whole slots](../reference/api/scoring.md#whole_slots-module) (ADR 0040). |

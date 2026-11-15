@@ -6,9 +6,10 @@ partial schedule, and branches that can't beat the best complete schedule found 
 
 > [!NOTE]
 > **Implemented** in [`csp/search.py`](../reference/api/search.md), tested, and used by the command line. The search
-> always runs to the end, with no limit: about half a minute for the 24-hour example (9 seconds on PyPy), while a
-> 48-hour schedule can take much longer. It shows its [progress](#progress) as it goes, and can be stopped with
-> Ctrl+C, keeping the best schedule found so far. Making it faster is [future work](future-work.md#search-performance).
+> always runs to the end, with no limit, in [parallel processes](#parallel-search) by default: in one process, about
+> half a minute for the 24-hour example (9 seconds on PyPy), while a 48-hour schedule can take much longer. It shows
+> its [progress](#progress) as it goes, and can be stopped with Ctrl+C, keeping the best schedule found so far.
+> Making it faster is [future work](future-work.md#search-performance).
 
 ## Overview
 
@@ -173,6 +174,31 @@ search makes exactly the same decisions as with scoring from scratch, and finds 
 the benchmark inputs, it visits the same nodes and finds the same schedules, about 1.7 times faster (2026-11-12).
 
 When the search ends, the pocket holds the best schedule.
+
+### Parallel search
+
+> [!NOTE]
+> **Implemented**, and covered by tests. See
+> [ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md).
+
+Python runs one thread at a time, so the search runs in several **processes**, by default one per processor, with
+little shared between them. Most of a search's time goes into proving that nothing beats the best schedule, found
+early, and that work can be shared out without waste.
+
+* **Cutting the tree.** The tree is cut, at the first depth giving at least 32 subtrees per process, into subtrees
+  numbered in the order the one-process search would visit them. Each subtree is reached by replaying its path's
+  assignments in the same order, so everything below it, including the order workers are tried in, is exactly what
+  the one-process search would do there.
+* **Sharing the best.** The processes take subtrees from a queue, in order, and share the best schedule found so far,
+  with the number of the subtree it came from. Each prunes on it, so a good schedule found by one prunes them all.
+* **Ties.** Of equally good schedules, the one-process search keeps the first found. To keep the same one, a subtree
+  coming before the best's may still produce a schedule with the same penalty, and it replaces the best; later ones
+  can't. In the end, each subtree's best is merged by penalty, then by subtree.
+
+So the schedule found is the same as in one process, whatever the timing; only the node counts differ from run to
+run. On the example and the benchmark inputs, 8 processes ran about 7.6 times faster than one, with as many nodes in
+all (on 8 cores; more processes than cores add little). The progress, the best schedules found and Ctrl+C work as in
+one process; the main process gathers them from the others.
 
 ## Progress
 

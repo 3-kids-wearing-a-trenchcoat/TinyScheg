@@ -146,14 +146,21 @@ Still deferred:
 
 > [!IMPORTANT]
 > **Partially implemented.** Deferred 2026-11-12; PyPy adopted for development runs on 2026-11-13
-> ([ADR 0033](../decisions/0033-pypy-for-development-runs.md)). Parallelization and a compiled core are still open.
+> ([ADR 0033](../decisions/0033-pypy-for-development-runs.md)); parallel search on 2026-11-15
+> ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)). A compiled core is still open, and
+> so is measuring parallel search where processes are spawned (below).
 
 Everything under [Search performance](#search-performance) speeds the search up by searching smarter: finding a good
 pocket sooner, or pruning more. The other way is to run the same search faster, without changing what it explores:
 
 * **Libraries**, such as a compiled numeric library for the scoring, or a constraint or optimization solver.
 * **Parallelization**, such as splitting the search tree between processes, which then share the pocket's penalty
-  so that each prunes on the best found by any.
+  so that each prunes on the best found by any. *Done on 2026-11-15*
+  ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)): with the subtrees numbered in the
+  sequential order and that number deciding ties, the schedule is the same as in one process, and 8 processes ran
+  about 7.6 times faster on 8 cores. Still to measure: where processes are spawned rather than forked (Windows,
+  macOS), each loads and warms up on its own, a cost short runs would feel; it should be measured there, and the
+  default reconsidered if need be, before [distribution](#accessibility-for-non-technical-users).
 * **Rewriting the hot modules in another language**, such as the search and scoring in a compiled language, called
   from Python.
 

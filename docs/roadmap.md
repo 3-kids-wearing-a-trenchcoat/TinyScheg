@@ -7,7 +7,8 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)).
+Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
+(2026-11-15).
 
 ## Phase 1: Walking skeleton
 
@@ -193,6 +194,19 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
   remaining work as if it could be split finely; the bound now also hands it out in whole slots, with exactly the
   same results on every benchmark input
 
+## Phase 9: Parallel search
+
+Using every processor for one search, without changing its result
+([ADR 0041](decisions/0041-parallel-search-with-the-sequential-result.md)).
+
+- [x] Measure the ceiling before building anything: the work splits evenly into a few hundred subtrees
+- [x] A prototype, checked for identical results under random delays and timed one input at a time: 7.6 times faster
+  with 8 processes, with as many nodes in all
+- [x] The parallel search (`csp/parallel.py`): subtrees in the sequential order, a shared best whose subtree number
+  decides ties, progress, new bests and Ctrl+C through shared memory; the command line's `--jobs`, by default one
+  process per processor; the sequential search unchanged with one process
+- [x] Tests, and every benchmark input, alone and as day 2, with the recorded schedules
+
 ## Later
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
@@ -200,8 +214,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Faster search: stronger pruning, e.g. a rest look-ahead, or whole-slot sets per worker's own domains (a
       workload bound in whole slots was done in Phase 8, ADR 0040; tried 2026-11-13 and not worth it: workload caps
       that account for overlaps, and symmetry between identical workers, rare in the benchmark)
-- [ ] Faster search by non-heuristic means: parallelization, a compiled core, optionally domains as bitsets (PyPy
-      adopted for development runs, ADR 0033)
+- [ ] Faster search by non-heuristic means: a compiled core, optionally domains as bitsets (PyPy adopted for
+      development runs, ADR 0033; parallel search done in Phase 9, ADR 0041)
+- [ ] Parallel search where processes are spawned (Windows, macOS): measure the start-up cost, and reconsider the
+      default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example)
 - [ ] Tuning: check the defaults on 48-hour schedules, including load within a day, once the search finishes them

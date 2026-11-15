@@ -11,13 +11,18 @@ From the repository root, with the `tinyscheg` environment activated
 (see [Development setup](../how-to/development-setup.md)):
 
 ```bash
-python src/main.py INPUT [-o OUTPUT]
+python src/main.py INPUT [-o OUTPUT] [-j JOBS]
 ```
 
 * `INPUT` — the YAML input file (see [Input format](input-format.md)).
 * `-o OUTPUT`, `--output OUTPUT` — the schedule file to write. Its extension sets the format (see
   [Output format](output-format.md)); `.csv`, `.xlsx` and `.ods` are supported, in any case. If omitted, the schedule is
   written next to the input, named after it: `shifts/week1.yml` → `shifts/week1_schedule.csv`.
+* `-j JOBS`, `--jobs JOBS` — how many processes search in parallel
+  ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)): a whole number of at least 1, by
+  default one per processor the operating system reports. The schedule is the same either way; `--jobs 1` searches
+  in a single process. With 8 processes on 8 cores, the search was about 7.6 times faster than with one
+  (2026-11-15).
 
 An existing file at the output path is replaced, but only once a schedule has been found: if anything goes wrong, no
 file is written and an existing one is left as it was.
@@ -25,9 +30,10 @@ file is written and an existing one is left as it was.
 The schedule written is the **best** legal one: the one with the lowest
 [penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
 The search runs to the end, with no limit, which can take a while: about half a minute for the 24-hour
-`exampleInput.yml` (9 seconds on [PyPy](../how-to/use-pypy.md)), and much longer for longer schedules. Its progress
-is shown as it goes (below), and Ctrl+C stops it, writing the best schedule found so far
-([Stopping early](#stopping-early-ctrlc)).
+`exampleInput.yml` in one process (9 seconds on [PyPy](../how-to/use-pypy.md); a few times less in parallel), and
+much longer for longer schedules. Its progress is shown as it goes (below), and Ctrl+C stops it, writing the best
+schedule found so far ([Stopping early](#stopping-early-ctrlc)). In parallel, the progress and the node counts are
+those of all processes together, and differ a little from run to run; the schedule doesn't.
 
 If the input has a [history](input-format.md#history), workers of a previous schedule who are no longer in the input
 are named in a warning on standard error first (`tinyscheg: warning: ...`); the run goes on.
