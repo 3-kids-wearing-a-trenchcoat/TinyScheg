@@ -109,8 +109,11 @@ the longer tiers are staffed more generously:
 | Minimum rest | 6 hours | same |
 
 An input is kept only if branch and bound finds its best schedule within the tier's time limit (5 minutes for the
-sweep tier, 10 minutes for the others). Candidates are tried in parallel but taken in seed order, so the inputs kept
-don't depend on how many are tried at once; a solve may run slightly slower when the machine is busy, though. This quietly drops the loosest inputs, which take longest to search; the manifest
+sweep tier, 10 for the confirm tier, 30 for the multiday tier). Candidates are tried in parallel but taken in seed
+order, so the inputs kept don't depend on how many are tried at once; a solve may run slightly slower when the machine
+is busy, though. The multiday tier's inputs are too long to search many at once, each in one process, so its
+candidates are tried one at a time instead, each search in parallel processes
+([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), one per processor. This quietly drops the loosest inputs, which take longest to search; the manifest
 (`tools/benchmarks/manifest.csv`) lists every skipped candidate and why, so the bias stays visible. Every third input
 of a tier is **held back**: never used to choose values, only to check the chosen ones at the end. The inputs are
 committed, so changing the generator never silently changes what was tuned on.
@@ -118,7 +121,8 @@ committed, so changing the generator never silently changes what was tuned on.
 ## Stages
 
 Run with `tools/tune.py`, which finds and audits the best schedule for each input at each setting, many in
-parallel. Each run's result is appended to `tools/benchmarks/results/<stage>.csv` as it finishes, so a stage can be
+parallel. A search taking more than 10 minutes is stopped and recorded as timed out, so that one setting can't stall
+a stage. Each run's result is appended to `tools/benchmarks/results/<stage>.csv` as it finishes, so a stage can be
 stopped and resumed, and `python tools/tune.py status` shows how far along it is. Each row keeps its best schedule,
 so after a change to the audit, `python tools/tune.py reaudit STAGE` audits a finished stage again without
 searching again.
@@ -133,8 +137,10 @@ searching again.
    tuning inputs, read, and adjusted for the next round, until the complaints stop dropping: the aim is fewer
    complaints, not none. Each round is its own stage, named on the command line:
    `python tools/tune.py round NAME --setting neutral_partner=0.25,shift_share=0.5 --setting ...`, where each setting
-   names only the parameters it changes from the defaults, and `--inputs holdout` or `--inputs confirm` runs it on
-   the held-back inputs or the confirm tier instead (report it with `--holdout` to include the held-back ones).
+   names only the parameters it changes from the defaults (`--setting defaults` is the defaults), and
+   `--inputs holdout`, `--inputs confirm` or `--inputs multiday` runs it on the held-back inputs, the confirm tier or
+   the multiday tier instead (report it with `--holdout` to include the held-back ones). For long inputs,
+   `--processes N` runs one run at a time, each search in N processes, with a time limit of an hour instead.
    Running a round again with more settings adds them. There's no automated search over the parameters: which
    values to try next is a judgement made from the results and the feedback cards.
 4. **Choice and check** — a few candidate settings, checked on the held-back inputs and the longer tiers, with the

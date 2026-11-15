@@ -231,8 +231,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       done)
 - [ ] Scoring: workload in hours only (shift share 0), once the rest part keeps short shifts apart in tight schedules
       too (deferred 2026-11-14)
-- [ ] A schedule that leaves the next period with no legal schedule, or a worse one: check or avoid it (found
-      2026-11-14)
+- [ ] A schedule that leaves the next period with no legal schedule: warn, after a cheap check of the next period
+      with the same parameters (found 2026-11-14, decided 2026-11-15); a worse one: open
+- [ ] Tuning: start the second period a whole number of days after the first, so that it covers the same hours of
+      the day (on 3 sweep inputs it doesn't, and has no legal schedule even with every worker rested; 2026-11-15)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Forcing a specific worker into a specific shift (low priority)
