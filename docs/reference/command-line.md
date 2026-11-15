@@ -29,10 +29,10 @@ file is written and an existing one is left as it was.
 
 The schedule written is the **best** legal one: the one with the lowest
 [penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
-The search runs to the end, with no limit, which can take a while: about half a minute for the 24-hour
-`exampleInput.yml` in one process (9 seconds on [PyPy](../how-to/use-pypy.md); a few times less in parallel), and
-much longer for longer schedules. Its progress is shown as it goes (below), and Ctrl+C stops it, writing the best
-schedule found so far ([Stopping early](#stopping-early-ctrlc)). In parallel, the progress and the node counts are
+The search runs to the end, with no limit, which can take a while: for the 24-hour `exampleInput.yml`, about 2
+seconds in parallel and 20 in one process (5½ on [PyPy](../how-to/use-pypy.md)), and much longer for longer
+schedules (the example stretched to 48 hours takes about 12 minutes in parallel on PyPy). Its progress is shown as
+it goes (below), and Ctrl+C stops it, writing the best schedule found so far ([Stopping early](#stopping-early-ctrlc)). In parallel, the progress and the node counts are
 those of all processes together, and differ a little from run to run; the schedule doesn't.
 
 If the input has a [history](input-format.md#history), workers of a previous schedule who are no longer in the input

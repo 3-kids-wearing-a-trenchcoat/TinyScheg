@@ -6,8 +6,9 @@ partial schedule, and branches that can't beat the best complete schedule found 
 
 > [!NOTE]
 > **Implemented** in [`csp/search.py`](../reference/api/search.md), tested, and used by the command line. The search
-> always runs to the end, with no limit, in [parallel processes](#parallel-search) by default: in one process, about
-> half a minute for the 24-hour example (9 seconds on PyPy), while a 48-hour schedule can take much longer. It shows
+> always runs to the end, with no limit, in [parallel processes](#parallel-search) by default: about 2 seconds for
+> the 24-hour example (20 in one process), while a 48-hour schedule can take much longer (about 12 minutes for the
+> example stretched to 48 hours, in parallel on PyPy). It shows
 > its [progress](#progress) as it goes, and can be stopped with Ctrl+C, keeping the best schedule found so far.
 > Making it faster is [future work](future-work.md#search-performance).
 
@@ -151,6 +152,9 @@ penalty counts only the pairs already filled. So the bound looks ahead, using th
     weight multiplies it. Each worker's lowest cost is found on its own, over the whole numbers of the remaining slots
     they could take, with a price on each unit of load (Lagrangian relaxation) set so that, in all, about the
     remaining load is handed out. Any price gives a valid bound, so the bound is never above a completion.
+  * The whole-slot estimate costs most of the search's time, so the search first checks the bound with water-filling
+    alone: where that already reaches the pocket, the full bound would too, and the whole-slot estimate is skipped
+    (the same decisions, about 1.8 times faster on CPython, 2026-11-15).
 * **Likes:** each pair of slots in a shared shift will add both workers' like values of each other; a pair with an
   unfilled slot adds at least the lowest value the workers still in its domains could give.
 * **Rest:** the penalty so far. A worker can always be given no further shifts, so no future deficit is certain.

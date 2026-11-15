@@ -99,10 +99,11 @@ finish a 48-hour one, 32 slots, in 5 minutes, nor a 72-hour one, 47 slots, in 10
 
 As implemented then, the command line proved the 24-hour example in about 100 s. Cheapest-first finds good schedules
 far sooner, but costs time per step, so on some inputs the bound alone would be faster. Neither finished a 48-hour
-schedule. (On 2026-11-15, with everything below and the weights of ADR 0039, the 24-hour example takes about 30 s, 9 s
-on PyPy, in one process; the 48-hour example still didn't finish in 15 minutes, its progress estimating about an
-hour. In parallel, [ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md), it takes about 12
-minutes on PyPy, its best schedule found at 9½.)
+schedule. (On 2026-11-15, with everything below and the weights of ADR 0039, the 24-hour example took about 30 s,
+9 s on PyPy, in one process, and about 20 s, 5½ on PyPy, with the cheaper bound below; the 48-hour example still
+didn't finish in 15 minutes, its progress estimating about an hour. In parallel,
+[ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md), it takes about 12 minutes on PyPy, its
+best schedule found at 9½.)
 Still deferred:
 
 * **Symmetry breaking between workers.** Within a shift it's done (ADR 0025): on the one benchmark input with
@@ -132,6 +133,14 @@ Still deferred:
   all of the slack was whole slots; roles and rest between the unfilled slots added about nothing. With the bound,
   every benchmark input gives the same schedules, alone and as day 2, with 3–75 times fewer nodes (see the ADR);
   `confirm_01` takes 4½ minutes instead of 2 hours.
+
+  Done on 2026-11-15, without changing a decision: the whole-slot estimate then cost most of the search's time (76%
+  on CPython on the example, 33–56% on PyPy), and at 17–54% of the nodes checked against the pocket, the bound
+  without it already pruned. The search now checks that cheaper bound first, computed with the same expression so
+  that it's never above the full one, and skips the whole-slot estimate where it already prunes; the estimate's
+  inner loop was also rewritten for speed, with the same arithmetic. Every node and schedule stayed exactly the same
+  (37 inputs traced, byte for byte); about 1.8 times faster on CPython (the example 31 s to 18 s), and 1.0–1.3 times
+  on PyPy, varying from run to run with its just-in-time compiler.
 
   Still open: a rest look-ahead (none is valid that's cheap, since a worker can always get no further shifts), caps
   that account for overlapping slots, and whole-slot sets per worker that count only the slots in their own domains

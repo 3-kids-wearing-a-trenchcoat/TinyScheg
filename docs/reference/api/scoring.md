@@ -195,7 +195,12 @@ The workload bound before normalizing, the higher of two:
 
 Parameters: `assigned_load`, each worker's load so far; `caps`, the load of the unfilled slots in each worker's
 domains; `remaining`, the load of the unfilled slots; `class_counts`, the number of unfilled slots of each of
-`load_classes`. Both `workload_lower_bound` and the `incremental` module call it, so they do the same arithmetic.
+`load_classes`. `workload_lower_bound` calls it, and the `incremental` module its two parts, so they do the same
+arithmetic.
+
+`water_filling(constants, assigned_load, caps, remaining)` gives the water-filling part and its level, as
+(total, level); `whole_slots(constants, assigned_load, caps, remaining, class_counts, level)` the whole-slot part
+(or `None` where it doesn't apply), from that level.
 
 ### `likes_penalty(constants, assignment) -> float`
 
@@ -254,6 +259,9 @@ steps of `MU_GROWTH` times to bracket it and `MU_STEPS` halvings.
 Named constants: `MAX_LOAD_COMBINATIONS = 64`, `MU_STEPS = 3`, `MU_GROWTH = 1.5`, `LOAD_TOLERANCE = 1e-9` (hours;
 so that a count or cap rounding put a hair short of a whole slot still allows it), `ROUNDING_MARGIN = 1e-9`.
 
+The exact combinations' evaluator is most of the search's time, so it's written for speed (plain comparisons, each
+term computed in place, the second candidate only where it differs), with the same arithmetic as the plain version.
+
 ## `incremental` module
 
 > [!NOTE]
@@ -273,6 +281,10 @@ Methods:
 * `total()` — the current schedule's total penalty, as `score` would give it.
 * `cost_if(slot, worker)` — the total with the worker in the unfilled slot, for the value order.
 * `bound()` — the lower bound, as `lower_bound` would give it.
+* `bound_without_whole_slots()` — the same bound with the workload part's water-filling alone, computed with the same
+  expression, so never above `bound()`. The search checks it first, and computes `bound()`, whose whole-slot part
+  costs most of the search's time, only where it doesn't already reach the pocket: the same decisions, at less cost
+  (2026-11-15). The water-filling is computed once per state, for both, until the next `assign` or `undo`.
 * `assign(slot, worker, narrowed)` — update the totals after the search assigned the slot; `narrowed` is the change
   record's `saved_domains`, (slot, domain before) pairs. Only the assigned worker's load and rest, the shifts with a
   slot assigned or narrowed, the caps of the workers dropped from a domain, and the count of unfilled slots of the
