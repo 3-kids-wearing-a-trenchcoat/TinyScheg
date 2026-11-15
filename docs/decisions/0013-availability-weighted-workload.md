@@ -1,6 +1,6 @@
 # 0013. Weight the workload penalty by availability
 
-**Status:** Accepted. Normalization amended by [0015](0015-normalize-workload-by-packable-maximum.md). Amends the penalty formula of [0006](0006-convex-function-for-workload-fairness.md).
+**Status:** Accepted. Normalization amended by [0015](0015-normalize-workload-by-packable-maximum.md) (itself superseded by [0032](0032-flat-penalty-parts.md)); the load amended by [0026](0026-workload-counts-shifts-and-hours.md) (shifts count as well as hours). Amends the penalty formula of [0006](0006-convex-function-for-workload-fairness.md).
 
 ## Context
 

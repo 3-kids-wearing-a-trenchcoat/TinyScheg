@@ -1,7 +1,8 @@
 # 0031. History as the already-filled part of one schedule
 
 **Status:** Accepted. Amends [0029](0029-schedule-history-input.md) (point 6) and
-[0030](0030-history-in-scoring.md) (points 1–3).
+[0030](0030-history-in-scoring.md) (points 1–3). Refined by [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md)
+(point 4, for the worst rest deficit).
 
 ## Context
 

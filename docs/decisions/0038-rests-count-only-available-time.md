@@ -1,6 +1,7 @@
 # 0038. A rest counts only the time the worker was available
 
-**Status:** Accepted.
+**Status:** Accepted. Amends [0036](0036-rest-targets-from-the-input-convex-per-worker.md) and
+[0014](0014-exact-worst-rest-deficit.md) (a rest is counted in available time).
 
 ## Context
 

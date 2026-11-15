@@ -1,6 +1,8 @@
 # 0036. Rest targets derived from the input, for the rest between two shifts, with each worker's shortfall squared
 
-**Status:** Accepted. Supersedes [ADR 0028](0028-rest-factor-default-2-5.md).
+**Status:** Accepted. Supersedes [ADR 0028](0028-rest-factor-default-2-5.md); amends
+[0014](0014-exact-worst-rest-deficit.md) (each step's target). Amended by [0038](0038-rests-count-only-available-time.md)
+(rests are counted in available time).
 
 ## Context
 

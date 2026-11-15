@@ -25,7 +25,7 @@ ADR that supersedes the old one.
 | [0001](0001-model-scheduling-as-csp.md) | Model scheduling as a constraint satisfaction problem | Accepted |
 | [0002](0002-backtracking-with-forward-checking.md) | Backtracking search with forward checking | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) and [0024](0024-cheapest-first-value-order-and-workload-bound.md) |
 | [0003](0003-variable-ordering-mrv-degree.md) | Order variables by MRV and the degree heuristic; no value ordering | Accepted, amended by [0024](0024-cheapest-first-value-order-and-workload-bound.md) |
-| [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) |
+| [0004](0004-branch-and-bound-with-monotone-penalty.md) | Find the best schedule with branch and bound over a monotone penalty | Accepted, amended by [0017](0017-plain-forward-checking-and-pruning-on-ties.md) and [0024](0024-cheapest-first-value-order-and-workload-bound.md) |
 | [0005](0005-weighted-sum-of-normalized-penalties.md) | Score as a weighted sum of normalized per-worker penalties | Accepted, amended by [0032](0032-flat-penalty-parts.md) |
 | [0006](0006-convex-function-for-workload-fairness.md) | Use a convex function for workload fairness | Accepted, amended by [0013](0013-availability-weighted-workload.md) and [0021](0021-power-function-for-workload-fairness.md) |
 | [0007](0007-greedy-bound-for-worst-rest-deficit.md) | Bound the worst rest deficit greedily | Superseded by [0014](0014-exact-worst-rest-deficit.md) |
@@ -34,8 +34,8 @@ ADR that supersedes the old one.
 | [0010](0010-python-rewrite.md) | Rewrite in Python | Accepted |
 | [0011](0011-no-output-for-infeasible-inputs.md) | No output for infeasible inputs | Accepted |
 | [0012](0012-deterministic-path-independent-scoring.md) | Deterministic, path-independent scoring and output | Accepted, amended by [0027](0027-incremental-scoring-for-steering.md) |
-| [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted, amended by [0015](0015-normalize-workload-by-packable-maximum.md) |
-| [0014](0014-exact-worst-rest-deficit.md) | Calculate the worst rest deficit exactly | Accepted |
+| [0013](0013-availability-weighted-workload.md) | Weight the workload penalty by availability | Accepted, amended by [0015](0015-normalize-workload-by-packable-maximum.md) and [0026](0026-workload-counts-shifts-and-hours.md) |
+| [0014](0014-exact-worst-rest-deficit.md) | Calculate the worst rest deficit exactly | Accepted, amended by [0036](0036-rest-targets-from-the-input-convex-per-worker.md) and [0038](0038-rests-count-only-available-time.md) |
 | [0015](0015-normalize-workload-by-packable-maximum.md) | Normalize workload by each worker's packable maximum | Superseded by [0032](0032-flat-penalty-parts.md) |
 | [0016](0016-undo-through-change-records-on-the-call-stack.md) | Undo through change records on the call stack | Accepted |
 | [0017](0017-plain-forward-checking-and-pruning-on-ties.md) | Plain forward checking, and pruning on ties | Accepted |
@@ -52,12 +52,12 @@ ADR that supersedes the old one.
 | [0028](0028-rest-factor-default-2-5.md) | Default rest factor 2.5 | Superseded by [0036](0036-rest-targets-from-the-input-convex-per-worker.md) |
 | [0029](0029-schedule-history-input.md) | Schedule history: previous inputs and their schedules, read back as fixed history | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
 | [0030](0030-history-in-scoring.md) | History in scoring: the history and the new schedule scored as one | Accepted, amended by [0031](0031-history-as-the-filled-part-of-one-schedule.md) |
-| [0031](0031-history-as-the-filled-part-of-one-schedule.md) | History as the already-filled part of one schedule | Accepted |
+| [0031](0031-history-as-the-filled-part-of-one-schedule.md) | History as the already-filled part of one schedule | Accepted, refined by [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md) |
 | [0032](0032-flat-penalty-parts.md) | Flat penalty parts: one event costs the same at any schedule length | Accepted, amended by [0039](0039-default-weights-from-the-users-trade-offs.md) |
 | [0033](0033-pypy-for-development-runs.md) | PyPy for development runs; the code stays Python 3.11-compatible | Accepted |
 | [0034](0034-never-back-to-back.md) | A worker is never assigned back-to-back shifts, whatever the minimum rest | Accepted |
 | [0035](0035-search-progress-and-keeping-the-best-on-interrupt.md) | The search shows its progress, and Ctrl+C keeps the best schedule found so far | Accepted |
-| [0036](0036-rest-targets-from-the-input-convex-per-worker.md) | Rest targets derived from the input, for the rest between two shifts, with each worker's shortfall squared | Accepted |
+| [0036](0036-rest-targets-from-the-input-convex-per-worker.md) | Rest targets derived from the input, for the rest between two shifts, with each worker's shortfall squared | Accepted, amended by [0038](0038-rests-count-only-available-time.md) |
 | [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md) | Each worker's worst rest deficit counts every history slot they could have filled | Accepted |
 | [0038](0038-rests-count-only-available-time.md) | A rest counts only the time the worker was available | Accepted |
 | [0039](0039-default-weights-from-the-users-trade-offs.md) | Default weights from the user's trade-offs: likes : workload : rest = 0.45 : 1 : 0.25, neutral partner 0.44 | Accepted |

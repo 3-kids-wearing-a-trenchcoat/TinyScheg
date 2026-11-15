@@ -1,6 +1,8 @@
 # 0014. Calculate the worst rest deficit exactly
 
-**Status:** Accepted. Supersedes [0007](0007-greedy-bound-for-worst-rest-deficit.md).
+**Status:** Accepted. Supersedes [0007](0007-greedy-bound-for-worst-rest-deficit.md). Amended by
+[0036](0036-rest-targets-from-the-input-convex-per-worker.md) (each step's target comes from both shifts' lengths) and
+[0038](0038-rests-count-only-available-time.md) (each step's rest is counted in available time).
 
 ## Context
 

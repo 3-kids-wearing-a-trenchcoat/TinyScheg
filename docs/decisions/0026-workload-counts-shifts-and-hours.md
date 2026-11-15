@@ -1,6 +1,6 @@
 # 0026. Workload counts shifts as well as hours
 
-**Status:** Accepted.
+**Status:** Accepted. Amends [0013](0013-availability-weighted-workload.md) (the load counts shifts as well as hours).
 
 ## Context
 
