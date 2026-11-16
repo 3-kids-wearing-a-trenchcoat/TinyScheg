@@ -68,7 +68,8 @@ Development runs (tests, benchmark, audit, tuning) also use PyPy 3.11, about 3 t
 **Python 3.11-compatible**, give exactly the same results on both interpreters (add lists of floats in the scoring
 with `math.fsum` or plain loops, never `sum()`), and close files explicitly (`with open(...)`). Run the tests under
 both: `conda run --no-capture-output -n tinyscheg python -m pytest` and `.pypy/bin/pypy3 -m pytest`.
-The program's third-party dependencies are PyYAML (input), and openpyxl and odfpy (XLSX and ODS output). MkDocs, Material and markdown-callouts are
+The program's third-party dependencies are PyYAML (input), openpyxl and odfpy (XLSX and ODS output), and psutil
+(counting physical cores for the default number of search processes, ADR 0043). MkDocs, Material and markdown-callouts are
 used only to build the docs, and pytest only for testing.
 New libraries should only be introduced under one of the following circumstances:
 * A feature can't be implemented using the existing libraries.
