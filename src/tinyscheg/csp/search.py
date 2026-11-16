@@ -41,7 +41,8 @@ class SearchResult:
     schedules the search visited, and pruned the branches it cut off because they couldn't beat the pocket.
     complete is False for a best-schedule search stopped by Ctrl+C (ADR 0035): assignment is then the best schedule
     found so far, not proven the best (None if none was found yet), and finished the share of the search space it
-    had finished; for a search that ran to the end, finished is 1.
+    had finished; for a search that ran to the end, finished is 1. It's also False for a search for a legal schedule
+    stopped by its node limit (ADR 0042) before finding one: whether one exists is then unknown.
     """
     assignment: tuple[int, ...] | None
     deepest: int
@@ -262,15 +263,31 @@ class _Search:
         return False
 
 
-def find_first_schedule(problem: Problem) -> SearchResult:
+class _NodeLimitReached(Exception):
+    """Raised in a search for a legal schedule that has visited as many nodes as it may (ADR 0042)."""
+
+
+def find_first_schedule(problem: Problem, max_nodes: int | None = None) -> SearchResult:
     """
     Search for a legal schedule
     :param problem: Problem
+    :param max_nodes: about the most nodes the search may visit, None for no limit (ADR 0042): it stops at the first
+    progress report (every PROGRESS_INTERVAL_NODES nodes) past it, so that the search's own steps are unchanged;
+    a limit in nodes makes the answer the same on every machine, unlike a time limit
     :return: the first legal schedule found (deterministically: slots are chosen by choose_slot and workers are
-    tried in input order), or the point at which the search got stuck if there is none
+    tried in input order), or the point at which the search got stuck if there is none; marked as not complete,
+    with no schedule, if the search reached max_nodes first
     """
-    run = _Search(problem)
-    if run.search():
+    def stop_at_limit(progress: SearchProgress) -> None:
+        if max_nodes is not None and progress.nodes > max_nodes:
+            raise _NodeLimitReached
+
+    run = _Search(problem, on_progress=None if max_nodes is None else stop_at_limit)
+    try:
+        found = run.search()
+    except _NodeLimitReached:  # the state is abandoned midway, so it's left as it is
+        return SearchResult(None, run.deepest, None, nodes=run.nodes, complete=False, finished=run.finished)
+    if found:
         return SearchResult(tuple(run.state.assigned), run.filled, None, nodes=run.nodes)
     return SearchResult(None, run.deepest, run.stuck_slot, nodes=run.nodes)
 

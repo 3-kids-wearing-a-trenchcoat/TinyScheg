@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import datetime as dt
 import os
 import pathlib
 import shutil
@@ -14,9 +15,11 @@ import time
 from collections.abc import Sequence
 from typing import TextIO
 
+from tinyscheg.csp.next_period import NEXT_PERIOD_CHECK_NODES, NextPeriodCheck, check_next_period, next_period_offset
 from tinyscheg.csp.parallel import default_processes, find_best_schedule_in_parallel
 from tinyscheg.csp.problem import Problem, build_problem, unfillable_slots
 from tinyscheg.csp.search import SearchProgress, SearchResult
+from tinyscheg.model.schedule_input import ScheduleInput
 from tinyscheg.model.shift import Slot
 from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import DEFAULT_EXTENSION, UnsupportedFormatError, write_schedule, writer_for
@@ -148,8 +151,10 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path, jobs: int) -> int:
     if not result.complete:
         print(f"{describe_penalty(result.penalty)}, the best found before the search was interrupted, not proven the "
               f"best ({percent(result.finished)} of the search finished)")
+        _warn_about_next_period(schedule_input, problem, result.assignment)
         return EXIT_INTERRUPTED
     print(f"{describe_penalty(result.penalty)}, the best possible")
+    _warn_about_next_period(schedule_input, problem, result.assignment)
     return EXIT_SUCCESS
 
 
@@ -312,6 +317,34 @@ def _describe_failure(problem: Problem, result: SearchResult) -> str:
     if result.stuck_slot is not None:
         message += f", and got stuck at {describe_slot(result.stuck_slot)}"
     return message
+
+
+def _warn_about_next_period(schedule_input: ScheduleInput, problem: Problem, assignment: Sequence[int]) -> None:
+    """
+    Warn on standard error if the schedule leaves the next period, with the same parameters, no legal schedule, or
+    note that the check couldn't tell (ADR 0042); say nothing if it can be filled
+    :param schedule_input: ScheduleInput
+    :param problem: its Problem
+    :param assignment: the schedule written, a worker index per slot of the problem
+    """
+    check = check_next_period(schedule_input, problem, assignment)
+    if check is NextPeriodCheck.FILLABLE:
+        return
+    period = schedule_input.settings.period
+    offset = next_period_offset(schedule_input)
+    following = describe_period(period.start + offset, period.end + offset)
+    sys.stdout.flush()  # after the summary on standard output, even when both go to one file
+    if check is NextPeriodCheck.NOT_FILLABLE:
+        _error(f"warning: after this schedule, the next period with the same parameters ({following}) has no legal "
+               f"schedule")
+    else:
+        _error(f"note: couldn't tell whether the next period with the same parameters ({following}) can still be "
+               f"filled after this schedule (the check stopped after {NEXT_PERIOD_CHECK_NODES:,} steps)")
+
+
+def describe_period(start: dt.datetime, end: dt.datetime) -> str:
+    """A period for messages, e.g. '2025-01-02 08:00–2025-01-03 08:00'."""
+    return f"{start:%Y-%m-%d %H:%M}–{end:%Y-%m-%d %H:%M}"
 
 
 def _error(message: str) -> None:

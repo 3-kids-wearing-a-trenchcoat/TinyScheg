@@ -417,3 +417,15 @@ def test_branch_and_bound_on_a_slot_no_one_can_fill() -> None:
                                    (Worker("Anne"), Worker("Bob")), (post,))
     result = find_best_schedule(build_problem(schedule_input), constants_of(schedule_input))
     assert result.assignment is None and result.penalty is None
+
+
+def test_a_search_for_a_legal_schedule_stops_at_its_node_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    # ADR 0042: past the limit, no schedule and not complete; with room enough, the same result as without a limit.
+    # The limit is checked at each progress report, here made every node
+    monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
+    problem = build_problem(small_inputs()[0])
+    unlimited = find_first_schedule(problem)
+    assert unlimited.assignment is not None
+    stopped = find_first_schedule(problem, max_nodes=1)
+    assert stopped.assignment is None and not stopped.complete
+    assert find_first_schedule(problem, max_nodes=unlimited.nodes) == unlimited

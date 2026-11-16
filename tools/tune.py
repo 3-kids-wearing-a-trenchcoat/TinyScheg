@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import csv
 import dataclasses
-import datetime as dt
 import json
 import math
 import multiprocessing
@@ -41,11 +40,12 @@ from typing import Any
 
 from audit import build_context, evaluate, find_fixes, summarize, with_history
 from tinyscheg.csp.problem import Problem, build_problem
+from tinyscheg.csp.next_period import next_period_input
 from tinyscheg.csp.parallel import find_best_schedule_in_parallel
 from tinyscheg.csp.search import SearchResult
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_NEUTRAL_PARTNER, DEFAULT_REST_WEIGHT,
                                             DEFAULT_SHIFT_SHARE, DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT,
-                                            PreviousSchedule, ScheduleInput, ScoringParameters)
+                                            ScheduleInput, ScoringParameters)
 from tinyscheg.parsing.input_reader import read_input
 from tinyscheg.scoring.constants import ScoringConstants, build_constants, hours, unavailable_before
 from tinyscheg.scoring.penalty import REST_POWER
@@ -86,9 +86,7 @@ AUDIT_FIELDS = ("complaints", "easy_fixes", "easy_fix_severity", "no_fix_severit
 MEASURE_FIELDS = ("rests", "rests_at_minimum", "rest_median", "shortest_rest_spread", "peer_hours_gap",
                   "peer_shifts_gap", "liked_pairings", "disliked_pairings")
 DAY2 = "day2_"  # the prefix of the second period's fields, measured over both periods together
-# the second period starts a whole number of these after the first, so that it covers the same hours (the user,
-# 2026-11-16): right after a 24- or 48-hour period, the next day at the same time after a 16-hour one
-NEXT_PERIOD_STEP = dt.timedelta(days=1)
+FIRST_PERIOD = "first period"  # the second period's history entry's source
 RESULT_FIELDS = ("stage", "setting", "input", "tier", "holdout", "likes_weight", "workload_weight", "rest_weight",
                  "workload_power", "neutral_partner", "shift_share", "status", "seconds", "nodes",
                  "penalty", "likes", "workload", "rest", *AUDIT_FIELDS, *MEASURE_FIELDS, "assignment",
@@ -297,23 +295,13 @@ def _solve(schedule_input: ScheduleInput,
 
 def next_period(schedule_input: ScheduleInput, assignment: tuple[int, ...]) -> ScheduleInput:
     """
-    The input continued for a second period with the same parameters, with the first's schedule as its history
-    (ADR 0031): the same length, workers and posts, starting the first whole number of NEXT_PERIOD_STEPs after the
-    first period's start that isn't before its end, so that it covers the same hours (right after a period of whole
-    days, with a gap otherwise); each worker's unavailability repeated as much later
+    The input continued for a second period with the same parameters, with the first's schedule as its history: the
+    program's own next period (ADR 0042), the same hours a whole number of days later
     :param schedule_input: ScheduleInput of the first period
     :param assignment: its schedule, a worker index per slot
     :return: ScheduleInput of the second period
     """
-    offset = math.ceil(schedule_input.settings.period.duration / NEXT_PERIOD_STEP) * NEXT_PERIOD_STEP
-
-    def later(time: DateTimeRange) -> DateTimeRange:
-        return DateTimeRange(time.start + offset, time.end + offset)
-    workers = tuple(dataclasses.replace(worker, unavailable=tuple(later(away) for away in worker.unavailable))
-                    for worker in schedule_input.workers)
-    settings = dataclasses.replace(schedule_input.settings, period=later(schedule_input.settings.period))
-    return dataclasses.replace(schedule_input, settings=settings, workers=workers,
-                               history=(PreviousSchedule("first period", schedule_input, tuple(assignment)),))
+    return next_period_input(schedule_input, assignment, FIRST_PERIOD)
 
 
 def measure_fields(problem: Problem, constants: ScoringConstants, assignment: tuple[int, ...]) -> dict[str, Any]:
