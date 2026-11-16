@@ -8,7 +8,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
-(2026-11-15).
+(2026-11-15); Phase 10, the defaults on long schedules, under way.
 
 ## Phase 1: Walking skeleton
 
@@ -207,6 +207,29 @@ Using every processor for one search, without changing its result
   decides ties, progress, new bests and Ctrl+C through shared memory; the command line's `--jobs`, by default one
   process per processor; the sequential search unchanged with one process
 - [x] Tests, and every benchmark input, alone and as day 2, with the recorded schedules
+
+## Phase 10: The defaults on long schedules
+
+Checking the defaults on 48-hour schedules, the length the user's schedules usually run to, and the loose ends the
+check turned up (planned 2026-11-16). Runs with no time limit come last.
+
+- [ ] Finish the runs that were cut short and are now fast: the defaults audited on the confirm tier (`confirm_01`
+      timed out in the check of [ADR 0039](decisions/0039-default-weights-from-the-users-trade-offs.md)), and the
+      workload weight 1.25 on `sweep_02`
+- [ ] Diagnose the 48-hour check's findings, by how the fixing change moves each part of the penalty: load within a
+      day on `multiday_05` (one swap removes 5 complaints), 12 short-straw complaints with an easy fix on
+      `multiday_04`, and a 4-against-6 shift gap over both periods on `multiday_05`
+- [ ] Decide on the defaults: they hold, a small tuning round on the 48-hour inputs, or a design question for the
+      user
+- [ ] The next period is the same hours a whole number of days later (the user, 2026-11-16): fix the tuning's
+      second period to match, and re-run the second periods it changes
+- [ ] Warn when a schedule leaves the next period with no legal schedule, after a cheap check with a time limit
+      (see [Future work](explanation/future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule))
+- [ ] The 48-hour tier reproducible by the generator: 5 inputs, a one-hour limit
+- [ ] Docs: the 48-hour results on the tuning page and in future work
+- [ ] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
+      real use, and what could help
+- [ ] Runs with no time limit, unattended: how long the 48-hour seeds 3009–3011 take to search to the end
 
 ## Later
 
