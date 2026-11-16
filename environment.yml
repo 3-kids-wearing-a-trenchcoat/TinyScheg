@@ -13,6 +13,8 @@ dependencies:
   # XLSX (Excel) and ODS (OpenDocument) output
   - openpyxl
   - odfpy
+  # Counting physical cores, for the default number of parallel processes (ADR 0043)
+  - psutil
 
   # Testing (development only, not used by the program itself)
   - pytest=9.0.3

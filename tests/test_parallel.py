@@ -147,3 +147,14 @@ def test_command_line_jobs(tmp_path: pathlib.Path) -> None:
     with pytest.raises(SystemExit) as exit_info:
         main([str(input_path), "--jobs", "0"])
     assert exit_info.value.code == EXIT_USAGE
+
+
+def test_the_default_is_one_process_per_physical_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    # ADR 0043: psutil's count of physical cores, or the operating system's count of processors if it can't tell
+    monkeypatch.setattr(parallel.psutil, "cpu_count", lambda logical=True: 6 if not logical else 12)
+    assert parallel.default_processes() == 6
+    monkeypatch.setattr(parallel.psutil, "cpu_count", lambda logical=True: None)
+    monkeypatch.setattr(parallel.os, "cpu_count", lambda: 12)
+    assert parallel.default_processes() == 12
+    monkeypatch.setattr(parallel.os, "cpu_count", lambda: None)
+    assert parallel.default_processes() == 1

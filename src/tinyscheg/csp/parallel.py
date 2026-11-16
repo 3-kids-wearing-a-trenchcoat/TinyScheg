@@ -29,6 +29,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import psutil
+
 from tinyscheg.csp.problem import Problem
 from tinyscheg.csp.search import SearchProgress, SearchResult, _Search, find_best_schedule
 from tinyscheg.model.shift import Slot
@@ -50,8 +52,13 @@ LOCK_TIMEOUT_SECONDS = 5.0
 
 
 def default_processes() -> int:
-    """The number of processes used unless told otherwise: one per processor the operating system reports."""
-    return os.cpu_count() or 1
+    """
+    The number of processes used unless told otherwise: one per physical core (ADR 0043), since a core's second
+    thread gained little on one machine and cost a third on another, which ran hotter; one per processor the
+    operating system reports when the cores can't be counted
+    :return: int, at least 1
+    """
+    return psutil.cpu_count(logical=False) or os.cpu_count() or 1
 
 
 def find_best_schedule_in_parallel(problem: Problem, constants: ScoringConstants, processes: int,

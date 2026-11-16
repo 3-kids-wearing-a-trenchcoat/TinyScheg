@@ -83,7 +83,7 @@ def _parser() -> argparse.ArgumentParser:
                         help=f"the schedule file to write; its extension sets the format (default: next to the "
                              f"input, named <input name>_schedule{DEFAULT_EXTENSION})")
     parser.add_argument("-j", "--jobs", type=_positive_int,
-                        help=f"how many processes search in parallel (default: one per processor, here "
+                        help=f"how many processes search in parallel (default: one per core, here "
                              f"{default_processes()}); 1 searches in a single process. The schedule is the same "
                              f"either way (ADR 0041)")
     return parser

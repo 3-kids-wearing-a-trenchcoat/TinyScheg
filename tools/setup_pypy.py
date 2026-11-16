@@ -25,7 +25,7 @@ PYTHON_VERSION = "3.11"
 DOWNLOAD_URL = "https://downloads.python.org/pypy/{archive}"
 
 # The libraries the program and its tests need, at the versions of the tinyscheg conda environment
-REQUIREMENTS = ("pyyaml==6.0.3", "openpyxl==3.1.5", "odfpy==1.4.1", "pytest==9.0.3")
+REQUIREMENTS = ("pyyaml==6.0.3", "openpyxl==3.1.5", "odfpy==1.4.1", "psutil==7.2.2", "pytest==9.0.3")
 
 REPOSITORY = pathlib.Path(__file__).resolve().parent.parent
 TARGET = REPOSITORY / ".pypy"
