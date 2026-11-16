@@ -143,7 +143,10 @@ severe, for anyone, and gives **nobody a short straw** of any kind they didn't h
 schedule's norm, or a disliked partner). Otherwise the fix only moves the problem around. A straw happens to a worker
 whatever the others have, so it counts even when the worker stays within the tolerance and nobody would complain.
 (Decided 2026-11-13: in a day-2 check, a fix gave a worker a new 6-hour rest, allowed because their count of straws
-stayed within one of the others'.)
+stayed within one of the others'.) Nor may it make anyone's **short rests shorter**: comparing a worker's rests
+shortest first, no short rest after the change may be shorter than the one in its place before. Counting straws alone
+missed this: two rests of 12 hours becoming 7 and 17, below a norm of 14, is one short rest fewer, but the one left
+is close to the minimum (decided 2026-11-16, found on a 48-hour benchmark input).
 
 Chains are found greedily, which keeps the search quick:
 

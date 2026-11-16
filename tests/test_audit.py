@@ -230,6 +230,24 @@ def test_a_change_that_gives_anyone_a_new_short_straw_is_not_harmless() -> None:
     assert not is_harmless(before, Audit((straws_only(1), straws_only(0)), ()))
 
 
+def rests_only(*rests: float) -> WorkerStats:
+    """A worker's statistics with nothing but the given rests (in hours; no straws counted)."""
+    return WorkerStats((), {}, {}, {}, rests, {}, 0, 0, {"short rest": 0, "disliked partner": 0})
+
+
+def test_a_change_that_makes_a_short_rest_shorter_is_not_harmless() -> None:
+    # threshold 14 hours: two rests of 12 becoming 7 and 17 (one short rest fewer), or 9 and 12, aren't harmless;
+    # a short rest getting longer is, and so is a rest above the threshold getting shorter but staying above it
+    straws = ({"short rest": 2, "disliked partner": 0},)
+    before = Baseline({}, straws, 14.0, ((12.0, 12.0),))
+    assert not is_harmless(before, Audit((rests_only(7.0, 17.0),), ()))
+    assert not is_harmless(before, Audit((rests_only(12.0, 9.0),), ()))
+    assert is_harmless(before, Audit((rests_only(13.0, 12.0),), ()))
+    above = Baseline({}, ({"short rest": 0, "disliked partner": 0},), 14.0, ((20.0,),))
+    assert is_harmless(above, Audit((rests_only(15.0),), ()))
+    assert not is_harmless(above, Audit((rests_only(13.0),), ()))
+
+
 def test_changes_are_judged_by_the_audited_schedules_norm() -> None:
     # everyone rests 8 hours: the norm makes nothing short (8 - 2 = 6), but against a norm of 9 every rest is short
     workers = [Worker(name) for name in ("Anne", "Bob", "Cy", "Dan", "Eve", "Fay")]

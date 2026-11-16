@@ -513,23 +513,27 @@ ComplaintKey = tuple[str, int, int, str]
 class Baseline:
     """
     What every change is judged against: the audited schedule's complaints (each one's severity, by key), each
-    worker's short straws by kind, and its short-rest threshold, the norm the schedule set, which no change may move
+    worker's short straws by kind, its short-rest threshold, the norm the schedule set, which no change may move, and
+    each worker's rests, shortest first
     """
     severities: dict[ComplaintKey, float]
     straws: tuple[dict[str, int], ...]
     short_rest: float
+    rests: tuple[tuple[float, ...], ...] = ()
 
 
 def baseline(audit: Audit) -> Baseline:
     """The Baseline of an audited schedule."""
     return Baseline({complaint.key: complaint.severity for complaint in audit.complaints},
-                    tuple(dict(stats.straws) for stats in audit.stats), audit.short_rest)
+                    tuple(dict(stats.straws) for stats in audit.stats), audit.short_rest,
+                    tuple(tuple(sorted(stats.rests)) for stats in audit.stats))
 
 
 def is_harmless(before: Baseline, after: Audit) -> bool:
     """
-    True if a change creates no new complaint, makes no existing one more severe, and gives nobody a short straw of
-    any kind they didn't have (a straw happens to a worker, whatever the others have)
+    True if a change creates no new complaint, makes no existing one more severe, gives nobody a short straw of any
+    kind they didn't have (a straw happens to a worker, whatever the others have), and makes nobody's short rests
+    shorter
     :param before: the Baseline of the audited schedule
     :param after: the Audit after the change, judged by the audited schedule's norm
     """
@@ -537,7 +541,23 @@ def is_harmless(before: Baseline, after: Audit) -> bool:
                 and complaint.severity <= before.severities[complaint.key] + SEVERITY_EPSILON
                 for complaint in after.complaints)
             and all(stats.straws[kind] <= straws[kind] for stats, straws in zip(after.stats, before.straws)
-                    for kind in straws))
+                    for kind in straws)
+            and all(not _short_rests_shorter(before.rests[worker], stats.rests, before.short_rest)
+                    for worker, stats in enumerate(after.stats) if worker < len(before.rests)))
+
+
+def _short_rests_shorter(before: tuple[float, ...], after: Sequence[float], short_rest: float) -> bool:
+    """
+    True if a worker's short rests got shorter: comparing their rests shortest first, some short rest after the
+    change is shorter than the rest in its place before (or has none in its place). Two rests of 12 hours becoming 7
+    and 17 is a shorter short rest, even with the number of short rests the same or smaller (found 2026-11-16).
+    :param before: the worker's rests in the audited schedule, shortest first
+    :param after: the worker's rests after the change
+    :param short_rest: the short-rest threshold, the audited schedule's norm
+    :return: True if the change made one of the worker's short rests shorter
+    """
+    return any(rest < short_rest and (place >= len(before) or rest < before[place])
+               for place, rest in enumerate(sorted(after)))
 
 
 @dataclass(frozen=True, slots=True)
