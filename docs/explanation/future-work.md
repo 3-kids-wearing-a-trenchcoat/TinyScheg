@@ -180,8 +180,9 @@ current code, with the same schedules and node counts on every input (archived o
 * **In one process,** the laptop is faster: about 1.6 times on PyPy (the example 3.3 s against 5.1–5.5 s) and 1.35
   times on CPython (13.8 s against 18.7 s).
 * **In parallel,** it's held back by heat (its processor stays at its 95 °C limit): `confirm_01` takes about 25 s
-  with 12 or 16 processes, as on the desktop with 16, but about 35 s with 24, one per logical processor, which is
-  the default ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)). On the desktop, the
+  with 12 or 16 processes, as on the desktop with 16, but about 35 s with 24, one per logical processor, which was
+  the default ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)); it's one per physical
+  core since ([ADR 0043](../decisions/0043-one-process-per-physical-core.md)). On the desktop, the
   second thread of each core gained little and cost nothing; here it costs a third. Timings vary by up to 15% from
   run to run.
 * **The benchmark inputs,** with 12 processes: each under 25 s, alone and as a second period.

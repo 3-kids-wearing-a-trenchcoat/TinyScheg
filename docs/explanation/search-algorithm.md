@@ -185,7 +185,8 @@ When the search ends, the pocket holds the best schedule.
 > **Implemented**, and covered by tests. See
 > [ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md).
 
-Python runs one thread at a time, so the search runs in several **processes**, by default one per processor, with
+Python runs one thread at a time, so the search runs in several **processes**, by default one per physical core
+([ADR 0043](../decisions/0043-one-process-per-physical-core.md)), with
 little shared between them. Most of a search's time goes into proving that nothing beats the best schedule, found
 early, and that work can be shared out without waste.
 

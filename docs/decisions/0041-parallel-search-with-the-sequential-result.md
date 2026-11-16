@@ -1,6 +1,6 @@
 # 0041. Branch and bound in parallel processes, with exactly the sequential result
 
-**Status:** Accepted.
+**Status:** Accepted, amended by [0043](0043-one-process-per-physical-core.md).
 
 ## Context
 

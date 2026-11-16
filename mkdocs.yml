@@ -100,6 +100,7 @@ nav:
       - 0040 A workload bound in whole slots: decisions/0040-workload-bound-in-whole-slots.md
       - 0041 Parallel search: decisions/0041-parallel-search-with-the-sequential-result.md
       - 0042 Next-period warning: decisions/0042-warn-when-the-next-period-cant-be-filled.md
+      - 0043 One process per core: decisions/0043-one-process-per-physical-core.md
 
 markdown_extensions:
   - admonition

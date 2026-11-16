@@ -175,7 +175,7 @@ in the sequential order; its `finished` and `nodes` are those of the branches en
 
 ### `default_processes() -> int`
 
-The number of processes used unless told otherwise: `os.cpu_count()`, at least 1.
+The number of processes used unless told otherwise: one per physical core, `psutil.cpu_count(logical=False)`, or `os.cpu_count()` if that can't tell, at least 1 ([ADR 0043](../../decisions/0043-one-process-per-physical-core.md)).
 
 Named constants: `SUBTREES_PER_PROCESS = 32`, `SHARE_INTERVAL_NODES = 4096`, `POLL_SECONDS = 0.25`,
 `LOCK_TIMEOUT_SECONDS = 5.0` (reading the shared best gives up waiting for its lock and reads it anyway, only possible

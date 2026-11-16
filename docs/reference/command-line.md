@@ -20,7 +20,8 @@ python src/main.py INPUT [-o OUTPUT] [-j JOBS]
   written next to the input, named after it: `shifts/week1.yml` → `shifts/week1_schedule.csv`.
 * `-j JOBS`, `--jobs JOBS` — how many processes search in parallel
   ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)): a whole number of at least 1, by
-  default one per processor the operating system reports. The schedule is the same either way; `--jobs 1` searches
+  default one per physical core ([ADR 0043](../decisions/0043-one-process-per-physical-core.md); one per processor
+  the operating system reports if the cores can't be counted). The schedule is the same either way; `--jobs 1` searches
   in a single process. With 8 processes on 8 cores, the search was about 7.6 times faster than with one
   (2026-11-15).
 
