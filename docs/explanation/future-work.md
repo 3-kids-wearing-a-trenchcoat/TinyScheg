@@ -172,7 +172,13 @@ Still deferred:
 
   Still open: a rest look-ahead (none is valid that's cheap, since a worker can always get no further shifts), caps
   that account for overlapping slots, and whole-slot sets per worker that count only the slots in their own domains
-  (tighter, but they'd have to be kept up to date as forward checking narrows the domains).
+  (tighter, but they'd have to be kept up to date as forward checking narrows the domains). Candidates for
+  [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds) (2026-11-16): a per-slot rest look-ahead (slots
+  no worker can take two of go to different workers, each adding at least the smallest rest increase among those who
+  could take it), a workload bound aware of roles, and a cheaper whole-slot bound. Further off: a strong bound used
+  only near the top of the tree, with a multiplier per slot and each worker's best set of slots found on its own,
+  covering roles, overlaps, rest and workload together; too costly at every node, but the top levels have few nodes
+  and a prune there removes the most.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
@@ -210,18 +216,25 @@ current code, with the same schedules and node counts on every input (archived o
   had a schedule within 1% of the best penalty within 2 seconds, and within 0.1% within 40. The rest of the time
   proves nothing beats it. The penalty's share isn't a measure of fairness, though: the schedules found early weren't
   audited.
+* **Seed 3009,** left out of the tier for going over its limit, searched to the end with 12 processes
+  (2026-11-16): **5 hours 57 minutes**, 12.7 billion nodes. Unlike the tier's inputs, its best schedule came late,
+  after 3 hours 46 minutes (63% of the time); it had one within 1% of the best penalty after 14 seconds, within 0.5%
+  after 3¼ minutes, and within 0.1% only after 31 minutes.
 
 ### Search time on 48-hour first periods
 
 > [!NOTE]
-> **Deferred** (2026-11-16, Phase 10): accepted for now.
+> **Accepted for now** (2026-11-16, Phase 10); faster search through the bounds is taken up next, in
+> [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds).
 
 About half the generated 48-hour inputs took over half an hour to search as a first period, with no history, and
-some far longer ([the 48-hour check](tuning.md#the-48-hour-check-2026-11-1516)). For now that's accepted: the best
-schedule is found early, and the rest of the time goes to proving nothing beats it, so stopping with Ctrl+C after a
-minute or two gives a schedule close to the best in penalty
-([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)); and in steady use, with the
-previous period as history, the 48-hour second periods took at most 8½ minutes. What could help is
+some far longer ([the 48-hour check](tuning.md#the-48-hour-check-2026-11-1516)): seed 3009 took 6 hours on the laptop
+([Speeds on the two machines](#speeds-on-the-two-machines-2026-11-16)). For now that's accepted. The best schedule is
+usually found early, and the rest of the time goes to proving nothing beats it, so stopping with Ctrl+C after a minute
+or two usually gives a schedule close to the best in penalty
+([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)), though not always the best:
+seed 3009's came after 3¾ hours, and it was within 0.1% only after 31 minutes. In steady use, with the previous period
+as history, the 48-hour second periods took at most 8½ minutes. What could help is
 [stronger pruning](#search-performance), and checking whether the schedules found early are as fair, by the audit, as
 the best one.
 

@@ -8,7 +8,8 @@ When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
-(2026-11-15); Phase 10, the defaults on long schedules, under way.
+(2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
+bounds, next.
 
 ## Phase 1: Walking skeleton
 
@@ -238,11 +239,37 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
 - [x] The 48-hour tier reproducible by the generator: 5 inputs, a 2-hour limit (seed 3008 took 54 minutes)
 - [x] Docs: the 48-hour results on the tuning page and in future work
 - [x] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
-      real use, and what could help (decided 2026-11-16: accepted for now; each search found its best schedule
-      within its first 41%, and one within 0.1% of its penalty within 40 s, so Ctrl+C gives a near-final schedule
-      early, and a second period, with history, takes at most 8½ minutes; faster first periods deferred to
-      [Later](#later))
-- [ ] Runs with no time limit, unattended: how long the 48-hour seeds 3009–3011 take to search to the end
+      real use, and what could help (decided 2026-11-16: accepted for now; on the tier's inputs each search found
+      its best schedule within its first 41%, and one within 0.1% of its penalty within 40 s, so Ctrl+C gives a
+      near-final schedule early, and a second period, with history, takes at most 8½ minutes; but seed 3009, in the
+      next step, came within 0.1% only after 31 minutes, and found its best after 3¾ hours; faster first periods
+      taken up in [Phase 11](#phase-11-faster-search-through-the-bounds))
+- [x] Runs with no time limit, unattended: how long the 48-hour seeds 3009–3011 take to search to the end (done
+      2026-11-16 for seed 3009 only: 5 hours 57 minutes on the laptop, 12.7 billion nodes, its best schedule found
+      after 3 hours 46; seeds 3010 and 3011 dropped by the user, for Phase 11 instead)
+
+## Phase 11: Faster search through the bounds
+
+Making the proof that nothing beats the best schedule cheaper, for 48-hour first periods above all (up to 6 hours on
+the laptop, Phase 10), without changing any result: each candidate is a valid lower bound, which changes only how much
+is pruned, never the schedule (planned 2026-11-16; see
+[Search time on 48-hour first periods](explanation/future-work.md#search-time-on-48-hour-first-periods)).
+
+- [ ] Measure first, outside the program: at sampled nodes of a few inputs, how far the current bounds are below
+      the best completion, how often each candidate below would prune where they don't, and at what depth; and how
+      many values of the multiplier the whole-slot bound tries
+- [ ] Then, in the order the measurement supports, each with the user's approval and checked for exactly the same
+      schedules:
+    - [ ] Cheaper: the whole-slot bound's multiplier started from the parent node's; fixed data not rebuilt at each
+      node; children whose own penalty already reaches the pocket's skipped without being set up
+    - [ ] Cheaper and tighter: the whole-slot bound's best multiplier computed directly (a greedy, for slots of one
+      load) rather than searched for
+    - [ ] Tighter: a workload bound aware of roles: the workers who can fill a group of slots take their load
+      between them (e.g. scarce medics covering a desk)
+    - [ ] Tighter: a rest look-ahead: slots no worker can take two of go to different workers, each adding at least
+      the smallest rest increase among those who could take it
+    - [ ] Cheaper, looser: the whole-slot bound only where the cheap bound is near the pocket's
+- [ ] Docs, and the 48-hour times measured again
 
 ## Later
 
@@ -254,8 +281,11 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [x] Faster search by non-heuristic means, as far as it's worth going: PyPy for development runs (ADR 0033),
       parallel search (Phase 9, ADR 0041), and the bound without its whole-slot part checked first (2026-11-15); a
       compiled core and domains as bitsets decided against for now (see future work)
-- [ ] Faster search for 48-hour first periods, with no history: up to an hour on the laptop, most of it proving
-      that nothing beats a schedule found early (deferred in Phase 10)
+- [ ] Faster search for 48-hour first periods, with no history: up to 6 hours on the laptop, most of it proving
+      that nothing beats a schedule found early (deferred in Phase 10; the bounds taken up in Phase 11)
+- [ ] A strong bound used only near the top of the tree, where a prune removes the most: a multiplier per slot, each
+      worker's best set of slots found on its own, covering roles, overlaps, rest and workload together (too costly
+      at every node; suggested 2026-11-16)
 - [ ] Parallel search where processes are spawned (Windows, macOS): measure the start-up cost, and reconsider the
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible

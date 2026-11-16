@@ -187,8 +187,8 @@ When the search ends, the pocket holds the best schedule.
 
 Python runs one thread at a time, so the search runs in several **processes**, by default one per physical core
 ([ADR 0043](../decisions/0043-one-process-per-physical-core.md)), with
-little shared between them. Most of a search's time goes into proving that nothing beats the best schedule, found
-early, and that work can be shared out without waste.
+little shared between them. Most of a search's time goes into proving that nothing beats the best schedule, usually
+found early, and that work can be shared out without waste.
 
 * **Cutting the tree.** The tree is cut, at the first depth giving at least 32 subtrees per process, into subtrees
   numbered in the order the one-process search would visit them. Each subtree is reached by replaying its path's

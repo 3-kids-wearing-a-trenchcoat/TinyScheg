@@ -188,7 +188,8 @@ hours (stage `multiday-defaults`).
 
 **The tier: 5 inputs** (`multiday_03` held back), each searched one at a time with the parallel search. At first the
 limit was 30 minutes, and 4 of the first 8 seeds with a legal schedule went over it (3008–3011), so it was lifted to
-see how long they take: seed 3008 took 54 minutes and became `multiday_05`; seed 3009 was stopped after 2½ hours. The
+see how long they take: seed 3008 took 54 minutes and became `multiday_05`; seed 3009 was stopped after 2½ hours
+(searched to the end later, on the laptop, it took 6 hours). The
 tier's limit is now 2 hours with 5 inputs, which reproduces exactly these inputs.
 
 Searched on the desktop of the time, with 16 processes (on the laptop used since, see
@@ -218,8 +219,9 @@ fixing change moves each part of the penalty:
   around the clock, 6 shifts each, and counting the gate's shifts leaves one fully available worker at 4.
 
 The defaults hold, for now. About half the generated 48-hour inputs took over half an hour to search, which is
-accepted for now ([Future work](future-work.md#search-time-on-48-hour-first-periods)): each search found its best
-schedule early, and second periods, with history, are much faster.
+accepted for now ([Future work](future-work.md#search-time-on-48-hour-first-periods)): each of the tier's searches
+found its best schedule early (seed 3009, left out, only after 3¾ hours of 6), and second periods, with history, are
+much faster.
 
 ## Known limits
 
