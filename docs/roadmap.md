@@ -255,20 +255,23 @@ the laptop, Phase 10), without changing any result: each candidate is a valid lo
 is pruned, never the schedule (planned 2026-11-16; see
 [Search time on 48-hour first periods](explanation/future-work.md#search-time-on-48-hour-first-periods)).
 
-- [ ] Measure first, outside the program: at sampled nodes of a few inputs, how far the current bounds are below
+- [x] Measure first, outside the program: at sampled nodes of a few inputs, how far the current bounds are below
       the best completion, how often each candidate below would prune where they don't, and at what depth; and how
-      many values of the multiplier the whole-slot bound tries
-- [ ] Then, in the order the measurement supports, each with the user's approval and checked for exactly the same
-      schedules:
-    - [ ] Cheaper: the whole-slot bound's multiplier started from the parent node's; fixed data not rebuilt at each
-      node; children whose own penalty already reaches the pocket's skipped without being set up
+      many values of the multiplier the whole-slot bound tries (done 2026-11-16, on 17 inputs, every candidate giving
+      the same schedules; see [Future work](explanation/future-work.md#search-performance)): the exact multiplier
+      and the rest look-ahead are worth building, a role-aware bound in a cheap form is worth designing; starting the
+      multiplier from the parent's (more nodes, not fewer) and a strong bound near the top of the tree only (the
+      pruning that matters is deep) are dropped
+- [ ] Then, in this order, each with the user's approval and checked for exactly the same schedules:
     - [ ] Cheaper and tighter: the whole-slot bound's best multiplier computed directly (a greedy, for slots of one
       load) rather than searched for
-    - [ ] Tighter: a workload bound aware of roles: the workers who can fill a group of slots take their load
-      between them (e.g. scarce medics covering a desk)
     - [ ] Tighter: a rest look-ahead: slots no worker can take two of go to different workers, each adding at least
-      the smallest rest increase among those who could take it
-    - [ ] Cheaper, looser: the whole-slot bound only where the cheap bound is near the pocket's
+      the smallest rest increase among those who could take it; kept up to date incrementally
+    - [ ] Tighter: a workload bound aware of roles, in a cheap form: the workers who can fill a group of slots take
+      their load between them (e.g. scarce medics covering a desk)
+    - [ ] Smaller, if still worth it: fixed data not rebuilt at each node; children whose own penalty already
+      reaches the pocket's skipped without being set up (0–16% of nodes); the whole-slot bound only where the cheap
+      bound is near the pocket's
 - [ ] Docs, and the 48-hour times measured again
 
 ## Later

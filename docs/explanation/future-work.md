@@ -179,6 +179,26 @@ Still deferred:
   only near the top of the tree, with a multiplier per slot and each worker's best set of slots found on its own,
   covering roles, overlaps, rest and workload together; too costly at every node, but the top levels have few nodes
   and a prune there removes the most.
+
+  Measured on 2026-11-16, outside the program (the program's search, with each candidate asked only after its own
+  bounds fail, and every run giving exactly the program's schedule), on the example, 12 benchmark inputs of 16–24
+  hours and four of 48 (`multiday_02`, `_04`, `_05` and seed 3009):
+
+  | Candidate | Nodes, searched to the end (of the program's) | Slow 48 hours: share finished in 40 million nodes |
+  |---|---|---|
+  | The whole-slot multiplier found exactly | 0.56–1.00 | `multiday_05` 34×, `multiday_04` 1.8×, seed 3009 1.0× |
+  | The rest look-ahead | 0.50–0.99 | seed 3009 2.6×, `multiday_04` 1.1×, `multiday_05` 1.0× |
+  | Both | 0.44–0.93 | 34×, 2.0×, 2.7× |
+  | Prices per slot (role-aware, too slow as tried) | 0.52–0.99 | (would prune about half the nodes kept) |
+  | Prices per slot and rest | 0.42–0.99 | (would prune 53–81% of the nodes kept) |
+  | The multiplier started from the parent's | 0.95–1.52 | — |
+
+  Searched for the true best completion at sampled deep nodes, the gap was mostly in workload on the 48-hour inputs
+  with scarce roles, and in workload and rest on seed 3009; prices per slot closed a quarter to a third of the
+  workload gap, the rest presumably coming from slots too close together for one worker, which no candidate sees.
+  The whole-slot bound tries 4.7–5.0 multipliers per node, and on slots of one load, a greedy gave exactly the best
+  multiplier's bound on every sample. A strong bound near the top only does little: the pruning that matters is deep
+  in the tree. The loose `multiday_02`, with no scarce roles, gained at most 7%.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
