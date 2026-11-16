@@ -171,6 +171,35 @@ Still deferred:
   progress with a rough time left, and Ctrl+C stops it, writing the best schedule found so far: stopping is the
   user's choice, made with the progress in view.
 
+### Speeds on the two machines (2026-11-16)
+
+Every timing above, and in the rest of the docs up to 2026-11-15, was measured on a desktop with a Ryzen 7 5800X3D
+(8 cores, 16 threads, 96 MB of cache). Development moved to a laptop with a Ryzen AI 9 HX 370 (12 cores, 4 full and 8
+compact, 24 threads, 24 MB of cache), which is the working machine from now on, so it was measured again on the
+current code, with the same schedules and node counts on every input (archived outside the repository):
+* **In one process,** the laptop is faster: about 1.6 times on PyPy (the example 3.3 s against 5.1–5.5 s) and 1.35
+  times on CPython (13.8 s against 18.7 s).
+* **In parallel,** it's held back by heat (its processor stays at its 95 °C limit): `confirm_01` takes about 25 s
+  with 12 or 16 processes, as on the desktop with 16, but about 35 s with 24, one per logical processor, which is
+  the default ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)). On the desktop, the
+  second thread of each core gained little and cost nothing; here it costs a third. Timings vary by up to 15% from
+  run to run.
+* **The benchmark inputs,** with 12 processes: each under 25 s, alone and as a second period.
+* **The 48-hour inputs,** with 12 processes, and when the best schedule was found:
+
+  | Input | First 48 hours (desktop, 16 processes) | Best found after | Second 48 hours (desktop) |
+  |---|---|---|---|
+  | `multiday_01` | 372 s (387 s) | 2 s | 8 s (11 s) |
+  | `multiday_02` | 94 s (98 s) | 39 s | under 1 s |
+  | `multiday_03` | 363 s (367 s) | 19 s | 27 s (29 s) |
+  | `multiday_04` | 1,189 s (1,247 s) | 196 s | 150 s (157 s) |
+  | `multiday_05` | 3,107 s (3,224 s) | 132 s | 505 s (364 s) |
+
+  The best schedule was found within the first 41% of each first period's search, mostly far sooner; every search
+  had a schedule within 1% of the best penalty within 2 seconds, and within 0.1% within 40. The rest of the time
+  proves nothing beats it. The penalty's share isn't a measure of fairness, though: the schedules found early weren't
+  audited.
+
 ## Faster search by non-heuristic means
 
 > [!NOTE]
