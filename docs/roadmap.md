@@ -213,19 +213,22 @@ Using every processor for one search, without changing its result
 Checking the defaults on 48-hour schedules, the length the user's schedules usually run to, and the loose ends the
 check turned up (planned 2026-11-16). Runs with no time limit come last.
 
-- [ ] Finish the runs that were cut short and are now fast: the defaults audited on the confirm tier (`confirm_01`
+- [x] Finish the runs that were cut short and are now fast: the defaults audited on the confirm tier (`confirm_01`
       timed out in the check of [ADR 0039](decisions/0039-default-weights-from-the-users-trade-offs.md)), and the
-      workload weight 1.25 on `sweep_02`
-- [ ] Diagnose the 48-hour check's findings, by how the fixing change moves each part of the penalty: load within a
+      workload weight 1.25 on `sweep_02` (done 2026-11-16: `confirm_01` gives the recorded schedule, with 4
+      complaints, 2 of them with a small easy fix; the weight 1.25 gives the defaults' schedules on every tuning input)
+- [x] Diagnose the 48-hour check's findings, by how the fixing change moves each part of the penalty: load within a
       day on `multiday_05` (one swap removes 5 complaints), 12 short-straw complaints with an easy fix on
-      `multiday_04`, and a 4-against-6 shift gap over both periods on `multiday_05`
+      `multiday_04`, and a 4-against-6 shift gap over both periods on `multiday_05` (done 2026-11-16: the scoring
+      can't see load within a day, as the swap leaves workload and rest unchanged; the audit counts short rests but not
+      how short, so its fixes there make a rest of 12 hours one of 7; the gap is forced by a scarce role)
 - [ ] Decide on the defaults: they hold, a small tuning round on the 48-hour inputs, or a design question for the
       user
 - [ ] The next period is the same hours a whole number of days later (the user, 2026-11-16): fix the tuning's
       second period to match, and re-run the second periods it changes
 - [ ] Warn when a schedule leaves the next period with no legal schedule, after a cheap check with a time limit
       (see [Future work](explanation/future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule))
-- [ ] The 48-hour tier reproducible by the generator: 5 inputs, a one-hour limit
+- [x] The 48-hour tier reproducible by the generator: 5 inputs, a 2-hour limit (seed 3008 took 54 minutes)
 - [ ] Docs: the 48-hour results on the tuning page and in future work
 - [ ] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
       real use, and what could help
