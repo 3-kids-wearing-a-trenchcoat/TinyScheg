@@ -255,24 +255,51 @@ the laptop, Phase 10), without changing any result: each candidate is a valid lo
 is pruned, never the schedule (planned 2026-11-16; see
 [Search time on 48-hour first periods](explanation/future-work.md#search-time-on-48-hour-first-periods)).
 
-- [x] Measure first, outside the program: at sampled nodes of a few inputs, how far the current bounds are below
+- [x] **1. Measure first,** outside the program: at sampled nodes of a few inputs, how far the current bounds are below
       the best completion, how often each candidate below would prune where they don't, and at what depth; and how
       many values of the multiplier the whole-slot bound tries (done 2026-11-16, on 17 inputs, every candidate giving
       the same schedules; see [Future work](explanation/future-work.md#search-performance)): the exact multiplier
       and the rest look-ahead are worth building, a role-aware bound in a cheap form is worth designing; starting the
       multiplier from the parent's (more nodes, not fewer) and a strong bound near the top of the tree only (the
       pruning that matters is deep) are dropped
-- [ ] Then, in this order, each with the user's approval and checked for exactly the same schedules:
-    - [ ] Cheaper and tighter: the whole-slot bound's best multiplier computed directly (a greedy, for slots of one
-      load) rather than searched for
-    - [ ] Tighter: a rest look-ahead: slots no worker can take two of go to different workers, each adding at least
-      the smallest rest increase among those who could take it; kept up to date incrementally
-    - [ ] Tighter: a workload bound aware of roles, in a cheap form: the workers who can fill a group of slots take
-      their load between them (e.g. scarce medics covering a desk)
-    - [ ] Smaller, if still worth it: fixed data not rebuilt at each node; children whose own penalty already
-      reaches the pocket's skipped without being set up (0–16% of nodes); the whole-slot bound only where the cheap
-      bound is near the pocket's
-- [ ] Docs, and the 48-hour times measured again
+
+Every step below keeps exactly the same schedules: each new bound is a valid lower bound, never above any
+completion. Each is checked as the earlier speed-ups were: every benchmark input alone and as a second period, on
+CPython and on PyPy, against the recorded schedules, and the 48-hour inputs. It's judged by **time**, not nodes: a
+tighter bound has to pay for its own cost, measured in one process and in parallel. Each code change needs the
+user's approval first.
+
+- [ ] **2. The exact multiplier** (asked 2026-11-16, awaiting the user's approval), with an ADR amending
+      [ADR 0040](decisions/0040-workload-bound-in-whole-slots.md): the whole-slot bound's best multiplier computed
+      instead of searched for with about five tries (`MU_STEPS`); on the measured inputs, 0–44% fewer nodes searched
+      to the end, and 1.0–34 times the progress on the slow 48-hour ones
+    - [ ] With one load left: hand out the remaining slots one at a time, each to the worker whose term it raises
+      least (a priority queue), each within their count and cap; the same value as the best multiplier
+    - [ ] With several loads: each worker's lower convex envelope of the extra loads they could take (the
+      combinations the exact evaluator lists, or its intervals beyond `MAX_LOAD_COMBINATIONS`), the segments of all
+      workers merged by slope until the remaining load is handed out
+    - [ ] Tests: equal to a long multiplier search on many states; never above the best completion (brute force on
+      small inputs)
+    - [ ] Check: the same schedules on every input; nodes and time against the current code, in one process on
+      both interpreters and with 12 processes; kept only if faster
+- [ ] **3. The rest look-ahead** (needs the user's approval), with an ADR: for each unfilled slot, the smallest
+      increase in the rest penalty among the workers still in its domain, measured against their current shifts;
+      slots that conflict pairwise (overlapping, or closer than the minimum rest) go to different workers, so the
+      heaviest such group is added to the bound. Two slots conflict exactly when the gap between them is shorter
+      than the minimum rest, or there's none, so conflicts follow time as between intervals, and the heaviest group
+      is found by one sweep over time. Kept up to date incrementally: an
+      assignment changes only the slots whose domain holds the assigned worker or was narrowed. Measured: 0–50%
+      fewer nodes, 2.6 times the progress on seed 3009. Same tests and check as step 2.
+- [ ] **4. A cheap role-aware workload bound:** designed and measured outside the program first, against the
+      ceiling found with a price per slot (32–52% of the nodes the program keeps would be pruned, on inputs with
+      scarce roles); candidates: water-filling where the workers who can fill a group of slots must take that
+      group's load between them, and the whole-slot bound by such groups. Then proposed to the user.
+- [ ] **5. Smaller, if still worth it after 2–4:** fixed data not rebuilt at each node; children whose own penalty
+      already reaches the pocket's skipped without being set up (0–16% of nodes); the whole-slot bound only where
+      the cheap bound is near the pocket's
+- [ ] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
+      the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
+      deferred item on 48-hour first periods reconsidered with them
 
 ## Later
 
@@ -280,7 +307,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 
 - [ ] Faster search: stronger pruning, e.g. a rest look-ahead, or whole-slot sets per worker's own domains (a
       workload bound in whole slots was done in Phase 8, ADR 0040; tried 2026-11-13 and not worth it: workload caps
-      that account for overlaps, and symmetry between identical workers, rare in the benchmark)
+      that account for overlaps, and symmetry between identical workers, rare in the benchmark; Phase 11 takes up
+      the rest look-ahead, the exact multiplier and roles). Left after Phase 11's measurement: workload slack from
+      slots too close together for one worker to take both, which no bound tried sees, and loose inputs with no
+      scarce roles (`multiday_02`), where nothing tried helped more than 7%
 - [x] Faster search by non-heuristic means, as far as it's worth going: PyPy for development runs (ADR 0033),
       parallel search (Phase 9, ADR 0041), and the bound without its whole-slot part checked first (2026-11-15); a
       compiled core and domains as bitsets decided against for now (see future work)
