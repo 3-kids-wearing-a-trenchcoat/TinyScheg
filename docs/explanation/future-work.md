@@ -61,6 +61,13 @@ tried. Looked at again on 2026-11-15/16:
 * **`sweep_08`** (24 hours, so the next day starts right after): the same, at midnight, with the medics; both days
   planned as one schedule could be filled. It's the one benchmark input, at the defaults, the warning catches.
 * **The example** (`exampleInput.yml`, 24 hours) does the same with the security holders the front gate needs at night.
+  One more worker with the security role would remove the warning, but the example is also the input the default
+  weights' trade-offs are checked on ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md),
+  `tools/tune.py`), and with that worker one of the user's rules no longer holds there: a 2-2-4 costs 0.83 times as
+  much as one worker resting at the minimum twice, against 1.38 now (the known limit of looser inputs,
+  [Tuning](tuning.md#known-limits)). Left as it is for now (the user, 2026-11-16), to be revisited: keep it, change it
+  and re-examine the defaults, or keep the current file as the reference for tuning and tests and give the
+  user-facing example the extra worker.
 
 **The decision** (the user, 2026-11-15/16): **warn**, as long as it's computationally cheap, with the next period
 assumed to have exactly the same parameters, at the same hours a whole number of days later. Done in

@@ -273,6 +273,8 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       one that leaves it no legal schedule is warned about since Phase 10, ADR 0042)
 - [x] Tuning: start the second period a whole number of days after the first, so that it covers the same hours of
       the day (done in Phase 10)
+- [ ] The example leaves the next period no legal schedule: whether to change it, given it's also the input the
+      defaults' trade-offs are checked on (left as it is in Phase 10, to be revisited)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Forcing a specific worker into a specific shift (low priority)
