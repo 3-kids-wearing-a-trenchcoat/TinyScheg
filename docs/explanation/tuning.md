@@ -114,7 +114,8 @@ sweep tier, 10 for the confirm tier, 2 hours for the multiday tier). Candidates 
 order, so the inputs kept don't depend on how many are tried at once; a solve may run slightly slower when the machine
 is busy, though. The multiday tier's inputs are too long to search many at once, each in one process, so its
 candidates are tried one at a time instead, each search in parallel processes
-([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), one per processor. This quietly drops the loosest inputs, which take longest to search; the manifest
+([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), one per physical core
+([ADR 0043](../decisions/0043-one-process-per-physical-core.md)). This quietly drops the loosest inputs, which take longest to search; the manifest
 (`tools/benchmarks/manifest.csv`) lists every skipped candidate and why, so the bias stays visible. Every third input
 of a tier is **held back**: never used to choose values, only to check the chosen ones at the end. The inputs are
 committed, so changing the generator never silently changes what was tuned on.
@@ -189,6 +190,9 @@ hours (stage `multiday-defaults`).
 limit was 30 minutes, and 4 of the first 8 seeds with a legal schedule went over it (3008–3011), so it was lifted to
 see how long they take: seed 3008 took 54 minutes and became `multiday_05`; seed 3009 was stopped after 2½ hours. The
 tier's limit is now 2 hours with 5 inputs, which reproduces exactly these inputs.
+
+Searched on the desktop of the time, with 16 processes (on the laptop used since, see
+[Speeds on the two machines](future-work.md#speeds-on-the-two-machines-2026-11-16)):
 
 | Input | First 48 hours | Complaints (easy fixes) | Second 48 hours | Complaints over both (easy fixes) |
 |---|---|---|---|---|

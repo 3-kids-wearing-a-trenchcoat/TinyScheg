@@ -73,8 +73,11 @@ tried. Looked at again on 2026-11-15/16:
 assumed to have exactly the same parameters, at the same hours a whole number of days later. Done in
 [ADR 0042](../decisions/0042-warn-when-the-next-period-cant-be-filled.md): after writing a schedule, the command line
 searches for any legal schedule of the next period, with this one as history, within about 500,000 nodes (a few
-seconds at most), and warns if there's none, or notes that it couldn't tell. The tuning still counts a setting whose
-first day leaves no legal second day as a failure.
+seconds at most), and warns if there's none, or notes that it couldn't tell. Measured on the laptop (2026-11-16)
+after the best schedule of the example and of every benchmark input: under 1 ms each on CPython (median 0.5 ms), 1–7
+ms on PyPy (median 2.6 ms); a check that runs into the node limit, on the hardest legal-schedule
+search known, took 2.0 s on CPython and 0.6 s on PyPy. The tuning still counts a setting whose first day leaves no
+legal second day as a failure.
 
 A milder form (2026-11-14): a first period that leaves the next a worse schedule than another first period would
 have. On `sweep_02`, with the workload weight raised from 0.38 to 1.0, the first day's best schedule no longer had an

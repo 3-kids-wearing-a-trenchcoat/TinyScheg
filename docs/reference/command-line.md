@@ -23,7 +23,8 @@ python src/main.py INPUT [-o OUTPUT] [-j JOBS]
   default one per physical core ([ADR 0043](../decisions/0043-one-process-per-physical-core.md); one per processor
   the operating system reports if the cores can't be counted). The schedule is the same either way; `--jobs 1` searches
   in a single process. With 8 processes on 8 cores, the search was about 7.6 times faster than with one
-  (2026-11-15).
+  (2026-11-15, on a desktop); on a laptop with 12 cores, 12 processes did best, held back by heat
+  ([ADR 0043](../decisions/0043-one-process-per-physical-core.md)).
 
 An existing file at the output path is replaced, but only once a schedule has been found: if anything goes wrong, no
 file is written and an existing one is left as it was.
@@ -32,7 +33,10 @@ The schedule written is the **best** legal one: the one with the lowest
 [penalty](../explanation/scoring.md), found by [branch and bound](../explanation/search-algorithm.md#branch-and-bound-the-pocket).
 The search runs to the end, with no limit, which can take a while: for the 24-hour `exampleInput.yml`, about 2
 seconds in parallel and 20 in one process (5½ on [PyPy](../how-to/use-pypy.md)), and much longer for longer
-schedules (the example stretched to 48 hours takes about 12 minutes in parallel on PyPy). Its progress is shown as
+schedules (the example stretched to 48 hours takes about 12 minutes in parallel on PyPy). These were measured on the
+desktop TinyScheg was developed on until 2026-11-16; the laptop used since is faster in one process (the example in
+14 s, 3.3 on PyPy), and 48-hour schedules take from minutes to hours
+([Speeds on the two machines](../explanation/future-work.md#speeds-on-the-two-machines-2026-11-16)). Its progress is shown as
 it goes (below), and Ctrl+C stops it, writing the best schedule found so far ([Stopping early](#stopping-early-ctrlc)). In parallel, the progress and the node counts are
 those of all processes together, and differ a little from run to run; the schedule doesn't.
 
