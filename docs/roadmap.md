@@ -222,8 +222,11 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       `multiday_04`, and a 4-against-6 shift gap over both periods on `multiday_05` (done 2026-11-16: the scoring
       can't see load within a day, as the swap leaves workload and rest unchanged; the audit counts short rests but not
       how short, so its fixes there make a rest of 12 hours one of 7; the gap is forced by a scarce role)
-- [ ] Decide on the defaults: they hold, a small tuning round on the 48-hour inputs, or a design question for the
-      user
+- [x] Decide on the defaults: they hold, a small tuning round on the 48-hour inputs, or a design question for the
+      user (decided 2026-11-16: they hold, for now; load within a day is left to the whole schedule's totals, since
+      the uneven day on `multiday_05` was only when a long rest fell, with even totals; the audit no longer counts a
+      change that makes a short rest shorter as harmless, which removed `multiday_04`'s fixes and changed no
+      conclusion of the weight re-check)
 - [x] The next period is the same hours a whole number of days later (the user, 2026-11-16): fix the tuning's
       second period to match, and re-run the second periods it changes (done 2026-11-16: at the defaults, all 8
       moved second periods have a legal schedule, against 3 of 8 before; of every benchmark input, only `sweep_08`
