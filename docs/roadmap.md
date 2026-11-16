@@ -224,8 +224,10 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       how short, so its fixes there make a rest of 12 hours one of 7; the gap is forced by a scarce role)
 - [ ] Decide on the defaults: they hold, a small tuning round on the 48-hour inputs, or a design question for the
       user
-- [ ] The next period is the same hours a whole number of days later (the user, 2026-11-16): fix the tuning's
-      second period to match, and re-run the second periods it changes
+- [x] The next period is the same hours a whole number of days later (the user, 2026-11-16): fix the tuning's
+      second period to match, and re-run the second periods it changes (done 2026-11-16: at the defaults, all 8
+      moved second periods have a legal schedule, against 3 of 8 before; of every benchmark input, only `sweep_08`
+      still leaves the next period none)
 - [ ] Warn when a schedule leaves the next period with no legal schedule, after a cheap check with a time limit
       (see [Future work](explanation/future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule))
 - [x] The 48-hour tier reproducible by the generator: 5 inputs, a 2-hour limit (seed 3008 took 54 minutes)
