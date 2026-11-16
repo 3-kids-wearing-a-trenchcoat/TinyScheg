@@ -97,7 +97,7 @@ class Tier:
 TIERS = {
     "sweep": Tier("sweep", (16, 20, 24), 12, 4000, 300.0, SHIFTS),
     "confirm": Tier("confirm", (24,), 3, 2000, 600.0, STAFFED),
-    "multiday": Tier("multiday", (48,), 6, 3000, 1800.0, STAFFED, one_at_a_time=True),
+    "multiday": Tier("multiday", (48,), 5, 3000, 7200.0, STAFFED, one_at_a_time=True),  # seed 3008 took 54 min
 }
 
 
