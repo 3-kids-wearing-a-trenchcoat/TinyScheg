@@ -1,8 +1,9 @@
-# `state`, `search` and `parallel` modules
+# `state`, `search`, `parallel` and `next_period` modules
 
 Sources: [`src/tinyscheg/csp/state.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/state.py),
-[`src/tinyscheg/csp/search.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/search.py) and
-[`src/tinyscheg/csp/parallel.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/parallel.py)
+[`src/tinyscheg/csp/search.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/search.py),
+[`src/tinyscheg/csp/parallel.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/parallel.py) and
+[`src/tinyscheg/csp/next_period.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/src/tinyscheg/csp/next_period.py)
 
 See [Search algorithm](../../explanation/search-algorithm.md) for how the search works and why. As in
 [`Problem`](problem.md), workers and slots are referred to by index.
@@ -54,10 +55,15 @@ Everything one `assign` changed. Immutable.
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_search.py`). The command line uses `find_best_schedule`.
 
-### `find_first_schedule(problem) -> SearchResult`
+### `find_first_schedule(problem, max_nodes=None) -> SearchResult`
 
 Backtracking search with forward checking. Slots are chosen by `choose_slot` and workers tried in input order, so
 the result is deterministic. Stops at the first complete, legal schedule.
+
+With `max_nodes` ([ADR 0042](../../decisions/0042-warn-when-the-next-period-cant-be-filled.md)), it gives up at the
+first progress report (every `PROGRESS_INTERVAL_NODES`, 4096, nodes) past that many nodes, and returns no schedule,
+marked as not complete: whether one exists is then unknown. The limit is checked only at progress reports, so the
+search's own steps are the same as without one.
 
 ### `find_best_schedule(problem, constants, prune=True, on_improvement=None, incremental=True, on_progress=None, keep_best_on_interrupt=False) -> SearchResult`
 
@@ -120,7 +126,7 @@ How far a search has got ([ADR 0035](../../decisions/0035-search-progress-and-ke
 * `pruned` — `int`, how many branches branch and bound cut off because they couldn't beat the pocket.
 * `complete` — `bool`, `False` for a `find_best_schedule` search stopped by Ctrl+C with `keep_best_on_interrupt`:
   `assignment` is then the best schedule found so far, not proven the best (`None` if none was found yet), and its
-  `penalty` is computed from scratch.
+  `penalty` is computed from scratch. Also `False` for a `find_first_schedule` search stopped by its `max_nodes`.
 * `finished` — `float`, the share of the search space finished: 1 for a search that ran to the end.
 
 The stuck slot is where the search found out, not necessarily the cause: forward checking stops an assignment as soon
@@ -175,3 +181,32 @@ Named constants: `SUBTREES_PER_PROCESS = 32`, `SHARE_INTERVAL_NODES = 4096`, `PO
 `LOCK_TIMEOUT_SECONDS = 5.0` (reading the shared best gives up waiting for its lock and reads it anyway, only possible
 if a process was killed holding it). Processes are forked on Linux, inheriting the main process's state, and spawned
 elsewhere.
+
+## `next_period` module
+
+> [!NOTE]
+> **Implemented**, and covered by tests (`tests/test_next_period.py`). The command line checks every schedule it
+> writes; the tuning (`tools/tune.py`) continues its benchmark inputs with `next_period_input`. See
+> [ADR 0042](../../decisions/0042-warn-when-the-next-period-cant-be-filled.md).
+
+### `next_period_offset(schedule_input) -> timedelta`
+
+How much later the next period starts: the first whole number of `NEXT_PERIOD_STEP`s (a day) that isn't shorter than
+the period, so that the next period covers the same hours. A day after a 24-hour period, also a day after a 16-hour
+one, two days after a 48-hour one.
+
+### `next_period_input(schedule_input, assignment, source="the schedule just made") -> ScheduleInput`
+
+The next period's input, with the same parameters: the same workers, posts, rules and length, `next_period_offset`
+later; each worker's unavailability repeated as much later; and the schedule (`assignment`, a worker index for each of
+this period's slots, in stable slot order) added at the end of the history, named `source` in messages.
+
+### `check_next_period(schedule_input, problem, assignment, max_nodes=NEXT_PERIOD_CHECK_NODES) -> NextPeriodCheck`
+
+Whether the next period could still be filled after a schedule (`assignment`, a worker index per slot of `problem`,
+its history included): first the slots no worker could fill, then `find_first_schedule` on the next period, with at
+most about `max_nodes` (500,000) nodes.
+
+### `class NextPeriodCheck`
+
+An enum: `FILLABLE`, `NOT_FILLABLE`, or `UNDECIDED` (the search reached its node limit first).

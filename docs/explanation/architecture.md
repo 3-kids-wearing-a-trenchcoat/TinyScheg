@@ -101,6 +101,7 @@ entry point.
 | `csp/state.py` | [The explicit search state and change records](../reference/api/search.md#state-module) ([ADR 0016](../decisions/0016-undo-through-change-records-on-the-call-stack.md)). |
 | `csp/search.py` | [Backtracking search with forward checking](../reference/api/search.md#search-module): MRV/degree ordering, branch and bound, and the search's progress. |
 | `csp/parallel.py` | [Branch and bound in parallel processes](../reference/api/search.md#parallel-module), with the same result (ADR 0041). |
+| `csp/next_period.py` | [The next period](../reference/api/search.md#next_period-module): whether a schedule leaves it a legal schedule, for the command line's warning (ADR 0042). |
 | `scoring/constants.py` | [The constants of the penalty score](../reference/api/scoring.md#constants-module), calculated once per run. |
 | `scoring/penalty.py` | [The penalty of a (partial) schedule](../reference/api/scoring.md#penalty-module): likes, workload, rest and their weighted sum. |
 | `scoring/whole_slots.py` | [The workload bound in whole slots](../reference/api/scoring.md#whole_slots-module) (ADR 0040). |

@@ -231,8 +231,9 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       second period to match, and re-run the second periods it changes (done 2026-11-16: at the defaults, all 8
       moved second periods have a legal schedule, against 3 of 8 before; of every benchmark input, only `sweep_08`
       still leaves the next period none)
-- [ ] Warn when a schedule leaves the next period with no legal schedule, after a cheap check with a time limit
-      (see [Future work](explanation/future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule))
+- [x] Warn when a schedule leaves the next period with no legal schedule, after a cheap check with a node limit
+      ([ADR 0042](decisions/0042-warn-when-the-next-period-cant-be-filled.md); done 2026-11-16: `sweep_08` and the
+      example warn)
 - [x] The 48-hour tier reproducible by the generator: 5 inputs, a 2-hour limit (seed 3008 took 54 minutes)
 - [ ] Docs: the 48-hour results on the tuning page and in future work
 - [ ] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
@@ -262,10 +263,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       done)
 - [ ] Scoring: workload in hours only (shift share 0), once the rest part keeps short shifts apart in tight schedules
       too (deferred 2026-11-14)
-- [ ] A schedule that leaves the next period with no legal schedule: warn, after a cheap check of the next period
-      with the same parameters (found 2026-11-14, decided 2026-11-15); a worse one: open
-- [ ] Tuning: start the second period a whole number of days after the first, so that it covers the same hours of
-      the day (on 3 sweep inputs it doesn't, and has no legal schedule even with every worker rested; 2026-11-15)
+- [ ] A schedule that leaves the next period a worse schedule than another first period would (found 2026-11-14;
+      one that leaves it no legal schedule is warned about since Phase 10, ADR 0042)
+- [x] Tuning: start the second period a whole number of days after the first, so that it covers the same hours of
+      the day (done in Phase 10)
 - [ ] Handling dangling shifts (keep, merge, or set a minimum length)
 - [ ] Time and post preferences
 - [ ] Forcing a specific worker into a specific shift (low priority)

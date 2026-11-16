@@ -83,6 +83,20 @@ The penalty and each part are at least 0, each part in its own units ([Scoring](
 differences between schedules mean anything. They're shown to `PENALTY_DECIMALS` (2) decimals; the
 seconds in plain progress lines to `ELAPSED_DECIMALS` (0), and the share finished to `PERCENT_DECIMALS` (1).
 
+After the summary, the next period is checked
+([ADR 0042](../decisions/0042-warn-when-the-next-period-cant-be-filled.md)): the same input a whole number of days
+later, covering the same hours (right after a 24- or 48-hour period), with this schedule as the last part of its
+history. If it has no legal schedule, a warning follows on standard error; nothing is printed if it can be filled:
+
+```
+tinyscheg: warning: after this schedule, the next period with the same parameters (2025-01-02 00:00–2025-01-03 00:00) has no legal schedule
+```
+
+The schedule is written all the same, with the same exit code: the warning is a chance to add workers, or change the
+schedule by hand, before the next one is due. It assumes the next period has the same workers and posts; the real
+one may differ. The check is a search for any legal schedule, not the best, and gives up after about
+`NEXT_PERIOD_CHECK_NODES` (500,000) steps, a few seconds at most; if it does, a note says it couldn't tell.
+
 With a [history](input-format.md#history), the schedule is searched as the continuation of the previous ones
 ([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): the file written holds the new period
 only, and the counts are the new period's, but the penalty is that of the whole schedule, history included, so it

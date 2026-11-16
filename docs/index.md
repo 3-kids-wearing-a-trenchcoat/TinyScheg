@@ -77,6 +77,7 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Branch and bound (pocket)           | Implemented and tested    |
 | Parallel search                     | Implemented and tested    |
 | Search progress, Ctrl+C keeps best  | Implemented and tested    |
+| Next-period warning                 | Implemented and tested    |
 | Undo (change records)               | Implemented and tested    |
 | Scoring parameters and constants    | Implemented and tested    |
 | Scoring penalties                   | Implemented and tested    |

@@ -99,6 +99,7 @@ nav:
       - 0039 Default weights from the user's trade-offs: decisions/0039-default-weights-from-the-users-trade-offs.md
       - 0040 A workload bound in whole slots: decisions/0040-workload-bound-in-whole-slots.md
       - 0041 Parallel search: decisions/0041-parallel-search-with-the-sequential-result.md
+      - 0042 Next-period warning: decisions/0042-warn-when-the-next-period-cant-be-filled.md
 
 markdown_extensions:
   - admonition

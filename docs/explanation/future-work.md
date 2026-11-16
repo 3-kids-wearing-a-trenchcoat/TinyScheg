@@ -40,32 +40,34 @@ rests is spared more of them. Disliked pairings aren't; making up for them acros
 ### A schedule that leaves the next one with no legal schedule
 
 > [!WARNING]
-> **Not yet implemented.** Found and deferred on 2026-11-14; to be handled with a warning (the user, 2026-11-15).
+> **Partially implemented.** Found on 2026-11-14. A schedule that leaves the next period **no** legal schedule is
+> warned about since 2026-11-16 ([ADR 0042](../decisions/0042-warn-when-the-next-period-cant-be-filled.md)); one that
+> leaves it a **worse** schedule, below, is still open.
 
 The search finds the best schedule for its own period, with no regard for the period after it. A first period starts
 with every worker rested, which the next one doesn't, and nothing tells the search that work in its last hours limits
 who can start the next. In real use, that can be a schedule after which the next one can't be made.
 
 **On the benchmark** (continued for a second day with the first as history, the inputs staffed at the minimum the
-first day needs plus 1–2 workers), 6 of the 15 inputs had no legal second day for some or all of the scorings tried.
-Looked at again on 2026-11-15, only 3 of them are this problem:
-* **`sweep_05`, `sweep_08`, `sweep_09`:** the second day alone has a legal schedule, and so do both days planned as
-  one schedule, but after the first day's best schedule the search is stuck at the second day's first slot: the end of
-  the first day had used the holders of a role the gate needs at night. For `sweep_05`, every scoring tried does this;
-  for the other two, some.
-* **`sweep_01`, `sweep_03`, `sweep_04`:** a flaw in the test. These are 16-hour periods from 16:00 to 08:00, so the
-  second runs from 08:00 to midnight and isn't the same schedule: it has 12 hours of a desk open 08:00–20:00, against
-  4 in the first. It has no legal schedule even with every worker rested. The tuning still counts these as failures,
-  equally for every setting; starting the second period a whole number of days after the first would avoid them.
+first day needs plus 1–2 workers), 6 of the 15 inputs first had no legal second day for some or all of the scorings
+tried. Looked at again on 2026-11-15/16:
+* **`sweep_01`, `sweep_03`, `sweep_04`:** a flaw in the test. These are 16-hour periods from 16:00 to 08:00, and the
+  second ran from 08:00 to midnight, not the same schedule: 12 hours of a desk open 08:00–20:00, against 4 in the
+  first. Since 2026-11-16 the second period covers the same hours, a whole number of days later (the user), and all
+  three have a legal second day.
+* **`sweep_05`, `sweep_09`** (20 hours): the end of the first day had used the holders of a role the gate needs at
+  night, so the second day, starting right after, was stuck at its first slot. Starting at the same hours a day later,
+  4 hours after the first ends, they have a legal second day.
+* **`sweep_08`** (24 hours, so the next day starts right after): the same, at midnight, with the medics; both days
+  planned as one schedule could be filled. It's the one benchmark input, at the defaults, the warning catches.
+* **The example** (`exampleInput.yml`, 24 hours) does the same with the security holders the front gate needs at night.
 
-**The decision** (the user, 2026-11-15): **warn**, as long as it's computationally cheap. After finding a schedule,
-check whether the next period, assumed to have exactly the same parameters (the same input a period later, each
-worker's unavailability repeated), could still be filled with this schedule as its history, and tell the scheduler if
-not; the schedule itself doesn't change, and the scheduler can add workers. It is cheap: on 7 benchmark inputs, the
-per-slot check took 4–7 ms and a search for any legal schedule (not the best) under 1 ms, catching all 3 real cases.
-Proving that there's no legal schedule can occasionally take very long, so the check needs a short time limit and a
-third answer: couldn't tell. Until then, the tuning counts a setting whose first day leaves no legal second day as a
-failure.
+**The decision** (the user, 2026-11-15/16): **warn**, as long as it's computationally cheap, with the next period
+assumed to have exactly the same parameters, at the same hours a whole number of days later. Done in
+[ADR 0042](../decisions/0042-warn-when-the-next-period-cant-be-filled.md): after writing a schedule, the command line
+searches for any legal schedule of the next period, with this one as history, within about 500,000 nodes (a few
+seconds at most), and warns if there's none, or notes that it couldn't tell. The tuning still counts a setting whose
+first day leaves no legal second day as a failure.
 
 A milder form (2026-11-14): a first period that leaves the next a worse schedule than another first period would
 have. On `sweep_02`, with the workload weight raised from 0.38 to 1.0, the first day's best schedule no longer had an

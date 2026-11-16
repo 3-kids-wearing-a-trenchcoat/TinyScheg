@@ -63,6 +63,7 @@ ADR that supersedes the old one.
 | [0039](0039-default-weights-from-the-users-trade-offs.md) | Default weights from the user's trade-offs: likes : workload : rest = 0.45 : 1 : 0.25, neutral partner 0.44 | Accepted |
 | [0040](0040-workload-bound-in-whole-slots.md) | A workload bound in whole slots | Accepted |
 | [0041](0041-parallel-search-with-the-sequential-result.md) | Branch and bound in parallel processes, with exactly the sequential result | Accepted |
+| [0042](0042-warn-when-the-next-period-cant-be-filled.md) | Warn when a schedule leaves the next period no legal schedule | Accepted |
 
 ## Template
 
