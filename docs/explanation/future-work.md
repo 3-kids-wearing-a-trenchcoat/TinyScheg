@@ -375,18 +375,17 @@ tried; at $\sigma = 0$ it moves it. All 12 of that input's complaints with an ea
 
 ## Tuning on longer schedules
 
-> [!WARNING]
-> **Not yet done.** Deferred 2026-11-12, until the search could finish 48-hour inputs; it can now, in parallel
-> (2026-11-15).
+> [!NOTE]
+> **Done** on 2026-11-16 ([the 48-hour check](tuning.md#the-48-hour-check-2026-11-1516)): the defaults hold on 48
+> hours, for now.
 
 The defaults were tuned on schedules of 16 to 24 hours ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md),
 [ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)), the longest branch and bound could finish
-(in one process, the 48-hour example still didn't finish in 15 minutes on PyPy on 2026-11-15; in parallel,
-[ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md), it takes about 12 minutes). On those,
-the whole schedule is the day, so the audit's comparison of load
-in any 24 hours adds nothing to its overall comparison. Whether the scoring keeps load even within each day of a
-longer schedule, as well as overall, can only be checked on 48-hour inputs (the multiday tier, dropped for now). The
-check: generate the tier, run the defaults on it, and see whether day-load complaints with an easy fix appear.
+then, and on those the whole schedule is the day. With the parallel search
+([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), the multiday tier's 48-hour inputs
+could be searched, and the defaults were checked on them: load within a day, the reason for the check, was uneven
+only where a long rest fell, with even totals, which the user considers fair; the audit gained a correction. Left
+open: about half the generated 48-hour inputs took over half an hour to search, some much longer.
 
 ## Schedule audit
 

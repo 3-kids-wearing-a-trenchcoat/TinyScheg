@@ -138,7 +138,8 @@ The *best* legal schedule ([ADR 0004](decisions/0004-branch-and-bound-with-monot
     - [x] Sensitivity, one parameter at a time
     - [x] Rounds by hand: a few candidate settings at a time (`tools/tune.py round`)
     - [x] Choose and check the defaults (held-back inputs, the confirm tier, cards read by hand): rest factor 2.5
-      ([ADR 0028](decisions/0028-rest-factor-default-2-5.md)). The 48-hour tier is out of the search's reach for now
+      ([ADR 0028](decisions/0028-rest-factor-default-2-5.md)). The 48-hour tier was out of the search's reach then;
+      it was checked in Phase 10
 
 ## Phase 6: Spreadsheet output
 
@@ -235,7 +236,7 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       ([ADR 0042](decisions/0042-warn-when-the-next-period-cant-be-filled.md); done 2026-11-16: `sweep_08` and the
       example warn)
 - [x] The 48-hour tier reproducible by the generator: 5 inputs, a 2-hour limit (seed 3008 took 54 minutes)
-- [ ] Docs: the 48-hour results on the tuning page and in future work
+- [x] Docs: the 48-hour results on the tuning page and in future work
 - [ ] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
       real use, and what could help
 - [ ] Runs with no time limit, unattended: how long the 48-hour seeds 3009–3011 take to search to the end
@@ -254,8 +255,8 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible
 - [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example)
-- [ ] Tuning: check the defaults on 48-hour schedules, including load within a day (now within reach: the 48-hour
-      example takes about 12 minutes on PyPy in parallel, 2026-11-15)
+- [x] Tuning: check the defaults on 48-hour schedules, including load within a day (done in Phase 10: they hold, for
+      now)
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
       wrong (see `explanation/future-work.md`)
 - [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one

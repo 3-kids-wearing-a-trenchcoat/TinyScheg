@@ -12,7 +12,8 @@ point, not final, but they shape how every later output is read, so the method i
 > ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). The weights were then checked
 > again, and set from the user's trade-offs
 > ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md); see
-> [the weight re-check](#the-weight-re-check-2026-11-14)). Longer schedules are still to be checked.
+> [the weight re-check](#the-weight-re-check-2026-11-14)). On 48-hour schedules they hold too, for now
+([the 48-hour check](#the-48-hour-check-2026-11-1516)).
 
 > [!WARNING]
 > **The audit changed on 2026-11-13** (load compared with no exchange rate between shifts and hours, shifts counted in
@@ -109,7 +110,7 @@ the longer tiers are staffed more generously:
 | Minimum rest | 6 hours | same |
 
 An input is kept only if branch and bound finds its best schedule within the tier's time limit (5 minutes for the
-sweep tier, 10 for the confirm tier, 30 for the multiday tier). Candidates are tried in parallel but taken in seed
+sweep tier, 10 for the confirm tier, 2 hours for the multiday tier). Candidates are tried in parallel but taken in seed
 order, so the inputs kept don't depend on how many are tried at once; a solve may run slightly slower when the machine
 is busy, though. The multiday tier's inputs are too long to search many at once, each in one process, so its
 candidates are tried one at a time instead, each search in parallel processes
@@ -140,7 +141,7 @@ searching again.
    names only the parameters it changes from the defaults (`--setting defaults` is the defaults), and
    `--inputs holdout`, `--inputs confirm` or `--inputs multiday` runs it on the held-back inputs, the confirm tier or
    the multiday tier instead (report it with `--holdout` to include the held-back ones). For long inputs,
-   `--processes N` runs one run at a time, each search in N processes, with a time limit of an hour instead.
+   `--processes N` runs one run at a time, each search in N processes, with a time limit of 2 hours instead.
    Running a round again with more settings adds them. There's no automated search over the parameters: which
    values to try next is a judgement made from the results and the feedback cards.
 4. **Choice and check** — a few candidate settings, checked on the held-back inputs and the longer tiers, with the
@@ -177,6 +178,44 @@ setting gave the same second, and by the chosen setting's own scoring, the two p
 workload 0.38's first period, avoidable gap and all
 ([future work](future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule)).
 
+## The 48-hour check (2026-11-15/16)
+
+The defaults had only been chosen on 16 to 24 hours, while the schedules TinyScheg is meant for usually run 24 to 48.
+With the parallel search ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), 48 hours
+came within reach, so the defaults were run on the multiday tier, each input alone and continued for a second 48
+hours (stage `multiday-defaults`).
+
+**The tier: 5 inputs** (`multiday_03` held back), each searched one at a time with the parallel search. At first the
+limit was 30 minutes, and 4 of the first 8 seeds with a legal schedule went over it (3008–3011), so it was lifted to
+see how long they take: seed 3008 took 54 minutes and became `multiday_05`; seed 3009 was stopped after 2½ hours. The
+tier's limit is now 2 hours with 5 inputs, which reproduces exactly these inputs.
+
+| Input | First 48 hours | Complaints (easy fixes) | Second 48 hours | Complaints over both (easy fixes) |
+|---|---|---|---|---|
+| `multiday_01` | 6½ min | 0 | 11 s | 31 (0) |
+| `multiday_02` | 1½ min | 0 | under 1 s | 0 |
+| `multiday_03` | 6 min | 4 (0) | 29 s | 23 (0) |
+| `multiday_04` | 21 min | 12 (0) | 2½ min | 37 (0) |
+| `multiday_05` | 54 min | 9 (5) | 6 min | 38 (2) |
+
+Every second period had a legal schedule, almost no rest was at the minimum (3, all on one input), and fully available
+workers ended at most a shift apart, except once over both periods. Three findings, each looked into by how the
+fixing change moves each part of the penalty:
+* **Load within a day** (`multiday_05`): one swap removed all 5 easy fixes of its first period, and the scoring saw no
+  difference in workload or rest. The totals were even: the worker with no shift in one 24-hour stretch had as many
+  as the one with two in it, and the complainers more; it was only where a 24-hour rest fell, and the swap moved two
+  shifts by 4 hours. The user: for a schedule fair overall, that's not a limitation, so load within a day is left to
+  the whole schedule's totals, history included, where compensation for a past period already happens.
+* **Short rests counted, not measured** (`multiday_04`): its 12 easy fixes turned a worker's two rests of 12 hours
+  into 7 and 17, one short rest fewer but one close to the minimum, which the scoring rightly rejected. The audit was
+  corrected ([Schedule audit](schedule-audit.md#easy-fixes)); re-audited, they're gone, and no conclusion of the
+  weight re-check changed.
+* **A 4-against-6 gap over both periods** (`multiday_05`): forced by a scarce role. Four medics must cover a desk
+  around the clock, 6 shifts each, and counting the gate's shifts leaves one fully available worker at 4.
+
+The defaults hold, for now. The search time is the open question: about half the generated 48-hour inputs took over
+half an hour.
+
 ## Known limits
 
 * Tuning to the audit's quirks: reading cards by hand at the last stage guards against it.
@@ -185,8 +224,7 @@ workload 0.38's first period, avoidable gap and all
   inputs a 2-2-4 costs less than one worker resting at the minimum twice
   ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).
 * The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
-* Benchmarks are small (16–24 hours) so that branch and bound finishes; the longer tiers check that results carry
-  over. Since a period of 24 hours or less is itself the day, the audit's load in any day only adds anything on
-  longer inputs, so load within a day can only be studied on 48-hour inputs. Those are now within reach: with the
-  parallel search ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), the 48-hour example
-  takes about 12 minutes on PyPy (2026-11-15).
+* The parameters were chosen on 16 to 24 hours, so that branch and bound finishes; the longer tiers check that
+  results carry over. Since a period of 24 hours or less is itself the day, load within a day can only be studied on
+  the 48-hour tier ([the 48-hour check](#the-48-hour-check-2026-11-1516)), which keeps only inputs searched within 2
+  hours: the slowest are left out.
