@@ -52,7 +52,7 @@ Docs rules:
   the site. After changing the docs, check them with `mkdocs build --strict`.
 
 ## Knowledge Sources
-The docs were migrated from notes in the Zettelkasten at `/home/danny/Documents/Zettelkasten/`, which are now
+The docs were migrated from notes in the Zettelkasten at `/home/dspector/Documents/Zettelkasten/`, which are now
 superseded by `docs/`: if they disagree with `docs/`, `docs/` wins.
 The Zettelkasten is still the **original source** everything was rebuilt from. When the original intention behind a
 design is unclear or ambiguous, consult the relevant note (e.g. `251028122014.md` for scoring, `251021115839.md` for
