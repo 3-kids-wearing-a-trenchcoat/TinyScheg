@@ -2,6 +2,7 @@
 import copy
 import csv
 import dataclasses
+import datetime as dt
 import pathlib
 import statistics
 import sys
@@ -15,6 +16,7 @@ from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.parsing.input_reader import parse_input, read_input
 from tinyscheg.scoring.constants import build_constants
+from tinyscheg.timing.datetime_range import DateTimeRange
 
 SEEDS = range(5)
 HOURS = 12
@@ -137,8 +139,8 @@ def test_one_run_finds_and_audits_the_best_schedule(tmp_path: pathlib.Path, monk
 
 
 def test_one_run_continues_for_a_second_period(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # day 2: the input continued right after the first period, with the first's schedule as its history; a first
-    # period that leaves the second no legal schedule is recorded as such
+    # day 2: the input continued for the same hours a day later (the period is 12 hours), with the first's schedule
+    # as its history; a first period that leaves the second no legal schedule is recorded as such
     generated = next(generate.generate(seed, HOURS) for seed in SEEDS if generate.generate(seed, HOURS))
     assert generated is not None
     (tmp_path / "inputs").mkdir()
@@ -148,7 +150,8 @@ def test_one_run_continues_for_a_second_period(tmp_path: pathlib.Path, monkeypat
     assert row["day2_status"] in ("done", "no schedule")
     first = parse_input(generated[0])
     second = tune.next_period(first, tuple(int(worker) for worker in row["assignment"].split()))
-    assert second.settings.period.start == first.settings.period.end
+    assert second.settings.period.start == first.settings.period.start + dt.timedelta(days=1)
+    assert second.settings.period.duration == first.settings.period.duration
     assert second.history[0].schedule_input == first
     if row["day2_status"] == "done":
         whole = build_problem(second)
@@ -293,3 +296,16 @@ def test_a_round_run_one_at_a_time_in_parallel_gives_the_same_results(tmp_path: 
     assert len(alone) == len(together) == 1 and alone[0]["setting"] == "defaults"
     assert ({key: value for key, value in alone[0].items() if key not in timing}
             == {key: value for key, value in together[0].items() if key not in timing})
+
+
+def test_the_next_period_covers_the_same_hours_right_after_a_period_of_whole_days() -> None:
+    # 48 hours: the next period starts where the first ends; 30 hours: two days after the first starts
+    first = parse_input({"settings": {"time": ["2025-01-01T08:00", "2025-01-03T08:00"], "min_rest": 6},
+                         "workers": [{"name": "Anne", "unavailable": [["2025-01-01T10:00", "2025-01-01T12:00"]]}],
+                         "posts": [{"name": "desk", "roles": {"any": 1}, "length": 4}]})
+    second = tune.next_period(first, ())
+    assert second.settings.period.start == first.settings.period.end
+    assert second.workers[0].unavailable[0].start == first.workers[0].unavailable[0].start + dt.timedelta(days=2)
+    longer = dataclasses.replace(first, settings=dataclasses.replace(first.settings, period=DateTimeRange(
+        first.settings.period.start, first.settings.period.start + dt.timedelta(hours=30))))
+    assert tune.next_period(longer, ()).settings.period.start == first.settings.period.start + dt.timedelta(days=2)
