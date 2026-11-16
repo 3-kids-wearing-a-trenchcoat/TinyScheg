@@ -237,8 +237,11 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       example warn)
 - [x] The 48-hour tier reproducible by the generator: 5 inputs, a 2-hour limit (seed 3008 took 54 minutes)
 - [x] Docs: the 48-hour results on the tuning page and in future work
-- [ ] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
-      real use, and what could help
+- [x] Search time on 48-hour schedules: about half the generated inputs take over half an hour; what that means for
+      real use, and what could help (decided 2026-11-16: accepted for now; each search found its best schedule
+      within its first 41%, and one within 0.1% of its penalty within 40 s, so Ctrl+C gives a near-final schedule
+      early, and a second period, with history, takes at most 8½ minutes; faster first periods deferred to
+      [Later](#later))
 - [ ] Runs with no time limit, unattended: how long the 48-hour seeds 3009–3011 take to search to the end
 
 ## Later
@@ -251,6 +254,8 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [x] Faster search by non-heuristic means, as far as it's worth going: PyPy for development runs (ADR 0033),
       parallel search (Phase 9, ADR 0041), and the bound without its whole-slot part checked first (2026-11-15); a
       compiled core and domains as bitsets decided against for now (see future work)
+- [ ] Faster search for 48-hour first periods, with no history: up to an hour on the laptop, most of it proving
+      that nothing beats a schedule found early (deferred in Phase 10)
 - [ ] Parallel search where processes are spawned (Windows, macOS): measure the start-up cost, and reconsider the
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible

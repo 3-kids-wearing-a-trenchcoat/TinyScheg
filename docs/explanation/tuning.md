@@ -213,8 +213,9 @@ fixing change moves each part of the penalty:
 * **A 4-against-6 gap over both periods** (`multiday_05`): forced by a scarce role. Four medics must cover a desk
   around the clock, 6 shifts each, and counting the gate's shifts leaves one fully available worker at 4.
 
-The defaults hold, for now. The search time is the open question: about half the generated 48-hour inputs took over
-half an hour.
+The defaults hold, for now. About half the generated 48-hour inputs took over half an hour to search, which is
+accepted for now ([Future work](future-work.md#search-time-on-48-hour-first-periods)): each search found its best
+schedule early, and second periods, with history, are much faster.
 
 ## Known limits
 

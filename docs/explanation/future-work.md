@@ -201,6 +201,20 @@ current code, with the same schedules and node counts on every input (archived o
   proves nothing beats it. The penalty's share isn't a measure of fairness, though: the schedules found early weren't
   audited.
 
+### Search time on 48-hour first periods
+
+> [!NOTE]
+> **Deferred** (2026-11-16, Phase 10): accepted for now.
+
+About half the generated 48-hour inputs took over half an hour to search as a first period, with no history, and
+some far longer ([the 48-hour check](tuning.md#the-48-hour-check-2026-11-1516)). For now that's accepted: the best
+schedule is found early, and the rest of the time goes to proving nothing beats it, so stopping with Ctrl+C after a
+minute or two gives a schedule close to the best in penalty
+([ADR 0035](../decisions/0035-search-progress-and-keeping-the-best-on-interrupt.md)); and in steady use, with the
+previous period as history, the 48-hour second periods took at most 8½ minutes. What could help is
+[stronger pruning](#search-performance), and checking whether the schedules found early are as fair, by the audit, as
+the best one.
+
 ## Faster search by non-heuristic means
 
 > [!NOTE]
@@ -415,7 +429,8 @@ then, and on those the whole schedule is the day. With the parallel search
 ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), the multiday tier's 48-hour inputs
 could be searched, and the defaults were checked on them: load within a day, the reason for the check, was uneven
 only where a long rest fell, with even totals, which the user considers fair; the audit gained a correction. Left
-open: about half the generated 48-hour inputs took over half an hour to search, some much longer.
+open: about half the generated 48-hour inputs took over half an hour to search, some much longer
+([deferred](#search-time-on-48-hour-first-periods)).
 
 ## Schedule audit
 
