@@ -101,6 +101,7 @@ nav:
       - 0041 Parallel search: decisions/0041-parallel-search-with-the-sequential-result.md
       - 0042 Next-period warning: decisions/0042-warn-when-the-next-period-cant-be-filled.md
       - 0043 One process per core: decisions/0043-one-process-per-physical-core.md
+      - 0044 Best whole-slot multiplier by tangents: decisions/0044-best-whole-slot-multiplier-by-tangents.md
 
 markdown_extensions:
   - admonition

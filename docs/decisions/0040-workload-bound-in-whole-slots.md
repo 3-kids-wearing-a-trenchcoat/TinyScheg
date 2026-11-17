@@ -1,7 +1,7 @@
 # 0040. A workload bound in whole slots
 
 **Status:** Accepted. Amends [0024](0024-cheapest-first-value-order-and-workload-bound.md) (the lower bound on
-workload).
+workload). Amended by [0044](0044-best-whole-slot-multiplier-by-tangents.md) (the search for $\mu$).
 
 ## Context
 

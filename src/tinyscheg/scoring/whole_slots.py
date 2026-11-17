@@ -13,11 +13,15 @@ holding every extra load the worker could get. So the right-hand side, LB(mu), i
 each worker's minimum is found on their own. T_w: whole numbers of the remaining slots of each load, no more of each
 load than remain, at most n_w = cap_w / u slots in all (u the smallest remaining load) and at most cap_w in all
 (cap_w the load of the unfilled slots in the worker's domains). With few combinations of loads they're listed
-exactly; otherwise T_w widens to the intervals {0}, [u, L], [2u, 2L], ... (L the largest remaining load). The best
-mu is searched near the water level's marginal cost, by bisection on how much load the minimizers hand out.
+exactly; otherwise T_w widens to the intervals {0}, [u, L], [2u, 2L], ... (L the largest remaining load).
 
-Every value found is a valid bound, however few values of mu are tried; it's lowered by a relative ROUNDING_MARGIN,
-so that rounding can never lift it above a completion, and the search's result is exactly the same as without it.
+The best mu is found exactly (ADR 0044). LB is concave and piecewise linear in mu, and each evaluation gives both its
+value and its slope there, R less the load the per-worker minimizers hand out. Once mu is bracketed between a rising
+end and a falling one, the tangent lines at the two ends cross at a height that no LB(mu) exceeds; the next mu tried
+is where they cross, and the search stops when the value found reaches that height, which proves it's the highest.
+
+Every value found is a valid bound; it's lowered by a relative ROUNDING_MARGIN, so that rounding can never lift it
+above a completion, and the search's result is exactly the same as without it.
 """
 from __future__ import annotations
 
@@ -29,11 +33,14 @@ from tinyscheg.scoring.constants import integer_power
 # Exact combinations of the remaining slot loads are listed up to this many per bound (the counts of every load but
 # the most frequent, whose count is then chosen directly); beyond it, the looser intervals are used
 MAX_LOAD_COMBINATIONS = 64
-# The search for the best mu: at most this many steps to bracket it, each moving mu by MU_GROWTH times, then this
-# many halvings of the bracket. Every value tried is a valid bound, so fewer steps only loosen it; 3 was fastest on
-# the benchmarks (2026-11-15: 2 visited nearly twice the nodes, 6 cost more time than the nodes it saved)
-MU_STEPS = 3
-MU_GROWTH = 1.5
+# The search for the best mu (ADR 0044). Bracketing: from the water level's marginal cost, mu is multiplied by this
+# until LB falls. 2 was measured (2026-11-17: 3-6 evaluations per bound, all certified)
+MU_GROWTH = 2.0
+# It stops once the value found is within this share of the tangents' crossing, which no LB(mu) is above: far below
+# ROUNDING_MARGIN, so the value is the highest up to rounding
+OPTIMUM_GAP = 1e-12
+# A safeguard only: at most this many evaluations of LB per bound (the best found so far is still a valid bound)
+MAX_MU_STEPS = 60
 # Loads (in hours) within this of each other count as equal: so a count or cap that rounding put a hair short of a
 # whole number of slots still allows it, which only widens the sets
 LOAD_TOLERANCE = 1e-9
@@ -68,48 +75,65 @@ def whole_slot_bound(power: int, availabilities: Sequence[float], loads: Sequenc
     evaluate = _exact_evaluator(power, availabilities, loads, caps, counts, remaining, classes)
     if evaluate is None:
         evaluate = _interval_evaluator(power, availabilities, loads, caps, counts, remaining, smallest, classes[-1][0])
-    best = _best_over_mu(evaluate, remaining, power * integer_power(level, power - 1))
+    at_zero = 0.0  # LB(0): with mu = 0 nobody takes anything, since each term rises with the worker's load
+    for availability, load in zip(availabilities, loads):
+        if availability > 0:
+            at_zero += _term(power, availability, load, 0.0, 0.0)
+    best = _best_over_mu(evaluate, remaining, power * integer_power(level, power - 1), at_zero)
     return best - ROUNDING_MARGIN * abs(best)
 
 
-def _best_over_mu(evaluate: _Evaluate, remaining: float, start: float) -> float:
+def _best_over_mu(evaluate: _Evaluate, remaining: float, start: float, at_zero: float) -> float:
     """
-    The highest LB(mu) found: LB is concave in mu, and rises while the minimizers hand out less than the remaining
-    load (more mu makes load cheaper to take), so mu is bracketed from the start, then bisected
+    The highest LB(mu), by tangents (ADR 0044). LB is concave and piecewise linear in mu, with slope R - handed at
+    each mu (handed: the load the per-worker minimizers hand out). mu = 0 is a rising end (slope R); the first falling
+    end is found by multiplying mu by MU_GROWTH from the start. Then the next mu is where the tangents at the two ends
+    cross: no LB(mu) is above that crossing, so the search stops when the value found reaches it; otherwise the mu
+    tried replaces the end whose slope has its sign
     :param evaluate: (LB(mu), the load handed out) for a mu
     :param remaining: R
-    :param start: the first mu, at least 0
-    :return: the highest value found; it stops early at a mu whose minimizers hand out exactly R, where LB is highest
+    :param start: the first mu tried, the water level's marginal cost
+    :param at_zero: LB(0)
+    :return: the highest value found: LB's maximum up to OPTIMUM_GAP, unless MAX_MU_STEPS ran out first or no mu
+    hands out all of R (then no completion exists); always a valid bound
     """
-    best, handed = evaluate(start)
-    if start <= 0 or abs(handed - remaining) <= LOAD_TOLERANCE:
+    best = at_zero
+    if start <= 0:
         return best
-    rising = handed < remaining
-    low = high = start
-    for _ in range(MU_STEPS):
-        probe = high * MU_GROWTH if rising else low / MU_GROWTH
-        value, handed = evaluate(probe)
-        best = max(best, value)
-        if abs(handed - remaining) <= LOAD_TOLERANCE:
+    low_mu, low_value, low_slope = 0.0, at_zero, remaining
+    mu, steps = start, 0
+    while True:  # bracketing: until the slope turns negative
+        value, handed = evaluate(mu)
+        steps += 1
+        if value > best:
+            best = value
+        slope = remaining - handed
+        if abs(slope) <= LOAD_TOLERANCE:  # a mu at which the slope is 0 is LB's highest point
             return best
-        if rising:
-            low, high = high, probe
-            if handed > remaining:
-                break
-        else:
-            low, high = probe, low
-            if handed < remaining:
-                break
-    for _ in range(MU_STEPS):
-        middle = (low + high) / 2
-        value, handed = evaluate(middle)
-        best = max(best, value)
-        if abs(handed - remaining) <= LOAD_TOLERANCE:
+        if slope < 0:
+            break
+        if steps >= MAX_MU_STEPS:
             return best
-        if handed < remaining:
-            low = middle
+        low_mu, low_value, low_slope = mu, value, slope
+        mu *= MU_GROWTH
+    high_mu, high_value, high_slope = mu, value, slope
+    while steps < MAX_MU_STEPS:
+        # the tangents low_value + low_slope * (mu - low_mu) and high_value + high_slope * (mu - high_mu) cross here
+        mu = (high_value - low_value + low_slope * low_mu - high_slope * high_mu) / (low_slope - high_slope)
+        ceiling = low_value + low_slope * (mu - low_mu)
+        if not low_mu < mu < high_mu:  # rounding: the bracket can't narrow any further
+            break
+        value, handed = evaluate(mu)
+        steps += 1
+        if value > best:
+            best = value
+        slope = remaining - handed
+        if ceiling - best <= OPTIMUM_GAP * abs(best) or abs(slope) <= LOAD_TOLERANCE:
+            break
+        if slope > 0:
+            low_mu, low_value, low_slope = mu, value, slope
         else:
-            high = middle
+            high_mu, high_value, high_slope = mu, value, slope
     return best
 
 

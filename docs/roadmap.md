@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, next.
+bounds, in progress (steps 1–2 done, 2026-11-17).
 
 ## Phase 1: Walking skeleton
 
@@ -269,19 +269,19 @@ CPython and on PyPy, against the recorded schedules, and the 48-hour inputs. It'
 tighter bound has to pay for its own cost, measured in one process and in parallel. Each code change needs the
 user's approval first.
 
-- [ ] **2. The exact multiplier** (asked 2026-11-16, awaiting the user's approval), with an ADR amending
+- [x] **2. The exact multiplier**, with [ADR 0044](decisions/0044-best-whole-slot-multiplier-by-tangents.md) amending
       [ADR 0040](decisions/0040-workload-bound-in-whole-slots.md): the whole-slot bound's best multiplier computed
-      instead of searched for with about five tries (`MU_STEPS`); on the measured inputs, 0–44% fewer nodes searched
-      to the end, and 1.0–34 times the progress on the slow 48-hour ones
-    - [ ] With one load left: hand out the remaining slots one at a time, each to the worker whose term it raises
-      least (a priority queue), each within their count and cap; the same value as the best multiplier
-    - [ ] With several loads: each worker's lower convex envelope of the extra loads they could take (the
-      combinations the exact evaluator lists, or its intervals beyond `MAX_LOAD_COMBINATIONS`), the segments of all
-      workers merged by slope until the remaining load is handed out
-    - [ ] Tests: equal to a long multiplier search on many states; never above the best completion (brute force on
-      small inputs)
-    - [ ] Check: the same schedules on every input; nodes and time against the current code, in one process on
-      both interpreters and with 12 processes; kept only if faster
+      instead of searched for with about five tries (`MU_STEPS`) (done 2026-11-17)
+    - [x] Two exact methods compared outside the program first: each worker's lower convex envelope merged by slope
+      (the plan; with one load left, a priority queue), and tangents on the concave bound, which reuse its evaluators
+      and stop when the value reaches the tangents' crossing. The same values; the envelope 2.5 times slower on PyPy
+      (worst on 48-hour inputs), faster only on CPython's small inputs. The user chose tangents
+    - [x] Tests: equal to a long multiplier search on random states (exact and interval sets, powers 2 and 3), a
+      function known by hand; never above the best completion (brute force, as before)
+    - [x] Check: the same schedules on every benchmark input, alone and as day 2, on CPython and PyPy with 12
+      processes; in one process against `dev`'s code, 12% less time on PyPy (16 inputs to the end), 15% less on
+      CPython (6 small inputs), 1.3–1.7 times the progress on 48-hour inputs; up to 12% slower where it prunes no
+      more (`sweep_11`)
 - [ ] **3. The rest look-ahead** (needs the user's approval), with an ADR: for each unfilled slot, the smallest
       increase in the rest penalty among the workers still in its domain, measured against their current shifts;
       slots that conflict pairwise (overlapping, or closer than the minimum rest) go to different workers, so the
