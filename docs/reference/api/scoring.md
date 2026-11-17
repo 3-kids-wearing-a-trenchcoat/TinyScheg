@@ -238,7 +238,8 @@ same arithmetic.
 
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_whole_slots.py`, against brute force).
-> See [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md).
+> See [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md) and
+> [ADR 0044](../../decisions/0044-best-whole-slot-multiplier-by-tangents.md).
 
 ### `whole_slot_bound(power, availabilities, loads, caps, remaining, classes, level) -> float | None`
 
@@ -248,16 +249,27 @@ $LB(\mu) = \mu R + \sum_w \min_{z \in T_w} (f_w(z) - \mu z)$ is at most every co
 $f_w(z) = \mathrm{av}_w ((x_w + z) / \mathrm{av}_w)^p$ and $T_w$ holds every extra load worker $w$ could get.
 $T_w$ is the exact combinations of the remaining slot loads (at most `MAX_LOAD_COMBINATIONS`), or else the intervals
 $\lbrace 0 \rbrace \cup [u, L] \cup [2u, 2L] \cup \dots$; both are cut at the worker's cap and at
-$\lfloor \mathrm{cap} / u \rfloor$ slots. $\mu$ is searched from the water level's marginal cost, in `MU_STEPS`
-steps of `MU_GROWTH` times to bracket it and `MU_STEPS` halvings.
+$\lfloor \mathrm{cap} / u \rfloor$ slots.
+
+The best $\mu$ is found exactly, by tangents (`_best_over_mu`, ADR 0044). $LB$ is concave and piecewise linear in
+$\mu$, and each evaluation gives its value and its slope, $R$ less the load the per-worker minimizers hand out:
+
+1. $\mu = 0$ is the rising end: $LB(0) = \sum_w f_w(0)$, computed directly, with slope $R$.
+2. From the water level's marginal cost, $\mu$ is multiplied by `MU_GROWTH` until the slope turns negative: the
+   falling end (each $\mu$ on the way with a positive slope becomes the rising end).
+3. The next $\mu$ is where the tangent lines at the two ends cross. No $LB(\mu)$ is above the crossing's height, so
+   the search stops when the value there reaches it (up to a relative `OPTIMUM_GAP`) or its slope is 0; otherwise
+   that $\mu$ replaces the end whose slope has the same sign.
+4. At most `MAX_MU_STEPS` evaluations, a safeguard; whatever stops the search, the highest value found is returned,
+   always a valid bound.
 
 * `classes` — (load, count) for every load at least one unfilled slot has, ascending.
 * `level` — the water-filling bound's level.
 * Returns the bound lowered by a relative `ROUNDING_MARGIN`, or `None` if nothing is left to fill, or a worker with
   no availability (whose term isn't counted) could take load.
 
-Named constants: `MAX_LOAD_COMBINATIONS = 64`, `MU_STEPS = 3`, `MU_GROWTH = 1.5`, `LOAD_TOLERANCE = 1e-9` (hours;
-so that a count or cap rounding put a hair short of a whole slot still allows it), `ROUNDING_MARGIN = 1e-9`.
+Named constants: `MAX_LOAD_COMBINATIONS = 64`, `MU_GROWTH = 2.0`, `OPTIMUM_GAP = 1e-12`, `MAX_MU_STEPS = 60`,
+`LOAD_TOLERANCE = 1e-9` (hours; so that a count or cap rounding put a hair short of a whole slot still allows it), `ROUNDING_MARGIN = 1e-9`.
 
 The exact combinations' evaluator is most of the search's time, so it's written for speed (plain comparisons, each
 term computed in place, the second candidate only where it differs), with the same arithmetic as the plain version.

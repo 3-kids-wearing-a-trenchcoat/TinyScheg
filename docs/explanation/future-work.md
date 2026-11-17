@@ -199,6 +199,14 @@ Still deferred:
   The whole-slot bound tries 4.7–5.0 multipliers per node, and on slots of one load, a greedy gave exactly the best
   multiplier's bound on every sample. A strong bound near the top only does little: the pruning that matters is deep
   in the tree. The loose `multiday_02`, with no scarce roles, gained at most 7%.
+
+  Done on 2026-11-17: the whole-slot multiplier found exactly, by tangents
+  ([ADR 0044](../decisions/0044-best-whole-slot-multiplier-by-tangents.md)), at about the cost of the five tries it
+  replaces; the same schedules, 12% less time on PyPy for the 16 inputs searched to the end, 15% less on CPython's
+  small inputs, and 1.3–1.7 times the progress on 48-hour inputs (up to 12% slower where it prunes no more, as on
+  `sweep_11`). Computing it from each worker's convex envelope instead gave the same bound but cost far more on PyPy
+  (searches about 2.5 times as long as with tangents, and 0.27–0.40 times their progress on 48-hour inputs); it was
+  faster only on CPython's small inputs.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
