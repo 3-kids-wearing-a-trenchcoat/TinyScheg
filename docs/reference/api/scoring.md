@@ -183,7 +183,7 @@ unfilled slots, divided by `workload_unit`. Each worker can gain at most the loa
 they're in. Which slots overlap is ignored, so it may be lower than anything reachable. At least
 $\mathcal{W}^*(\text{partial})$.
 
-### `workload_bound_total(constants, assigned_load, caps, remaining, class_counts) -> float`
+### `workload_bound_total(constants, assigned_load, caps, remaining, own_counts) -> float`
 
 The workload bound before normalizing, the higher of two:
 
@@ -191,15 +191,16 @@ The workload bound before normalizing, the higher of two:
   slots' load spread so that the least loaded workers are topped up to a common level of load per available hour,
   which minimizes the sum of convex terms; a worker who could take little stops rising early;
 * **whole slots** (`whole_slot_bound`, [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md)): each
-  unfilled slot's load goes whole to one worker.
+  unfilled slot's load goes whole to one worker, who takes only slots in their own domain
+  ([ADR 0046](../../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md)).
 
-Parameters: `assigned_load`, each worker's load so far; `caps`, the load of the unfilled slots in each worker's
-domains; `remaining`, the load of the unfilled slots; `class_counts`, the number of unfilled slots of each of
-`load_classes`. `workload_lower_bound` calls it, and the `incremental` module its two parts, so they do the same
-arithmetic.
+Parameters: `assigned_load`, each worker's load so far; `caps`, the load of the unfilled slots in each worker's domains;
+`remaining`, the load of the unfilled slots; `own_counts`, for each worker, the number of unfilled slots of each of
+`load_classes` in their domain. `workload_lower_bound` calls it, and the `incremental` module its two parts, so they do
+the same arithmetic.
 
 `water_filling(constants, assigned_load, caps, remaining)` gives the water-filling part and its level, as
-(total, level); `whole_slots(constants, assigned_load, caps, remaining, class_counts, level)` the whole-slot part
+(total, level); `whole_slots(constants, assigned_load, caps, remaining, own_counts, level)` the whole-slot part
 (or `None` where it doesn't apply), from that level.
 
 ### `likes_penalty(constants, assignment) -> float`
@@ -238,18 +239,21 @@ same arithmetic.
 
 > [!NOTE]
 > **Implemented**, and covered by tests (`tests/test_whole_slots.py`, against brute force).
-> See [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md) and
-> [ADR 0044](../../decisions/0044-best-whole-slot-multiplier-by-tangents.md).
+> See [ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md),
+> [ADR 0044](../../decisions/0044-best-whole-slot-multiplier-by-tangents.md) and
+> [ADR 0046](../../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md).
 
-### `whole_slot_bound(power, availabilities, loads, caps, remaining, classes, level) -> float | None`
+### `whole_slot_bound(power, availabilities, loads, caps, remaining, own_classes, level) -> float | None`
 
 A lower bound on the sum of $\mathrm{av} \cdot (\text{load} / \mathrm{av})^p$ over every completion, handing out
 the unfilled slots whole, by Lagrangian relaxation: for any $\mu$,
 $LB(\mu) = \mu R + \sum_w \min_{z \in T_w} (f_w(z) - \mu z)$ is at most every completion's sum, where
 $f_w(z) = \mathrm{av}_w ((x_w + z) / \mathrm{av}_w)^p$ and $T_w$ holds every extra load worker $w$ could get.
-$T_w$ is the exact combinations of the remaining slot loads (at most `MAX_LOAD_COMBINATIONS`), or else the intervals
-$\lbrace 0 \rbrace \cup [u, L] \cup [2u, 2L] \cup \dots$; both are cut at the worker's cap and at
-$\lfloor \mathrm{cap} / u \rfloor$ slots.
+$T_w$ comes from the unfilled slots in the worker's own domain (ADR 0046): the exact combinations of their loads,
+no more of each load than the worker is in the domain of (at most `MAX_LOAD_COMBINATIONS` combinations), or else
+the intervals $\lbrace 0 \rbrace \cup [u_w, L_w] \cup [2u_w, 2L_w] \cup \dots$ up to the number of those slots, cut
+at the worker's cap ($u_w$, $L_w$ the smallest and largest of their loads). A worker's sets depend only on their
+counts per load, so they're built once per set of counts and cached (`_own_sets`, up to `COMBINATIONS_CACHE_SIZE`).
 
 The best $\mu$ is found exactly, by tangents (`_best_over_mu`, ADR 0044). $LB$ is concave and piecewise linear in
 $\mu$, and each evaluation gives its value and its slope, $R$ less the load the per-worker minimizers hand out:
@@ -263,13 +267,15 @@ $\mu$, and each evaluation gives its value and its slope, $R$ less the load the 
 4. At most `MAX_MU_STEPS` evaluations, a safeguard; whatever stops the search, the highest value found is returned,
    always a valid bound.
 
-* `classes` — (load, count) for every load at least one unfilled slot has, ascending.
+* `own_classes` — per worker, (load, count) for every load at least one unfilled slot in their domain has,
+  ascending.
 * `level` — the water-filling bound's level.
 * Returns the bound lowered by a relative `ROUNDING_MARGIN`, or `None` if nothing is left to fill, or a worker with
   no availability (whose term isn't counted) could take load.
 
-Named constants: `MAX_LOAD_COMBINATIONS = 64`, `MU_GROWTH = 2.0`, `OPTIMUM_GAP = 1e-12`, `MAX_MU_STEPS = 60`,
-`LOAD_TOLERANCE = 1e-9` (hours; so that a count or cap rounding put a hair short of a whole slot still allows it), `ROUNDING_MARGIN = 1e-9`.
+Named constants: `MAX_LOAD_COMBINATIONS = 64` (per worker), `COMBINATIONS_CACHE_SIZE = 4096`, `MU_GROWTH = 2.0`,
+`OPTIMUM_GAP = 1e-12`, `MAX_MU_STEPS = 60`, `LOAD_TOLERANCE = 1e-9` (hours; so that a count or cap rounding put a hair
+short of a whole slot still allows it), `ROUNDING_MARGIN = 1e-9`.
 
 The exact combinations' evaluator is most of the search's time, so it's written for speed (plain comparisons, each
 term computed in place, the second candidate only where it differs), with the same arithmetic as the plain version.
@@ -305,8 +311,8 @@ Methods:
   `bound()`, which stays equal to `lower_bound`.
 * `assign(slot, worker, narrowed)` — update the totals after the search assigned the slot; `narrowed` is the change
   record's `saved_domains`, (slot, domain before) pairs. Only the assigned worker's load and rest, the shifts with a
-  slot assigned or narrowed, the caps of the workers dropped from a domain, and the count of unfilled slots of the
-  slot's load change.
+  slot assigned or narrowed, and the caps and counts of own slots per load of the workers in the slot's domain and of
+  those dropped from a domain change.
 * `undo()` — restore the totals from before the latest `assign`, exactly: saved values are put back, never
   subtracted.
 

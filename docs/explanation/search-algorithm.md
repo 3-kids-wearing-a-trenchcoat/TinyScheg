@@ -147,14 +147,15 @@ penalty counts only the pairs already filled. So the bound looks ahead, using th
   * **Water-filling:** each worker's workload term is convex, so the total is lowest when the load tops up the
     least-loaded workers to a common level of load per available hour, like water filling vessels. Each worker rises
     only up to the load of the unfilled slots they could take, like vessels of different heights.
-  * **Whole slots** ([ADR 0040](../decisions/0040-workload-bound-in-whole-slots.md)): in a real schedule each slot
-    goes whole to one worker, which water-filling ignores. That's where almost all of its slack was, and the workload
-    weight multiplies it. Each worker's lowest cost is found on its own, over the whole numbers of the remaining slots
-    they could take, with a price on each unit of load (Lagrangian relaxation). Any price gives a valid bound, so the
-    bound is never above a completion, and the best price gives the highest one. It's found exactly
-    ([ADR 0044](../decisions/0044-best-whole-slot-multiplier-by-tangents.md)): as a function of the price, the bound
-    is concave and made of straight pieces, and each evaluation also tells which way it rises. Between a price where
-    it rises and one where it falls, the lines touching it at the two meet at a height it can't exceed; the next price
+  * **Whole slots** ([ADR 0040](../decisions/0040-workload-bound-in-whole-slots.md)): in a real schedule each slot goes
+    whole to one worker, which water-filling ignores. That's where almost all of its slack was, and the workload weight
+    multiplies it. Each worker's lowest cost is found on its own, over the whole numbers of the unfilled slots in their
+    own domain ([ADR 0046](../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md)), so that roles and
+    unavailability count too, with a price on each unit of load (Lagrangian relaxation). Any price gives a valid bound,
+    so the bound is never above a completion, and the best price gives the highest one. It's found exactly
+    ([ADR 0044](../decisions/0044-best-whole-slot-multiplier-by-tangents.md)): as a function of the price, the bound is
+    concave and made of straight pieces, and each evaluation also tells which way it rises. Between a price where it
+    rises and one where it falls, the lines touching it at the two meet at a height it can't exceed; the next price
     tried is where they meet, until the bound reaches that height, usually within 3–6 tries.
   * The whole-slot estimate costs most of the search's time, so the search first checks the bound with water-filling
     alone: where that already reaches the pocket, the full bound would too, and the whole-slot estimate is skipped

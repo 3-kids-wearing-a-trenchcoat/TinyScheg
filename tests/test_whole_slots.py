@@ -1,5 +1,6 @@
 """Tests for tinyscheg.scoring.whole_slots, the workload bound in whole slots (ADR 0040), against brute force."""
 import random
+from collections import Counter
 from itertools import product
 
 import pytest
@@ -47,6 +48,13 @@ def brute_force(power: int, availabilities: list[float], loads: list[float], slo
     return best
 
 
+def own_classes(workers: int, slots: list[float], domains: list[list[int]]) -> list[list[tuple[float, int]]]:
+    """Per worker, (load, count) of the unfilled slots in their domain, ascending (ADR 0046)."""
+    return [[(load, count) for load, count in sorted(Counter(slot_load for slot_load, domain in zip(slots, domains)
+                                                             if worker in domain).items())]
+            for worker in range(workers)]
+
+
 def bounds(power: int, availabilities: list[float], loads: list[float], slots: list[float],
            domains: list[list[int]]) -> tuple[float, float | None]:
     """(the water-filling bound, the whole-slot bound), before normalizing, as penalty.workload_bound_total gets
@@ -59,8 +67,8 @@ def bounds(power: int, availabilities: list[float], loads: list[float], slots: l
     pool = [(load / av, av, (load + cap) / av) for av, load, cap in zip(availabilities, loads, caps)]
     level = _water_level(pool, remaining)
     filled = sum(av * integer_power(min(max(ratio, level), highest), power) for ratio, av, highest in pool)
-    classes = [(load, slots.count(load)) for load in sorted(set(slots))]
-    return filled, whole_slot_bound(power, availabilities, loads, caps, remaining, classes, level)
+    return filled, whole_slot_bound(power, availabilities, loads, caps, remaining,
+                                    own_classes(len(availabilities), slots, domains), level)
 
 
 @pytest.mark.parametrize("power", [2, 3])
@@ -93,7 +101,7 @@ def long_search_bound(power: int, availabilities: list[float], loads: list[float
     :param loads: each worker's load so far
     :param slots: the unfilled slots' loads
     :param domains: the unfilled slots' domains
-    :param most_combinations: MAX_LOAD_COMBINATIONS for the evaluator (0: intervals only)
+    :param most_combinations: MAX_LOAD_COMBINATIONS for the evaluator (0: intervals only), already set by the caller
     :return: the highest LB(mu) found
     """
     caps = [0.0] * len(availabilities)
@@ -101,16 +109,9 @@ def long_search_bound(power: int, availabilities: list[float], loads: list[float
         for worker in domain:
             caps[worker] += slot_load
     remaining = sum(slots)
-    classes = [(load, slots.count(load)) for load in sorted(set(slots))]
-    smallest = classes[0][0]
-    counts = [int(cap / smallest + whole_slots.LOAD_TOLERANCE) for cap in caps]
-    evaluate = None
-    if most_combinations:
-        evaluate = whole_slots._exact_evaluator(power, availabilities, loads, caps, counts, remaining, classes)
-    if evaluate is None:
-        evaluate = whole_slots._interval_evaluator(power, availabilities, loads, caps, counts, remaining, smallest,
-                                                   classes[-1][0])
-    best, high = evaluate(0.0)[0], 1.0
+    evaluate, at_zero = whole_slots._evaluator(power, availabilities, loads, caps, remaining,
+                                               own_classes(len(availabilities), slots, domains))
+    best, high = at_zero, 1.0
     for _ in range(LONG_SEARCH_STEPS):
         value, handed = evaluate(high)
         best = max(best, value)
@@ -162,13 +163,23 @@ def test_one_slot_two_workers_by_hand() -> None:
     assert whole == pytest.approx(2.0)
 
 
+def test_each_worker_takes_only_slots_in_their_own_domain_by_hand() -> None:
+    # ADR 0046: one 4-hour slot either worker can take, and four 1-hour slots only the first can. The second worker,
+    # with 2 hours already, can get 0 or 4 more: 4 gives 4 * 4 / 8 + 6 * 6 / 8 = 6.5, the best completion. Counting
+    # the remaining slots of each load overall, they could get 3 of the 1-hour slots, for 5 * 5 / 8 * 2 = 6.25
+    slots, domains = [4.0, 1.0, 1.0, 1.0, 1.0], [[0, 1], [0], [0], [0], [0]]
+    _, whole = bounds(2, [8.0, 8.0], [0.0, 2.0], slots, domains)
+    assert whole == pytest.approx(6.5)
+    assert whole <= brute_force(2, [8.0, 8.0], [0.0, 2.0], slots, domains)
+
+
 def test_no_bound_when_a_worker_with_no_availability_could_take_load() -> None:
     # their term isn't counted, so load they take is free: the sets would have to allow for it
-    assert whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [(4.0, 1)], 0.5) is None
+    assert whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [[(4.0, 1)], [(4.0, 1)]], 0.5) is None
 
 
 def test_no_bound_with_nothing_left_to_fill() -> None:
-    assert whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [], 0.0) is None
+    assert whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [[], []], 0.0) is None
 
 
 @pytest.mark.parametrize("schedule_input", small_inputs())
