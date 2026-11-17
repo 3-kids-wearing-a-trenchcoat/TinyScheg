@@ -36,8 +36,8 @@ python src/main.py exampleInput.yml -o schedule.csv
 ```
 
 The output file's extension chooses the format: `.csv`, `.xlsx` (Excel) or `.ods` (LibreOffice and other
-OpenDocument spreadsheets). Without `-o`, the schedule is written next to the input as `<input name>_schedule.csv`. See
-[Command line](docs/reference/command-line.md) for details.
+OpenDocument spreadsheets). Without `-o`, the schedule is written next to the input as `<input name>_schedule.csv`. Run
+`python src/main.py --help` for every option, and see [Command line](docs/reference/command-line.md) for details.
 
 Input is a YAML file describing the schedule settings, workers and posts. [`exampleInput.yml`](exampleInput.yml)
 is an annotated example, and the format is described in [Input format](docs/reference/input-format.md).
