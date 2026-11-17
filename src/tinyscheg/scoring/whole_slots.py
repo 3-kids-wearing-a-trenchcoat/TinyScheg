@@ -10,10 +10,16 @@ For any mu, and any completion giving each worker w an extra load z_w (the z_w a
 
 where f_w(z) = av_w * ((x_w + z) / av_w) ** p is the worker's term with x_w already assigned, and T_w is any set
 holding every extra load the worker could get. So the right-hand side, LB(mu), is a lower bound for every mu, and
-each worker's minimum is found on their own. T_w (ADR 0046): whole numbers of the unfilled slots of each load in the
-worker's own domain, no more of each load than they're in the domain of; with few combinations of loads they're
-listed exactly, otherwise T_w widens to the intervals {0}, [u_w, L_w], [2 u_w, 2 L_w], ... up to the number of slots
-in their domain, cut at cap_w (u_w and L_w the smallest and largest load among those slots, cap_w their load).
+each worker's minimum is found on their own. Two kinds of sets T_w, chosen per run (ADR 0047):
+* global (whole_slot_bound, ADR 0040): whole numbers of the remaining slots of each load, no more of each load than
+  remain, at most n_w = cap_w / u slots in all (u the smallest remaining load) and at most cap_w in all (cap_w the
+  load of the unfilled slots in the worker's domains); listed exactly with few combinations of loads, otherwise
+  widened to the intervals {0}, [u, L], [2u, 2L], ... (L the largest remaining load);
+* each worker's own (own_whole_slot_bound, ADR 0046): whole numbers of the unfilled slots of each load in the
+  worker's own domain, no more of each load than they're in the domain of; listed exactly with few combinations,
+  otherwise the intervals {0}, [u_w, L_w], [2 u_w, 2 L_w], ... up to the number of slots in their domain, cut at cap_w
+  (u_w and L_w the smallest and largest load among those slots). They lie within the global sets, so the bound is
+  never lower, but keeping each worker's counts costs more.
 
 The best mu is found exactly (ADR 0044). LB is concave and piecewise linear in mu, and each evaluation gives both its
 value and its slope there, R less the load the per-worker minimizers hand out. Once mu is bracketed between a rising
@@ -31,8 +37,9 @@ from collections.abc import Callable, Sequence
 
 from tinyscheg.scoring.constants import integer_power
 
-# Exact combinations of a worker's slot loads are listed up to this many per worker (the counts of every load but the
-# most frequent, whose count is then chosen directly); beyond it, the looser intervals are used for that worker
+# Exact combinations of the slot loads are listed up to this many (per bound with the global sets, per worker with
+# their own; the counts of every load but the most frequent, whose count is then chosen directly); beyond it, the
+# looser intervals are used
 MAX_LOAD_COMBINATIONS = 64
 # Each worker's combinations depend only on their counts of slots per load, so they're kept for reuse: at most this
 # many different sets of counts at a time (a search meets far fewer)
@@ -63,10 +70,43 @@ _Sets = tuple | None
 
 
 def whole_slot_bound(power: int, availabilities: Sequence[float], loads: Sequence[float], caps: Sequence[float],
-                     remaining: float, own_classes: Sequence[Sequence[tuple[float, int]]],
-                     level: float) -> float | None:
+                     remaining: float, classes: Sequence[tuple[float, int]], level: float) -> float | None:
     """
-    A lower bound on the sum of av * (load / av) ** p over every completion, handing out the unfilled slots whole
+    A lower bound on the sum of av * (load / av) ** p over every completion, handing out the unfilled slots whole,
+    with the global sets (ADR 0040)
+    :param power: p, the workload power (at least 2)
+    :param availabilities: av per worker, in worker order
+    :param loads: each worker's load so far
+    :param caps: the most extra load each worker could get: the loads of the unfilled slots in their domains
+    :param remaining: R, the load of the unfilled slots
+    :param classes: (load, how many unfilled slots have it) for every load at least one unfilled slot has, ascending
+    :param level: the water level of the water-filling bound, whose marginal cost is where mu's search starts
+    :return: the bound, before normalizing and already lowered by ROUNDING_MARGIN; None if it doesn't apply (nothing
+    left to fill, or a worker with no availability who could take load, whose share the penalty doesn't count)
+    """
+    if not classes or classes[0][0] <= 0:
+        return None
+    if any(availability <= 0 and cap > LOAD_TOLERANCE for availability, cap in zip(availabilities, caps)):
+        return None
+    smallest = classes[0][0]
+    counts = [int(cap / smallest + LOAD_TOLERANCE) for cap in caps]  # n_w: each slot carries at least u
+    evaluate = _exact_evaluator(power, availabilities, loads, caps, counts, remaining, classes)
+    if evaluate is None:
+        evaluate = _interval_evaluator(power, availabilities, loads, caps, counts, remaining, smallest, classes[-1][0])
+    at_zero = 0.0  # LB(0): with mu = 0 nobody takes anything, since each term rises with the worker's load
+    for availability, load in zip(availabilities, loads):
+        if availability > 0:
+            at_zero += _term(power, availability, load, 0.0, 0.0)
+    best = _best_over_mu(evaluate, remaining, power * integer_power(level, power - 1), at_zero)
+    return best - ROUNDING_MARGIN * abs(best)
+
+
+def own_whole_slot_bound(power: int, availabilities: Sequence[float], loads: Sequence[float], caps: Sequence[float],
+                         remaining: float, own_classes: Sequence[Sequence[tuple[float, int]]],
+                         level: float) -> float | None:
+    """
+    A lower bound on the sum of av * (load / av) ** p over every completion, handing out the unfilled slots whole,
+    each worker's sets from their own domain (ADR 0046)
     :param power: p, the workload power (at least 2)
     :param availabilities: av per worker, in worker order
     :param loads: each worker's load so far
@@ -292,3 +332,128 @@ def _interval_minimum(power: int, availability: float, load: float, cap: float, 
         if term < best:
             best, best_extra = term, extra
     return best, best_extra
+
+
+def _exact_evaluator(power: int, availabilities: Sequence[float], loads: Sequence[float], caps: Sequence[float],
+                     counts: Sequence[int], remaining: float, classes: Sequence[tuple[float, int]]
+                     ) -> _Evaluate | None:
+    """
+    LB(mu) with T_w the exact combinations of the remaining slot loads: the counts of every load but the most
+    frequent are listed; for each, the most frequent load's count is the whole number nearest the ideal extra load
+    (the term is convex in it, so one of the two around it is best)
+    :param power: p
+    :param availabilities: av per worker
+    :param loads: each worker's load so far
+    :param caps: each worker's cap
+    :param counts: n_w, the most slots each worker could get
+    :param remaining: R
+    :param classes: (load, count) per remaining load, ascending
+    :return: evaluate(mu), or None if there'd be more than MAX_LOAD_COMBINATIONS combinations
+    """
+    free = max(range(len(classes)), key=lambda index: classes[index][1])  # the first of the most frequent
+    size = 1
+    for index, (_, count) in enumerate(classes):
+        if index != free:
+            size *= count + 1
+    if size > MAX_LOAD_COMBINATIONS:
+        return None
+    combinations = [(0.0, 0)]  # (the load, the number of slots) of each combination of the listed loads
+    for index, (load, count) in enumerate(classes):
+        if index != free:
+            combinations = [(total + taken * load, used + taken)
+                            for total, used in combinations for taken in range(count + 1)]
+    free_load, free_count = classes[free]
+    # what doesn't change with mu, per worker with some availability: (av, x, cap, n_w, cap with the tolerance)
+    workers = [(availability, load, cap, most_slots, cap + LOAD_TOLERANCE)
+               for availability, load, cap, most_slots in zip(availabilities, loads, caps, counts) if availability > 0]
+    floor = math.floor
+
+    def evaluate(mu: float) -> tuple[float, float]:
+        """
+        LB(mu) and the load handed out, over the exact combinations. This is most of the search's time (2026-11-15),
+        so it's written for speed: plain comparisons rather than min and max, each candidate's term computed in place
+        (as _term does, with the same arithmetic, so the same results), and the second candidate only where it
+        differs from the first.
+        """
+        value, handed = mu * remaining, 0.0
+        for availability, load, cap, most_slots, cap_limit in workers:
+            ideal = _ideal_extra(mu, power, availability, load)
+            best, best_extra = _term(power, availability, load, 0.0, mu), 0.0
+            for partial, used in combinations:
+                if used > most_slots or partial > cap_limit:
+                    continue
+                most = int((cap - partial) / free_load + LOAD_TOLERANCE)  # the free load's count: at most this,
+                if most > most_slots - used:                              # the slots left and the count remaining
+                    most = most_slots - used
+                if most > free_count:
+                    most = free_count
+                if most < 0:
+                    most = 0
+                below = floor((ideal - partial) / free_load)  # the count just below the ideal, within [0, most]
+                if below < 0:
+                    below = 0
+                elif below > most:
+                    below = most
+                extra = partial + below * free_load
+                total = load + extra
+                term = (total * total / availability if power == 2
+                        else availability * integer_power(total / availability, power)) - mu * extra
+                if term < best:
+                    best, best_extra = term, extra
+                if below < most:  # and the count just above it
+                    extra = partial + (below + 1) * free_load
+                    total = load + extra
+                    term = (total * total / availability if power == 2
+                            else availability * integer_power(total / availability, power)) - mu * extra
+                    if term < best:
+                        best, best_extra = term, extra
+            value += best
+            handed += best_extra
+        return value, handed
+
+    return evaluate
+
+
+def _interval_evaluator(power: int, availabilities: Sequence[float], loads: Sequence[float], caps: Sequence[float],
+                        counts: Sequence[int], remaining: float, smallest: float, largest: float) -> _Evaluate:
+    """
+    LB(mu) with T_w the intervals {0}, [u, L], ..., [n_w u, n_w L], cut at the cap: j slots carry between j times the
+    smallest and j times the largest remaining load. The term is convex, so its lowest point on them is the ideal
+    extra load if that falls in one, or else an end of the gap it falls in
+    :param power: p
+    :param availabilities: av per worker
+    :param loads: each worker's load so far
+    :param caps: each worker's cap
+    :param counts: n_w, the most slots each worker could get
+    :param remaining: R
+    :param smallest: u, the smallest remaining load
+    :param largest: L, the largest remaining load
+    :return: evaluate(mu)
+    """
+    def evaluate(mu: float) -> tuple[float, float]:
+        """LB(mu) and the load handed out, over the intervals."""
+        value, handed = mu * remaining, 0.0
+        for availability, load, cap, most_slots in zip(availabilities, loads, caps, counts):
+            if availability <= 0:
+                continue
+            if most_slots <= 0 or cap + LOAD_TOLERANCE < smallest:
+                value += _term(power, availability, load, 0.0, mu)
+                continue
+            ideal = min(max(_ideal_extra(mu, power, availability, load), 0.0), cap)
+            slots = min(int(ideal // smallest), most_slots)  # the last interval starting at or below the ideal
+            if slots >= 1 and ideal <= slots * largest:
+                candidates = [ideal]  # inside [slots * u, slots * L]
+            else:
+                candidates = [min(slots * largest, cap) if slots >= 1 else 0.0]  # the gap's lower end
+                if slots + 1 <= most_slots and (slots + 1) * smallest <= cap + LOAD_TOLERANCE:
+                    candidates.append((slots + 1) * smallest)  # and its upper end
+            best, best_extra = math.inf, 0.0
+            for extra in candidates:
+                term = _term(power, availability, load, extra, mu)
+                if term < best:
+                    best, best_extra = term, extra
+            value += best
+            handed += best_extra
+        return value, handed
+
+    return evaluate

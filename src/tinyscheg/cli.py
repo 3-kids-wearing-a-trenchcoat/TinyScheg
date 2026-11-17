@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import dataclasses
 import datetime as dt
 import os
 import pathlib
@@ -19,7 +20,8 @@ from tinyscheg.csp.next_period import NEXT_PERIOD_CHECK_NODES, NextPeriodCheck, 
 from tinyscheg.csp.parallel import default_processes, find_best_schedule_in_parallel
 from tinyscheg.csp.problem import Problem, build_problem, unfillable_slots
 from tinyscheg.csp.search import SearchProgress, SearchResult
-from tinyscheg.model.schedule_input import ScheduleInput
+from tinyscheg.model.schedule_input import (DEFAULT_ROLE_AWARE_BOUND, ROLE_AWARE_BOUND_AUTO, ROLE_AWARE_BOUND_CHOICES,
+                                            ROLE_AWARE_BOUND_OFF, ROLE_AWARE_BOUND_ON, ScheduleInput)
 from tinyscheg.model.shift import Slot
 from tinyscheg.output.grid import build_grid
 from tinyscheg.output.writers import DEFAULT_EXTENSION, UnsupportedFormatError, write_schedule, writer_for
@@ -64,7 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_path = pathlib.Path(arguments.output) if arguments.output else default_output_path(input_path)
     jobs = arguments.jobs if arguments.jobs is not None else default_processes()
     try:
-        return _run(input_path, output_path, jobs)
+        return _run(input_path, output_path, jobs, arguments.role_aware_bound)
     except KeyboardInterrupt:
         _error("interrupted; no schedule written")
         return EXIT_INTERRUPTED
@@ -86,6 +88,11 @@ def _parser() -> argparse.ArgumentParser:
                         help=f"how many processes search in parallel (default: one per core, here "
                              f"{default_processes()}); 1 searches in a single process. The schedule is the same "
                              f"either way (ADR 0041)")
+    parser.add_argument("--role-aware-bound", choices=ROLE_AWARE_BOUND_CHOICES,
+                        help="whether the search's whole-slot bound limits each worker to the slots they can fill: "
+                             "faster where roles and unavailability narrow who can fill what, slower where they "
+                             "don't; auto chooses from the input. Overrides the input's settings, role_aware_bound "
+                             f"(default: {DEFAULT_ROLE_AWARE_BOUND}). The schedule is the same either way (ADR 0047)")
     return parser
 
 
@@ -100,12 +107,14 @@ def _positive_int(text: str) -> int:
     return value
 
 
-def _run(input_path: pathlib.Path, output_path: pathlib.Path, jobs: int) -> int:
+def _run(input_path: pathlib.Path, output_path: pathlib.Path, jobs: int, role_aware_bound: str | None = None) -> int:
     """
     Read, search and write, reporting any problem on standard error
     :param input_path: pathlib.Path of the input file
     :param output_path: pathlib.Path of the schedule file to write
     :param jobs: how many processes search in parallel (ADR 0041)
+    :param role_aware_bound: one of ROLE_AWARE_BOUND_CHOICES to use instead of the input's setting, or None to keep
+    the input's (ADR 0047: the command line wins)
     :return: the exit code
     """
     try:
@@ -128,7 +137,10 @@ def _run(input_path: pathlib.Path, output_path: pathlib.Path, jobs: int) -> int:
         return EXIT_NO_SCHEDULE
     # with a history, the whole schedule's settings: its period runs from the history's start (ADR 0031)
     settings = problem.settings or schedule_input.settings
+    if role_aware_bound is not None:
+        settings = dataclasses.replace(settings, role_aware_bound=role_aware_bound)
     constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
+    _error(describe_role_aware_bound(settings.role_aware_bound, constants.own_whole_slot_sets))
     display = _ProgressDisplay(sys.stderr)
     result = find_best_schedule_in_parallel(problem, constants, jobs, on_improvement=display.improvement,
                                             on_progress=display.progress, keep_best_on_interrupt=True)
@@ -340,6 +352,17 @@ def _warn_about_next_period(schedule_input: ScheduleInput, problem: Problem, ass
     else:
         _error(f"note: couldn't tell whether the next period with the same parameters ({following}) can still be "
                f"filled after this schedule (the check stopped after {NEXT_PERIOD_CHECK_NODES:,} steps)")
+
+
+def describe_role_aware_bound(setting: str, used: bool) -> str:
+    """
+    The note on whether the search uses the role-aware bound (ADR 0047)
+    :param setting: the role_aware_bound setting the run resolved it from
+    :param used: whether it's used
+    :return: e.g. "role-aware bound: on (chosen from the input)"
+    """
+    state = ROLE_AWARE_BOUND_ON if used else ROLE_AWARE_BOUND_OFF
+    return f"role-aware bound: {state}" + (" (chosen from the input)" if setting == ROLE_AWARE_BOUND_AUTO else "")
 
 
 def describe_period(start: dt.datetime, end: dt.datetime) -> str:

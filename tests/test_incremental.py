@@ -1,4 +1,5 @@
 """Tests for tinyscheg.scoring.incremental, against the from-scratch scoring as the oracle (ADR 0027)."""
+import dataclasses
 import random
 from itertools import product
 
@@ -28,8 +29,13 @@ def assert_matches(incremental: IncrementalScore, state: SearchState) -> None:
     assert incremental.bound_without_whole_slots() <= incremental.bound()
 
 
+@pytest.mark.parametrize("role_aware_bound", ["on", "off"])
 @pytest.mark.parametrize("schedule_input", small_inputs())
-def test_incremental_scoring_matches_scoring_from_scratch(schedule_input: ScheduleInput) -> None:
+def test_incremental_scoring_matches_scoring_from_scratch(schedule_input: ScheduleInput,
+                                                          role_aware_bound: str) -> None:
+    # with either kind of whole-slot sets (ADR 0047)
+    schedule_input = dataclasses.replace(schedule_input, settings=dataclasses.replace(
+        schedule_input.settings, role_aware_bound=role_aware_bound))
     problem, constants = build_problem(schedule_input), constants_of(schedule_input)
     state = SearchState(problem)
     incremental = IncrementalScore(constants, state.assigned, state.domains)

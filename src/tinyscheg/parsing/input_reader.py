@@ -17,8 +17,9 @@ from typing import Any, TypeVar
 import yaml
 
 from tinyscheg.model.post import Post, ShiftRules, Variation
-from tinyscheg.model.schedule_input import (DEFAULT_MIN_REST, PreviousSchedule, ScheduleInput, ScoringParameters,
-                                            Settings)
+from tinyscheg.model.schedule_input import (DEFAULT_MIN_REST, DEFAULT_ROLE_AWARE_BOUND, ROLE_AWARE_BOUND_CHOICES,
+                                            ROLE_AWARE_BOUND_OFF, ROLE_AWARE_BOUND_ON, PreviousSchedule, ScheduleInput,
+                                            ScoringParameters, Settings)
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.schedule_reader import ScheduleReadError, read_schedule
 from tinyscheg.parsing.validation import InputError, location, validate
@@ -29,7 +30,7 @@ T = TypeVar("T")
 
 _TOP_LEVEL_FIELDS = {"settings", "workers", "posts", "history"}
 _HISTORY_FIELDS = {"input", "schedule"}
-_SETTINGS_FIELDS = {"time", "min_rest", "scoring"}
+_SETTINGS_FIELDS = {"time", "min_rest", "scoring", "role_aware_bound"}
 _SCORING_FIELDS = {"weights", "workload_power", "neutral_partner", "shift_share"}
 # Scoring fields that no longer exist, with why, so that an old input gets a clear message (ADR 0036)
 _REMOVED_SCORING_FIELDS = {"rest_factor": "no longer a setting: the rest targets are derived from the input "
@@ -97,7 +98,10 @@ def _parse_settings(raw: dict[Any, Any], problems: list[str]) -> Settings:
     period = _convert(problems, "settings, time", lambda: _date_time_range(_required_value(section, "time")))
     min_rest = _convert(problems, "settings, min_rest", lambda: _optional_hours(section, "min_rest", DEFAULT_MIN_REST))
     scoring = _attempt(problems, lambda: _parse_scoring(section.get("scoring"), problems))
-    return _convert(problems, "settings", lambda: Settings(_ok(period), _ok(min_rest), _ok(scoring)))
+    role_aware_bound = _convert(problems, "settings, role_aware_bound",
+                                lambda: _optional_role_aware_bound(section))
+    return _convert(problems, "settings",
+                    lambda: Settings(_ok(period), _ok(min_rest), _ok(scoring), _ok(role_aware_bound)))
 
 
 def _parse_scoring(raw: object, problems: list[str]) -> ScoringParameters:
@@ -386,6 +390,19 @@ def _optional_hours(entry: dict[Any, Any], field: str, default: dt.timedelta) ->
     if entry.get(field) is None:
         return default
     return _hours(entry[field], positive=False)
+
+
+def _optional_role_aware_bound(entry: dict[Any, Any]) -> str:
+    """The optional role_aware_bound setting (ADR 0047). YAML reads a bare on or off as true or false, so those are
+    taken as on and off."""
+    value = entry.get("role_aware_bound")
+    if value is None:
+        return DEFAULT_ROLE_AWARE_BOUND
+    if isinstance(value, bool):
+        return ROLE_AWARE_BOUND_ON if value else ROLE_AWARE_BOUND_OFF
+    if not isinstance(value, str) or value not in ROLE_AWARE_BOUND_CHOICES:
+        raise ValueError(f"must be one of {', '.join(ROLE_AWARE_BOUND_CHOICES)}, got {value!r}")
+    return value
 
 
 def _optional_window(value: object) -> DailyWindow | None:

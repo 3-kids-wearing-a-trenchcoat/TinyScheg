@@ -9,7 +9,7 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from tinyscheg.model.schedule_input import ScoringParameters, Settings
+from tinyscheg.model.schedule_input import ROLE_AWARE_BOUND_OFF, ROLE_AWARE_BOUND_ON, ScoringParameters, Settings
 from tinyscheg.model.shift import Shift, Slot
 from tinyscheg.model.worker import Worker
 from tinyscheg.timing.datetime_range import DateTimeRange
@@ -21,6 +21,12 @@ _ONE_HOUR = dt.timedelta(hours=1)
 LIKED_PARTNER = 0.0
 DISLIKED_PARTNER = 1.0
 
+
+# The automatic choice of the role-aware bound (ADR 0047): each worker's own whole-slot sets where the slots' domains
+# are of at least this many kinds and at least this share of the load lies outside them. Fitted on the benchmark
+# inputs, alone and as day 2 (2026-11-17)
+AUTO_MIN_DISTINCT_DOMAINS = 3
+AUTO_MIN_LOAD_OUTSIDE = 0.2
 
 @dataclass(frozen=True, slots=True)
 class WorkerConstants:
@@ -51,7 +57,9 @@ class ScoringConstants:
     pair_values[w][p] is what workers w and p add to the likes total as a pair, before
     dividing by the shift's other slots: both workers' like values of each other, computed once since the search asks
     for them at every step. load_classes holds the schedule's distinct slot loads, ascending, and slot_load_class[i]
-    the index of slot i's load among them, for the workload bound in whole slots (ADR 0040).
+    the index of slot i's load among them, for the workload bound in whole slots (ADR 0040). own_whole_slot_sets says
+    whether that bound takes each worker's sets from their own domain (ADR 0046), as the role_aware_bound setting
+    resolves for the run (ADR 0047).
     """
     parameters: ScoringParameters
     min_rest: float
@@ -70,6 +78,7 @@ class ScoringConstants:
     pair_values: tuple[tuple[float, ...], ...]
     load_classes: tuple[float, ...]
     slot_load_class: tuple[int, ...]
+    own_whole_slot_sets: bool
 
 
 def hours(length: dt.timedelta) -> float:
@@ -81,7 +90,7 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
                     domains: Sequence[Sequence[int]]) -> ScoringConstants:
     """
     Calculate the scoring constants of a run
-    :param settings: Settings, for the period, the minimum rest and the scoring parameters
+    :param settings: Settings, for the period, the minimum rest, the scoring parameters and the role-aware bound
     :param workers: all workers, in input order
     :param shifts: all shifts, in stable order
     :param slots: all slots, in stable order
@@ -131,7 +140,35 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
                                  for worker in workers),
         pair_values=pair_values(worker_constants, parameters.neutral_partner),
         load_classes=classes,
-        slot_load_class=slot_classes)
+        slot_load_class=slot_classes,
+        own_whole_slot_sets=uses_own_whole_slot_sets(settings.role_aware_bound, len(workers), domains, loads))
+
+
+def uses_own_whole_slot_sets(setting: str, workers: int, domains: Sequence[Sequence[int]],
+                             loads: Sequence[float]) -> bool:
+    """
+    Whether the whole-slot bound takes each worker's sets from their own domain (ADR 0046), from the role_aware_bound
+    setting: on, off, or auto (ADR 0047). Each worker's own sets prune more only where roles and unavailability narrow
+    the domains in more than one way, and their bookkeeping costs about a fifth more per node, so auto chooses them
+    where the domains are of at least AUTO_MIN_DISTINCT_DOMAINS kinds and at least AUTO_MIN_LOAD_OUTSIDE of the load
+    lies outside them (each slot's load, times the share of workers who can't take it)
+    :param setting: one of ROLE_AWARE_BOUND_CHOICES
+    :param workers: the number of workers
+    :param domains: each slot's domain, as build_constants takes them
+    :param loads: each slot's load
+    :return: True for each worker's own sets, False for the global ones
+    """
+    if setting == ROLE_AWARE_BOUND_ON:
+        return True
+    if setting == ROLE_AWARE_BOUND_OFF:
+        return False
+    total, outside = 0.0, 0.0
+    for domain, load in zip(domains, loads):  # plain loops round the same on every interpreter, like fsum
+        total += load
+        outside += load * (workers - len(domain))
+    distinct = len({tuple(domain) for domain in domains})
+    return (distinct >= AUTO_MIN_DISTINCT_DOMAINS and workers > 0 and total > 0
+            and outside / (workers * total) >= AUTO_MIN_LOAD_OUTSIDE)
 
 
 def load_classes(loads: Sequence[float]) -> tuple[tuple[float, ...], tuple[int, ...]]:

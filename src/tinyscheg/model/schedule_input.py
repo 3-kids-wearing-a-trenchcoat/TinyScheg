@@ -11,6 +11,15 @@ from tinyscheg.timing.datetime_range import DateTimeRange
 
 DEFAULT_MIN_REST = dt.timedelta(hours=6)
 
+# The role-aware bound (ADR 0047): whether the whole-slot bound takes each worker's sets from their own domain (ADR
+# 0046), which prunes more where roles and unavailability narrow the domains and costs more where they don't. "auto"
+# chooses from the input; it changes how fast the search finishes, never the schedule
+ROLE_AWARE_BOUND_AUTO = "auto"
+ROLE_AWARE_BOUND_ON = "on"
+ROLE_AWARE_BOUND_OFF = "off"
+ROLE_AWARE_BOUND_CHOICES = (ROLE_AWARE_BOUND_AUTO, ROLE_AWARE_BOUND_ON, ROLE_AWARE_BOUND_OFF)
+DEFAULT_ROLE_AWARE_BOUND = ROLE_AWARE_BOUND_AUTO
+
 # Scoring parameter defaults (ADR 0022). Weights are relative: they're divided by their sum. Set on 2026-11-14
 # (ADR 0039) from the user's trade-offs, checked on the example (tests/test_default_tradeoffs.py): a like is worth
 # about one short rest, and an avoidable gap of two shifts outweighs three pairings and one worker resting at the
@@ -76,17 +85,21 @@ def _check_number(name: str, value: object) -> None:
 @dataclass(frozen=True, slots=True)
 class Settings:
     """
-    General scheduler settings: the period to schedule, the minimum rest between a worker's shifts, and the scoring
-    parameters.
+    General scheduler settings: the period to schedule, the minimum rest between a worker's shifts, the scoring
+    parameters, and whether the search uses the role-aware bound (one of ROLE_AWARE_BOUND_CHOICES).
     """
     period: DateTimeRange
     min_rest: dt.timedelta = DEFAULT_MIN_REST
     scoring: ScoringParameters = field(default_factory=ScoringParameters)
+    role_aware_bound: str = DEFAULT_ROLE_AWARE_BOUND
 
     def __post_init__(self) -> None:
         """Validate the settings."""
         if self.min_rest < dt.timedelta(0):
             raise ValueError(f"min_rest must not be negative, got {self.min_rest}")
+        if self.role_aware_bound not in ROLE_AWARE_BOUND_CHOICES:
+            raise ValueError(f"role_aware_bound must be one of {', '.join(ROLE_AWARE_BOUND_CHOICES)}, "
+                             f"got {self.role_aware_bound!r}")
 
 
 @dataclass(frozen=True, slots=True)
