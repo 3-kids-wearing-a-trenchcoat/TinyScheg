@@ -11,9 +11,10 @@ From the repository root, with the `tinyscheg` environment activated
 (see [Development setup](../how-to/development-setup.md)):
 
 ```bash
-python src/main.py INPUT [-o OUTPUT] [-j JOBS] [--role-aware-bound {auto,on,off}]
+python src/main.py [-h] INPUT [-o OUTPUT] [-j JOBS] [--role-aware-bound {auto,on,off}]
 ```
 
+* `-h`, `--help` — list the options with a short description of each, and exit.
 * `INPUT` — the YAML input file (see [Input format](input-format.md)).
 * `-o OUTPUT`, `--output OUTPUT` — the schedule file to write. Its extension sets the format (see
   [Output format](output-format.md)); `.csv`, `.xlsx` and `.ods` are supported, in any case. If omitted, the schedule is

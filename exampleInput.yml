@@ -2,6 +2,9 @@
 settings:
   time: ["2025-01-01", "2025-01-02"] # time period to generate a schedule for
   min_rest: 6 # minimum time between shifts (in hours)
+  # role_aware_bound: auto # optional, auto if omitted: auto, on or off. Whether the search limits each worker to the
+  #   slots they can fill; it changes only how fast the search finishes, never the schedule. The command line's
+  #   --role-aware-bound overrides it
 
 
 # List of workers available for assignment.
