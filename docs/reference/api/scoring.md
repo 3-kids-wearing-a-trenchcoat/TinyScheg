@@ -263,7 +263,7 @@ $\lbrace 0 \rbrace \cup [u, L] \cup [2u, 2L] \cup \dots$; both cut at the worker
 $\lfloor \mathrm{cap} / u \rfloor$ slots. `classes` is (load, count) for every load at least one unfilled slot has,
 ascending. Otherwise as `own_whole_slot_bound`.
 
-### `own_whole_slot_bound(power, availabilities, loads, caps, remaining, own_classes, level) -> float | None`
+### `own_whole_slot_bound(power, availabilities, loads, caps, remaining, own_counts, load_classes, level) -> float | None`
 
 A lower bound on the sum of $\mathrm{av} \cdot (\text{load} / \mathrm{av})^p$ over every completion, handing out
 the unfilled slots whole, by Lagrangian relaxation: for any $\mu$,
@@ -273,7 +273,11 @@ $T_w$ comes from the unfilled slots in the worker's own domain (ADR 0046): the e
 no more of each load than the worker is in the domain of (at most `MAX_LOAD_COMBINATIONS` combinations), or else
 the intervals $\lbrace 0 \rbrace \cup [u_w, L_w] \cup [2u_w, 2L_w] \cup \dots$ up to the number of those slots, cut
 at the worker's cap ($u_w$, $L_w$ the smallest and largest of their loads). A worker's sets depend only on their
-counts per load, so they're built once per set of counts and cached (`_own_sets`, up to `COMBINATIONS_CACHE_SIZE`).
+counts per load, so they're built once per set of counts (`_own_sets`) and kept in a plain dict keyed by the counts
+(`_SetsCache`, up to `COMBINATIONS_CACHE_SIZE` sets of counts, for one set of loads and one `MAX_LOAD_COMBINATIONS` at
+a time; starting afresh when either changes or it's full). It replaced `functools.lru_cache` keyed by the
+(load, count) pairs, which PyPy runs as Python code: with the pairs built and hashed at every bound, that cost the
+search 11–32% of its time on PyPy (Phase 11 step 5, 2026-11-17).
 
 The best $\mu$ is found exactly, by tangents (`_best_over_mu`, ADR 0044). $LB$ is concave and piecewise linear in
 $\mu$, and each evaluation gives its value and its slope, $R$ less the load the per-worker minimizers hand out:
@@ -287,8 +291,8 @@ $\mu$, and each evaluation gives its value and its slope, $R$ less the load the 
 4. At most `MAX_MU_STEPS` evaluations, a safeguard; whatever stops the search, the highest value found is returned,
    always a valid bound.
 
-* `own_classes` — per worker, (load, count) for every load at least one unfilled slot in their domain has,
-  ascending.
+* `own_counts` — per worker, how many unfilled slots in their domain have each load of `load_classes`.
+* `load_classes` — the schedule's distinct slot loads, ascending (`ScoringConstants.load_classes`).
 * `level` — the water-filling bound's level.
 * Returns the bound lowered by a relative `ROUNDING_MARGIN`, or `None` if nothing is left to fill, or a worker with
   no availability (whose term isn't counted) could take load.

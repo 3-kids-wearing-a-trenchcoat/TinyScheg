@@ -310,7 +310,23 @@ user's approval first.
       third slower where domains aren't narrowed (`sweep_06`; `multiday_04` 0.9 times). An on/off setting deferred
 - [ ] **5. Smaller, if still worth it after 2–4:** the per-worker sets' bookkeeping made cheaper (ADR 0046); fixed data
       not rebuilt at each node; children whose own penalty already reaches the pocket's skipped without being set up
-      (0–16% of nodes); the whole-slot bound only where the cheap bound is near the pocket's
+      (0–16% of nodes); the whole-slot bound only where the cheap bound is near the pocket's (2026-11-17, lab first,
+      one process on PyPy; see [Future work](explanation/future-work.md#search-performance))
+    - [x] Kept: each worker's sets cached in a plain dict keyed by their counts, instead of `lru_cache` (run as Python
+      code on PyPy) keyed by pairs built at every bound; the same search node for node, 11–32% less time with the
+      role-aware bound on. The user approved it, on branch `phase11-sets-cache`
+    - [x] Not taken: skipping children that can't beat the pocket (0.3–11% of nodes skipped, 14–36% slower on four
+      inputs); the whole-slot bound only near the pocket (no gap that saves calls without losing prunes); each
+      worker's extra loads as a sorted list with a binary search and the fixed parts computed once (28% less on
+      CPython, even on PyPy: faster on `multiday_05`, slower on small inputs; a lead, in a form using the list only
+      where it's short)
+    - [x] Check: the same schedules everywhere (alone and day 2, CPython and PyPy, 12 processes); one process
+      against `dev` at the default (`auto`), PyPy: 11–20% less time where `auto` turns the bound on (`sweep_08` 0.80,
+      `multiday_05` and `confirm_01` 0.85, `multiday_04` 0.87, `multiday_04`'s second period 0.89), seed 3009 0.96;
+      where it's off, the code is unchanged (`sweep_11` 1.24 in the batch, 1.07 timed again alone, the same nodes);
+      CPython 0.96–1.00 on 6 small inputs
+    - [ ] `auto`'s rule (ADR 0047) measured again with the cheaper bound: on is now as fast as off or faster on nearly
+      every input, slower only by about 5% (`sweep_02`, `multiday_02`); the user to decide what it becomes
 - [ ] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
       the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
       deferred item on 48-hour first periods reconsidered with them

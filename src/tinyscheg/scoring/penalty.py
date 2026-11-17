@@ -273,9 +273,8 @@ def whole_slots(constants: ScoringConstants, assigned_load: Sequence[float], cap
     power = constants.parameters.workload_power
     availabilities = [worker.availability for worker in constants.workers]
     if constants.own_whole_slot_sets:
-        own_classes = [[(load, count) for load, count in zip(constants.load_classes, worker_counts) if count > 0]
-                       for worker_counts in counts]
-        return own_whole_slot_bound(power, availabilities, assigned_load, caps, remaining, own_classes, level)
+        return own_whole_slot_bound(power, availabilities, assigned_load, caps, remaining, counts,
+                                    constants.load_classes, level)
     classes = [(load, count) for load, count in zip(constants.load_classes, counts) if count > 0]
     return whole_slot_bound(power, availabilities, assigned_load, caps, remaining, classes, level)
 
