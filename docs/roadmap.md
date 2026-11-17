@@ -336,7 +336,11 @@ user's approval first.
       periods 2 h 16 min in all against 7 h 22 (3.3 times), seed 3009 1 h 40 min against 5 h 57, `multiday_05` 4.2
       times, `multiday_02` even; `multiday_04`'s second period 15% slower, `auto` choosing on where off is faster.
       The deferred item stays open: seed 3009 is still well over half an hour
-    - [ ] After step 5, if it changes the search's speed
+    - [x] After step 5 (2026-11-18, the same way; see
+      [Future work](explanation/future-work.md#after-phase-11s-step-5-2026-11-18)): the same schedules; first periods
+      2 h in all (3.7 times the speed of 2026-11-16), seed 3009 1 h 28 min, `multiday_05` 619 s (5.0 times); 7–15% less
+      than after steps 2–4 wherever the role-aware bound is on
+    - [ ] The deferred item on 48-hour first periods reconsidered with these, by the user
 
 ## Later
 

@@ -350,6 +350,29 @@ other figures are single runs, which vary by up to 15%.
   The bound's cost per node is what [Phase 11 step 5](../roadmap.md#phase-11-faster-search-through-the-bounds)
   would cut first.
 
+#### After Phase 11's step 5 (2026-11-18)
+
+The same again after step 5 (each worker's sets cached in a plain dict), the same way, in seconds unless marked: the
+time after steps 2–4 (above) and on 2026-11-16 alongside. Every schedule is the recorded one:
+
+| Input | First 48 hours | After steps 2–4 | 2026-11-16 | Best found after | Second 48 hours | After steps 2–4 | 2026-11-16 |
+|---|---|---|---|---|---|---|---|
+| `multiday_01` | 251 | 271 | 372 | 2 | 7 | 7 | 8 |
+| `multiday_02` (off) | 112 | 112 | 94 | 44 | under 1 | under 1 | under 1 |
+| `multiday_03` | 238 | 260 | 363 | 9 | 20 | 21 | 27 |
+| `multiday_04` | 713 | 802 | 1,189 | 124 | 168 | 175–185 | 154–156 |
+| `multiday_05` | 619 | 732 | 3,107 | 33 | 214 | 234 | 505 |
+| seed 3009 | **1 h 28 min** | 1 h 40 min | 5 h 57 min | 54 min | 13 min | 15 min | not measured |
+
+* **In all,** the six first periods took 2 hours, against 2 hours 16 after steps 2–4 and 7 hours 22 on 2026-11-16:
+  3.7 times faster than before Phase 11. The tier's five second periods took 409 s (446 s, 690 s).
+* **Step 5 took 7–15% off** every input where the role-aware bound is on, first periods and second; `multiday_02`,
+  where `auto` leaves it off, is unchanged (112 s, a single run; 98 s when timed in pairs after steps 2–4).
+* **`multiday_04`'s second period** is still a little slower than on 2026-11-16 (168 s against 150 s), but on is now
+  the right choice there: with the cheaper bound it's about 1.07 times as fast as off.
+* **Seed 3009** finds its best schedule after 54 minutes, and is within 0.1% of it after under 8 minutes. Its first
+  period is still about three times the half hour or so that's acceptable for one schedule.
+
 ## Faster search by non-heuristic means
 
 > [!NOTE]
