@@ -24,13 +24,13 @@ class _Saved:
     rest: float
     likes_bound: float
     remaining: float
-    load_class: int                              # the index of the slot's load among the load classes
     worker: int                                  # the worker assigned
     load: float                                  # their load before
     deficit: float                               # their rest deficit before
     position: int                                # where the slot went among their slots
     caps: tuple[tuple[int, float], ...]          # (worker, cap before), for every cap changed
     shift_bounds: tuple[tuple[int, float], ...]  # (shift index, its likes look-ahead before), for every one changed
+    own_counts: tuple[tuple[int, int], ...]      # (worker, load class) for every count of own slots lowered by one
 
 
 class IncrementalScore:
@@ -39,7 +39,7 @@ class IncrementalScore:
     worker's load, rest deficit and slots in time order; and for the lower bound, each shift's likes look-ahead and each
     worker's workload cap. assign updates them, undo restores them; both must be called in step with the search's
     own assignments, the latest assignment undone first. For the workload bound in whole slots (ADR 0040), it also
-    counts the unfilled slots of each load.
+    counts, for each worker, the unfilled slots of each load in their domain (ADR 0046).
     """
 
     def __init__(self, constants: ScoringConstants, assignment: Sequence[int | None],
@@ -67,13 +67,14 @@ class IncrementalScore:
             self.likes_bound += shift_bound
         self.caps = [0.0] * len(constants.workers)
         self.remaining = 0.0
-        self.class_counts = [0] * len(constants.load_classes)  # unfilled slots per load class
+        # per worker, per load class: the unfilled slots of that load in their domain
+        self.own_counts = [[0] * len(constants.load_classes) for _ in constants.workers]
         for slot, domain in enumerate(domains):
             if assignment[slot] is None:
                 self.remaining += constants.slot_load[slot]
-                self.class_counts[constants.slot_load_class[slot]] += 1
                 for worker in domain:
                     self.caps[worker] += constants.slot_load[slot]
+                    self.own_counts[worker][constants.slot_load_class[slot]] += 1
         self._saved: list[_Saved] = []
         self._water: tuple[float, float] | None = None  # the current state's water-filling, once computed
 
@@ -170,7 +171,7 @@ class IncrementalScore:
         if constants.workload_unit == 0:
             return 0.0
         filled, level = self._water_filling()
-        whole = whole_slots(constants, self.load, self.caps, self.remaining, self.class_counts, level)
+        whole = whole_slots(constants, self.load, self.caps, self.remaining, self.own_counts, level)
         return (filled if whole is None else max(filled, whole)) / constants.workload_unit
 
     # --- assigning and undoing ---
@@ -201,28 +202,34 @@ class IncrementalScore:
         self.deficits[worker] += deficit_change
         self.load[worker] += constants.slot_load[slot]
         self.slots[worker].insert(position, slot)
-        # the workload look-ahead: the slot's load is no longer to be spread, nor in anyone's cap; and a worker dropped
-        # from a narrowed domain can no longer take that slot's load
+        # the workload look-ahead: the slot's load is no longer to be spread, nor in anyone's cap or own slots; and a
+        # worker dropped from a narrowed domain can no longer take that slot
         caps_before: dict[int, float] = {}
+        lowered: list[tuple[int, int]] = []  # (worker, load class) of each own count lowered
         self.remaining -= constants.slot_load[slot]
-        self.class_counts[constants.slot_load_class[slot]] -= 1
+        load_class = constants.slot_load_class[slot]
         for candidate in self.domains[slot]:
             caps_before.setdefault(candidate, self.caps[candidate])
             self.caps[candidate] -= constants.slot_load[slot]
+            self.own_counts[candidate][load_class] -= 1
+            lowered.append((candidate, load_class))
         for narrowed_slot, domain in before.items():
             current = set(self.domains[narrowed_slot])
+            narrowed_class = constants.slot_load_class[narrowed_slot]
             for dropped in domain:
                 if dropped not in current:
                     caps_before.setdefault(dropped, self.caps[dropped])
                     self.caps[dropped] -= constants.slot_load[narrowed_slot]
+                    self.own_counts[dropped][narrowed_class] -= 1
+                    lowered.append((dropped, narrowed_class))
         # the likes look-ahead: only the shifts with a slot assigned or narrowed can change
         for shift in changed_shifts:
             new = shift_likes_lower_bound(constants, constants.shifts[shift], self.assignment, self.domains)
             self.likes_bound += new - self.shift_bounds[shift]
             self.shift_bounds[shift] = new
         likes, workload, rest, likes_bound, remaining, load, deficit = old
-        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, constants.slot_load_class[slot],
-                                  worker, load, deficit, position, tuple(caps_before.items()), old_shift_bounds))
+        self._saved.append(_Saved(likes, workload, rest, likes_bound, remaining, worker, load, deficit, position,
+                                  tuple(caps_before.items()), old_shift_bounds, tuple(lowered)))
 
     def undo(self) -> None:
         """Undo the latest assignment, restoring every total exactly as it was."""
@@ -230,7 +237,8 @@ class IncrementalScore:
         self._water = None
         self.likes, self.workload, self.rest = saved.likes, saved.workload, saved.rest
         self.likes_bound, self.remaining = saved.likes_bound, saved.remaining
-        self.class_counts[saved.load_class] += 1
+        for owner, load_class in saved.own_counts:
+            self.own_counts[owner][load_class] += 1
         self.load[saved.worker] = saved.load
         self.deficits[saved.worker] = saved.deficit
         del self.slots[saved.worker][saved.position]
