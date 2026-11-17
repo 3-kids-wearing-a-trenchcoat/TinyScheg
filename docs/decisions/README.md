@@ -61,12 +61,13 @@ ADR that supersedes the old one.
 | [0037](0037-worst-rest-deficit-from-scratch-over-the-history.md) | Each worker's worst rest deficit counts every history slot they could have filled | Accepted |
 | [0038](0038-rests-count-only-available-time.md) | A rest counts only the time the worker was available | Accepted |
 | [0039](0039-default-weights-from-the-users-trade-offs.md) | Default weights from the user's trade-offs: likes : workload : rest = 0.45 : 1 : 0.25, neutral partner 0.44 | Accepted |
-| [0040](0040-workload-bound-in-whole-slots.md) | A workload bound in whole slots | Accepted, amended by [0044](0044-best-whole-slot-multiplier-by-tangents.md) |
+| [0040](0040-workload-bound-in-whole-slots.md) | A workload bound in whole slots | Accepted, amended by [0044](0044-best-whole-slot-multiplier-by-tangents.md) and [0046](0046-whole-slot-sets-from-each-workers-own-domain.md) |
 | [0041](0041-parallel-search-with-the-sequential-result.md) | Branch and bound in parallel processes, with exactly the sequential result | Accepted, amended by [0043](0043-one-process-per-physical-core.md) |
 | [0042](0042-warn-when-the-next-period-cant-be-filled.md) | Warn when a schedule leaves the next period no legal schedule | Accepted |
 | [0043](0043-one-process-per-physical-core.md) | By default, one search process per physical core | Accepted |
 | [0044](0044-best-whole-slot-multiplier-by-tangents.md) | The whole-slot bound's best multiplier, found exactly by tangents | Accepted |
 | [0045](0045-rest-lookahead.md) | A rest look-ahead in the lower bound | Accepted |
+| [0046](0046-whole-slot-sets-from-each-workers-own-domain.md) | The whole-slot bound's sets from each worker's own domain | Accepted |
 
 ## Template
 

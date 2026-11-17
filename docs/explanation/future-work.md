@@ -218,6 +218,16 @@ Still deferred:
   assignment), and a quicker test for slots that add nothing (each candidate's nearest slots' deficits, before the
   full increase; about a quarter of the cost on some inputs, none on others). Also left: tuning the tangent search's
   `MU_GROWTH` and `OPTIMUM_GAP` (ADR 0044), which costs up to 12% where it prunes no more (`sweep_11`).
+
+  Done on 2026-11-17: the whole-slot bound's sets from each worker's own domain
+  ([ADR 0046](../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md)), the role-aware bound worth its cost
+  among those tried (groups of slots with a price each never bound; a price per slot cost too much); the same schedules,
+  6–10% less time on PyPy for the 16 inputs searched to the end, 60–71 and 3.5–3.9 times the progress on `multiday_05`
+  and seed 3009, and `multiday_05` searched to the end in 689 s (3107 s before ADRs 0044–0046). Where roles and
+  availability narrow the domains it prunes much more, but elsewhere its bookkeeping costs up to about a third more time
+  (`sweep_06`; `multiday_04` 0.9 times the progress). Deferred (asked by the user): a setting to turn it on or off, and
+  perhaps choosing it automatically from how constrained the input is (how much the domains are narrowed by roles and
+  unavailability).
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long

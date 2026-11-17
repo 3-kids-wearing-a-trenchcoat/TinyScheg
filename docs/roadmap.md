@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, in progress (steps 1–3 done, 2026-11-17).
+bounds, in progress (steps 1–4 done, 2026-11-17).
 
 ## Phase 1: Walking skeleton
 
@@ -296,13 +296,21 @@ user's approval first.
       `dev`: 4–7% less time on PyPy (`sweep_12` 35% less), seed 3009 2.3 and `multiday_04` 1.7–1.85 times the
       progress; up to 12% slower where no rest cost is certain (`sweep_11`, `multiday_05`); as day 2 with 12
       processes, 17–20% less
-- [ ] **4. A cheap role-aware workload bound:** designed and measured outside the program first, against the
-      ceiling found with a price per slot (32–52% of the nodes the program keeps would be pruned, on inputs with
-      scarce roles); candidates: water-filling where the workers who can fill a group of slots must take that
-      group's load between them, and the whole-slot bound by such groups. Then proposed to the user.
-- [ ] **5. Smaller, if still worth it after 2–4:** fixed data not rebuilt at each node; children whose own penalty
-      already reaches the pocket's skipped without being set up (0–16% of nodes); the whole-slot bound only where
-      the cheap bound is near the pocket's
+- [x] **4. A role-aware workload bound**, with
+      [ADR 0046](decisions/0046-whole-slot-sets-from-each-workers-own-domain.md) (done 2026-11-17): the whole-slot
+      bound's sets from each worker's own domain, counted per load, kept up to date incrementally and cached
+    - [x] Lab first: groups of slots with a price each (water-filling and whole slots) never bound; a price per slot
+      (the ceiling) cost 80–100 µs per node; the per-worker sets beat it, and pay their way only replacing the global
+      sets with incremental counts. The user chose to adopt them as they are
+    - [x] Tests: never above brute force, equal to a long multiplier search, a case by hand where only these reach the
+      best completion; incremental equal to from scratch
+    - [x] Check: the same schedules everywhere (alone and day 2, CPython and PyPy, 12 processes); one process against
+      `dev`: 6–10% less time on PyPy, 13% on CPython; `multiday_05` 60–71 and seed 3009 3.5–3.9 times the progress,
+      `multiday_05` to the end in 689 s and 230 s for the two periods (3107 s and 505 s on 2026-11-16); up to about a
+      third slower where domains aren't narrowed (`sweep_06`; `multiday_04` 0.9 times). An on/off setting deferred
+- [ ] **5. Smaller, if still worth it after 2–4:** the per-worker sets' bookkeeping made cheaper (ADR 0046); fixed data
+      not rebuilt at each node; children whose own penalty already reaches the pocket's skipped without being set up
+      (0–16% of nodes); the whole-slot bound only where the cheap bound is near the pocket's
 - [ ] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
       the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
       deferred item on 48-hour first periods reconsidered with them
@@ -324,6 +332,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       that nothing beats a schedule found early (deferred in Phase 10; the bounds taken up in Phase 11)
 - [ ] The rest look-ahead kept up to date incrementally, or with a quicker test for slots that add nothing, to cut its
       4–12% cost (ADR 0045); and the tangent search's dials tuned (ADR 0044). Only if ever worth it (2026-11-17)
+- [ ] A setting to turn the whole-slot bound's per-worker sets (ADR 0046) on or off, since they cost up to about a
+      third more time where roles and availability don't narrow the domains; later perhaps chosen automatically from
+      how constrained the input is (asked by the user, 2026-11-17)
 - [ ] A strong bound used only near the top of the tree, where a prune removes the most: a multiplier per slot, each
       worker's best set of slots found on its own, covering roles, overlaps, rest and workload together (too costly
       at every node; suggested 2026-11-16)
