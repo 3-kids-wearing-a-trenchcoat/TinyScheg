@@ -79,6 +79,81 @@ def test_the_bound_is_never_above_the_best_whole_slot_completion(power: int, mos
     assert tighter > CASES / 4  # and it means something: it's often above the water-filling bound
 
 
+LONG_SEARCH_STEPS = 200     # doublings, then halvings, in the long search for mu the tangents are checked against
+SAME_VALUE = 1e-11          # relative: how close the tangents' value must be to the long search's (both lowered
+                            # by the rounding margin)
+
+
+def long_search_bound(power: int, availabilities: list[float], loads: list[float], slots: list[float],
+                      domains: list[list[int]], most_combinations: int) -> float:
+    """
+    The whole-slot bound with mu found by a long bisection on the same evaluator, without the rounding margin
+    :param power: p
+    :param availabilities: av per worker
+    :param loads: each worker's load so far
+    :param slots: the unfilled slots' loads
+    :param domains: the unfilled slots' domains
+    :param most_combinations: MAX_LOAD_COMBINATIONS for the evaluator (0: intervals only)
+    :return: the highest LB(mu) found
+    """
+    caps = [0.0] * len(availabilities)
+    for slot_load, domain in zip(slots, domains):
+        for worker in domain:
+            caps[worker] += slot_load
+    remaining = sum(slots)
+    classes = [(load, slots.count(load)) for load in sorted(set(slots))]
+    smallest = classes[0][0]
+    counts = [int(cap / smallest + whole_slots.LOAD_TOLERANCE) for cap in caps]
+    evaluate = None
+    if most_combinations:
+        evaluate = whole_slots._exact_evaluator(power, availabilities, loads, caps, counts, remaining, classes)
+    if evaluate is None:
+        evaluate = whole_slots._interval_evaluator(power, availabilities, loads, caps, counts, remaining, smallest,
+                                                   classes[-1][0])
+    best, high = evaluate(0.0)[0], 1.0
+    for _ in range(LONG_SEARCH_STEPS):
+        value, handed = evaluate(high)
+        best = max(best, value)
+        if handed >= remaining:
+            break
+        high *= 2
+    low = 0.0
+    for _ in range(LONG_SEARCH_STEPS):
+        middle = (low + high) / 2
+        value, handed = evaluate(middle)
+        best = max(best, value)
+        low, high = (middle, high) if handed < remaining else (low, middle)
+    return best
+
+
+@pytest.mark.parametrize("power", [2, 3])
+@pytest.mark.parametrize("most_combinations", [whole_slots.MAX_LOAD_COMBINATIONS, 0])  # exact, then intervals only
+def test_the_tangents_find_the_best_multiplier(power: int, most_combinations: int,
+                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    # ADR 0044: the same value as a long search for mu, never below it (beyond rounding) and never above it
+    monkeypatch.setattr(whole_slots, "MAX_LOAD_COMBINATIONS", most_combinations)
+    rng = random.Random(100 + power)
+    for _ in range(CASES):
+        case = random_case(rng)
+        _, whole = bounds(power, *case)
+        reference = long_search_bound(power, *case, most_combinations)
+        reference -= whole_slots.ROUNDING_MARGIN * abs(reference)
+        assert whole == pytest.approx(reference, rel=SAME_VALUE, abs=SAME_VALUE)
+
+
+def test_the_tangents_on_a_function_known_by_hand() -> None:
+    # LB(mu) = 6 mu + min(0, 4 - 2 mu, 10 - 4 mu, 18 - 6 mu): one worker whose extra loads 0, 2, 4, 6 cost 0, 4, 10, 18,
+    # and R = 3. The convexified cost of 3 is halfway between 4 and 10, so the highest LB is 7, at mu = 3
+    points = [(0.0, 0.0), (2.0, 4.0), (4.0, 10.0), (6.0, 18.0)]
+
+    def evaluate(mu: float) -> tuple[float, float]:
+        cost, extra = min((cost - mu * extra, extra) for extra, cost in points)
+        return 3.0 * mu + cost, extra
+
+    assert whole_slots._best_over_mu(evaluate, 3.0, 0.5, 0.0) == pytest.approx(7.0, abs=1e-12)
+    assert whole_slots._best_over_mu(evaluate, 3.0, 50.0, 0.0) == pytest.approx(7.0, abs=1e-12)
+
+
 def test_one_slot_two_workers_by_hand() -> None:
     # One slot of load 4 for two equally available workers with nothing yet. Water-filling gives each half:
     # 2 * 8 * (2 / 8) ** 2 = 1. Whole, one of them gets it all: 8 * (4 / 8) ** 2 = 2, and the bound finds it.
