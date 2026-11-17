@@ -1,4 +1,6 @@
-"""Tests for tinyscheg.scoring.whole_slots, the workload bound in whole slots (ADR 0040), against brute force."""
+"""Tests for tinyscheg.scoring.whole_slots, the workload bound in whole slots (ADR 0040), with the global sets and with
+each worker's own (ADR 0046), against brute force."""
+import dataclasses
 import random
 from collections import Counter
 from itertools import product
@@ -10,9 +12,9 @@ from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_best_schedule
 from tinyscheg.model.schedule_input import ScheduleInput
 from tinyscheg.scoring import penalty, whole_slots
-from tinyscheg.scoring.constants import integer_power
+from tinyscheg.scoring.constants import build_constants, integer_power
 from tinyscheg.scoring.penalty import _water_level
-from tinyscheg.scoring.whole_slots import whole_slot_bound
+from tinyscheg.scoring.whole_slots import own_whole_slot_bound, whole_slot_bound
 
 CASES = 300                 # random cases compared with brute force, per power and set of loads
 MOST_WORKERS = 4
@@ -55,10 +57,15 @@ def own_classes(workers: int, slots: list[float], domains: list[list[int]]) -> l
             for worker in range(workers)]
 
 
+def global_classes(slots: list[float]) -> list[tuple[float, int]]:
+    """(load, count) of the unfilled slots, ascending (ADR 0040)."""
+    return [(load, slots.count(load)) for load in sorted(set(slots))]
+
+
 def bounds(power: int, availabilities: list[float], loads: list[float], slots: list[float],
-           domains: list[list[int]]) -> tuple[float, float | None]:
+           domains: list[list[int]], own: bool = True) -> tuple[float, float | None]:
     """(the water-filling bound, the whole-slot bound), before normalizing, as penalty.workload_bound_total gets
-    them."""
+    them: with each worker's own sets, or the global ones."""
     caps = [0.0] * len(availabilities)
     for slot_load, domain in zip(slots, domains):
         for worker in domain:
@@ -67,13 +74,16 @@ def bounds(power: int, availabilities: list[float], loads: list[float], slots: l
     pool = [(load / av, av, (load + cap) / av) for av, load, cap in zip(availabilities, loads, caps)]
     level = _water_level(pool, remaining)
     filled = sum(av * integer_power(min(max(ratio, level), highest), power) for ratio, av, highest in pool)
-    return filled, whole_slot_bound(power, availabilities, loads, caps, remaining,
-                                    own_classes(len(availabilities), slots, domains), level)
+    if own:
+        return filled, own_whole_slot_bound(power, availabilities, loads, caps, remaining,
+                                            own_classes(len(availabilities), slots, domains), level)
+    return filled, whole_slot_bound(power, availabilities, loads, caps, remaining, global_classes(slots), level)
 
 
+@pytest.mark.parametrize("own", [True, False])
 @pytest.mark.parametrize("power", [2, 3])
 @pytest.mark.parametrize("most_combinations", [whole_slots.MAX_LOAD_COMBINATIONS, 0])  # exact, then intervals only
-def test_the_bound_is_never_above_the_best_whole_slot_completion(power: int, most_combinations: int,
+def test_the_bound_is_never_above_the_best_whole_slot_completion(own: bool, power: int, most_combinations: int,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(whole_slots, "MAX_LOAD_COMBINATIONS", most_combinations)
     rng = random.Random(power)
@@ -81,7 +91,7 @@ def test_the_bound_is_never_above_the_best_whole_slot_completion(power: int, mos
     for _ in range(CASES):
         case = random_case(rng)
         best = brute_force(power, *case)
-        filled, whole = bounds(power, *case)
+        filled, whole = bounds(power, *case, own=own)
         assert whole is not None and whole <= best + CLOSE
         tighter += whole > filled + CLOSE
     assert tighter > CASES / 4  # and it means something: it's often above the water-filling bound
@@ -93,7 +103,7 @@ SAME_VALUE = 1e-11          # relative: how close the tangents' value must be to
 
 
 def long_search_bound(power: int, availabilities: list[float], loads: list[float], slots: list[float],
-                      domains: list[list[int]], most_combinations: int) -> float:
+                      domains: list[list[int]], most_combinations: int, own: bool) -> float:
     """
     The whole-slot bound with mu found by a long bisection on the same evaluator, without the rounding margin
     :param power: p
@@ -102,6 +112,7 @@ def long_search_bound(power: int, availabilities: list[float], loads: list[float
     :param slots: the unfilled slots' loads
     :param domains: the unfilled slots' domains
     :param most_combinations: MAX_LOAD_COMBINATIONS for the evaluator (0: intervals only), already set by the caller
+    :param own: each worker's own sets, or the global ones
     :return: the highest LB(mu) found
     """
     caps = [0.0] * len(availabilities)
@@ -109,8 +120,18 @@ def long_search_bound(power: int, availabilities: list[float], loads: list[float
         for worker in domain:
             caps[worker] += slot_load
     remaining = sum(slots)
-    evaluate, at_zero = whole_slots._evaluator(power, availabilities, loads, caps, remaining,
-                                               own_classes(len(availabilities), slots, domains))
+    if own:
+        evaluate, at_zero = whole_slots._evaluator(power, availabilities, loads, caps, remaining,
+                                                   own_classes(len(availabilities), slots, domains))
+    else:
+        classes = global_classes(slots)
+        counts = [int(cap / classes[0][0] + whole_slots.LOAD_TOLERANCE) for cap in caps]
+        evaluate = whole_slots._exact_evaluator(power, availabilities, loads, caps, counts, remaining,
+                                                classes) if most_combinations else None
+        if evaluate is None:
+            evaluate = whole_slots._interval_evaluator(power, availabilities, loads, caps, counts, remaining,
+                                                       classes[0][0], classes[-1][0])
+        at_zero = evaluate(0.0)[0]
     best, high = at_zero, 1.0
     for _ in range(LONG_SEARCH_STEPS):
         value, handed = evaluate(high)
@@ -127,17 +148,18 @@ def long_search_bound(power: int, availabilities: list[float], loads: list[float
     return best
 
 
+@pytest.mark.parametrize("own", [True, False])
 @pytest.mark.parametrize("power", [2, 3])
 @pytest.mark.parametrize("most_combinations", [whole_slots.MAX_LOAD_COMBINATIONS, 0])  # exact, then intervals only
-def test_the_tangents_find_the_best_multiplier(power: int, most_combinations: int,
+def test_the_tangents_find_the_best_multiplier(own: bool, power: int, most_combinations: int,
                                                monkeypatch: pytest.MonkeyPatch) -> None:
     # ADR 0044: the same value as a long search for mu, never below it (beyond rounding) and never above it
     monkeypatch.setattr(whole_slots, "MAX_LOAD_COMBINATIONS", most_combinations)
     rng = random.Random(100 + power)
     for _ in range(CASES):
         case = random_case(rng)
-        _, whole = bounds(power, *case)
-        reference = long_search_bound(power, *case, most_combinations)
+        _, whole = bounds(power, *case, own=own)
+        reference = long_search_bound(power, *case, most_combinations, own)
         reference -= whole_slots.ROUNDING_MARGIN * abs(reference)
         assert whole == pytest.approx(reference, rel=SAME_VALUE, abs=SAME_VALUE)
 
@@ -158,9 +180,10 @@ def test_the_tangents_on_a_function_known_by_hand() -> None:
 def test_one_slot_two_workers_by_hand() -> None:
     # One slot of load 4 for two equally available workers with nothing yet. Water-filling gives each half:
     # 2 * 8 * (2 / 8) ** 2 = 1. Whole, one of them gets it all: 8 * (4 / 8) ** 2 = 2, and the bound finds it.
-    filled, whole = bounds(2, [8.0, 8.0], [0.0, 0.0], [4.0], [[0, 1]])
-    assert filled == pytest.approx(1.0)
-    assert whole == pytest.approx(2.0)
+    for own in (True, False):
+        filled, whole = bounds(2, [8.0, 8.0], [0.0, 0.0], [4.0], [[0, 1]], own=own)
+        assert filled == pytest.approx(1.0)
+        assert whole == pytest.approx(2.0)
 
 
 def test_each_worker_takes_only_slots_in_their_own_domain_by_hand() -> None:
@@ -171,15 +194,19 @@ def test_each_worker_takes_only_slots_in_their_own_domain_by_hand() -> None:
     _, whole = bounds(2, [8.0, 8.0], [0.0, 2.0], slots, domains)
     assert whole == pytest.approx(6.5)
     assert whole <= brute_force(2, [8.0, 8.0], [0.0, 2.0], slots, domains)
+    _, global_whole = bounds(2, [8.0, 8.0], [0.0, 2.0], slots, domains, own=False)
+    assert global_whole == pytest.approx(6.25)
 
 
 def test_no_bound_when_a_worker_with_no_availability_could_take_load() -> None:
     # their term isn't counted, so load they take is free: the sets would have to allow for it
-    assert whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [[(4.0, 1)], [(4.0, 1)]], 0.5) is None
+    assert whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [(4.0, 1)], 0.5) is None
+    assert own_whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [[(4.0, 1)], [(4.0, 1)]], 0.5) is None
 
 
 def test_no_bound_with_nothing_left_to_fill() -> None:
-    assert whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [[], []], 0.0) is None
+    assert whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [], 0.0) is None
+    assert own_whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [[], []], 0.0) is None
 
 
 @pytest.mark.parametrize("schedule_input", small_inputs())
@@ -189,6 +216,21 @@ def test_the_search_finds_the_same_schedule_with_and_without_it(schedule_input: 
     problem, constants = build_problem(schedule_input), constants_of(schedule_input)
     with_it = find_best_schedule(problem, constants)
     monkeypatch.setattr(penalty, "whole_slot_bound", lambda *arguments: None)
+    monkeypatch.setattr(penalty, "own_whole_slot_bound", lambda *arguments: None)
     without_it = find_best_schedule(problem, constants)
     assert (with_it.assignment, with_it.penalty) == (without_it.assignment, without_it.penalty)
     assert with_it.nodes <= without_it.nodes
+
+
+@pytest.mark.parametrize("schedule_input", small_inputs())
+def test_the_search_finds_the_same_schedule_with_either_sets(schedule_input: ScheduleInput) -> None:
+    # ADR 0047: the role-aware bound on or off changes only how much is pruned, so the result is exactly the same
+    problem = build_problem(schedule_input)
+    results = {}
+    for setting in ("on", "off"):
+        settings = dataclasses.replace(schedule_input.settings, role_aware_bound=setting)
+        constants = build_constants(settings, problem.workers, problem.shifts, problem.slots, problem.scoring_domains)
+        assert constants.own_whole_slot_sets == (setting == "on")
+        results[setting] = find_best_schedule(problem, constants)
+    assert (results["on"].assignment, results["on"].penalty) == (results["off"].assignment, results["off"].penalty)
+    assert results["on"].nodes <= results["off"].nodes

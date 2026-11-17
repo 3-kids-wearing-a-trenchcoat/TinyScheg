@@ -11,9 +11,10 @@ from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.scoring.constants import (DISLIKED_PARTNER, LIKED_PARTNER, availability, build_constants, hours,
-                                         like_value, load_classes, rest_factor, rest_unit, slot_load,
-                                         unavailable_before, workload_unit, worst_deficit)
+from tinyscheg.scoring.constants import (AUTO_MIN_DISTINCT_DOMAINS, AUTO_MIN_LOAD_OUTSIDE, DISLIKED_PARTNER,
+                                         LIKED_PARTNER, availability, build_constants, hours, like_value, load_classes,
+                                         rest_factor, rest_unit, slot_load, unavailable_before,
+                                         uses_own_whole_slot_sets, workload_unit, worst_deficit)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 EXAMPLE_INPUT = pathlib.Path(__file__).parent.parent / "exampleInput.yml"
@@ -189,3 +190,27 @@ def test_slots_of_the_same_load_share_a_load_class() -> None:
                                 problem.scoring_domains)
     assert len(constants.load_classes) == len(set(constants.slot_hours))  # one class per slot length
     assert [constants.load_classes[index] for index in constants.slot_load_class] == list(constants.slot_load)
+
+
+# --- the role-aware bound setting (ADR 0047) ---
+
+def test_on_and_off_are_taken_as_given() -> None:
+    assert uses_own_whole_slot_sets("on", 2, [(0, 1)], [1.0])
+    assert not uses_own_whole_slot_sets("off", 3, [(0,), (1,), (2,)], [1.0, 1.0, 1.0])
+
+
+def test_auto_needs_domains_of_several_kinds() -> None:
+    # 4 workers; every slot's domain the same two: half the load outside, but one kind of domain only
+    assert AUTO_MIN_DISTINCT_DOMAINS > 1
+    assert not uses_own_whole_slot_sets("auto", 4, [(0, 1)] * 6, [1.0] * 6)
+    # domains of several kinds, each leaving out half the workers
+    domains = [(0, 1), (1, 2), (2, 3), (0, 3)][:AUTO_MIN_DISTINCT_DOMAINS + 1]
+    assert uses_own_whole_slot_sets("auto", 4, domains, [1.0] * len(domains))
+
+
+def test_auto_needs_enough_load_outside_the_domains() -> None:
+    # several kinds of domain, each leaving out one worker of many: little load outside them
+    workers = 20
+    domains = [tuple(w for w in range(workers) if w != left_out) for left_out in range(AUTO_MIN_DISTINCT_DOMAINS)]
+    assert 1 / workers < AUTO_MIN_LOAD_OUTSIDE
+    assert not uses_own_whole_slot_sets("auto", workers, domains, [1.0] * len(domains))

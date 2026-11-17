@@ -151,7 +151,9 @@ penalty counts only the pairs already filled. So the bound looks ahead, using th
     whole to one worker, which water-filling ignores. That's where almost all of its slack was, and the workload weight
     multiplies it. Each worker's lowest cost is found on its own, over the whole numbers of the unfilled slots in their
     own domain ([ADR 0046](../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md)), so that roles and
-    unavailability count too, with a price on each unit of load (Lagrangian relaxation). Any price gives a valid bound,
+    unavailability count too, where that's chosen ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md):
+    by default where the input narrows the domains enough for it to pay; otherwise over the remaining slots of each
+    load overall), with a price on each unit of load (Lagrangian relaxation). Any price gives a valid bound,
     so the bound is never above a completion, and the best price gives the highest one. It's found exactly
     ([ADR 0044](../decisions/0044-best-whole-slot-multiplier-by-tangents.md)): as a function of the price, the bound is
     concave and made of straight pieces, and each evaluation also tells which way it rises. Between a price where it

@@ -15,11 +15,12 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from tinyscheg.model.shift import Shift
 from tinyscheg.scoring.constants import (DISLIKED_PARTNER, ScoringConstants, hours, integer_power, like_value,
                                          rest_target)
-from tinyscheg.scoring.whole_slots import whole_slot_bound
+from tinyscheg.scoring.whole_slots import own_whole_slot_bound, whole_slot_bound
 
 
 # Each worker's rest shortfall goes through deficit ** REST_POWER (ADR 0036): squared, so that the same shortfall
@@ -195,36 +196,42 @@ def workload_lower_bound(constants: ScoringConstants, assignment: Sequence[int |
         return 0.0
     assigned_load = _assigned_load(constants, assignment)
     caps = [0.0] * len(constants.workers)
-    own_counts = [[0] * len(constants.load_classes) for _ in constants.workers]
+    own = constants.own_whole_slot_sets
+    counts: list[Any] = ([[0] * len(constants.load_classes) for _ in constants.workers] if own
+                         else [0] * len(constants.load_classes))
     remaining = 0.0
     for slot, worker in enumerate(assignment):
         if worker is None:
             remaining += constants.slot_load[slot]
+            load_class = constants.slot_load_class[slot]
+            if not own:
+                counts[load_class] += 1
             for candidate in domains[slot]:
                 caps[candidate] += constants.slot_load[slot]
-                own_counts[candidate][constants.slot_load_class[slot]] += 1
-    return workload_bound_total(constants, assigned_load, caps, remaining, own_counts) / constants.workload_unit
+                if own:
+                    counts[candidate][load_class] += 1
+    return workload_bound_total(constants, assigned_load, caps, remaining, counts) / constants.workload_unit
 
 
 def workload_bound_total(constants: ScoringConstants, assigned_load: Sequence[float], caps: Sequence[float],
-                         remaining: float, own_counts: Sequence[Sequence[int]]) -> float:
+                         remaining: float, counts: Sequence[Any]) -> float:
     """
     workload_lower_bound before normalizing, from the loads so far and what's left to hand out; the higher of:
     * water-filling (ADR 0024): each worker's term av * (load / av) ** p is convex, so the total is lowest when the
       load tops up the least-loaded workers to a common level of load / av, each only up to their cap, as water
       fills vessels of different heights (Jensen's inequality);
-    * whole slots (ADR 0040, tinyscheg.scoring.whole_slots): each unfilled slot's load goes whole to one worker, who
-      takes only slots in their own domain (ADR 0046).
+    * whole slots (ADR 0040, tinyscheg.scoring.whole_slots): each unfilled slot's load goes whole to one worker; with
+      each worker's own sets (ADR 0046, chosen per run by ADR 0047), they take only slots in their own domain.
     :param constants: ScoringConstants
     :param assigned_load: each worker's load so far
     :param caps: each worker's cap, the load of the unfilled slots in their domains
     :param remaining: the load of the unfilled slots
-    :param own_counts: for each worker, for each of constants.load_classes, how many unfilled slots in their domain
-    have that load
+    :param counts: for each of constants.load_classes, how many unfilled slots have that load; with each worker's own
+    sets (constants.own_whole_slot_sets), that per worker, counting the slots in their domain
     :return: at least workload_total(assignment)
     """
     filled, level = water_filling(constants, assigned_load, caps, remaining)
-    whole = whole_slots(constants, assigned_load, caps, remaining, own_counts, level)
+    whole = whole_slots(constants, assigned_load, caps, remaining, counts, level)
     return filled if whole is None else max(filled, whole)
 
 
@@ -251,22 +258,26 @@ def water_filling(constants: ScoringConstants, assigned_load: Sequence[float], c
 
 
 def whole_slots(constants: ScoringConstants, assigned_load: Sequence[float], caps: Sequence[float], remaining: float,
-                own_counts: Sequence[Sequence[int]], level: float) -> float | None:
+                counts: Sequence[Any], level: float) -> float | None:
     """
     The whole-slot part of workload_bound_total, before normalizing (tinyscheg.scoring.whole_slots)
     :param constants: ScoringConstants
     :param assigned_load: each worker's load so far
     :param caps: each worker's cap
     :param remaining: the load of the unfilled slots
-    :param own_counts: for each worker, for each of constants.load_classes, how many unfilled slots in their domain
-    have that load
+    :param counts: as workload_bound_total takes them: per load class, or with each worker's own sets, per worker and
+    load class
     :param level: the water level, from water_filling
     :return: the bound, or None where it doesn't apply
     """
-    own_classes = [[(load, count) for load, count in zip(constants.load_classes, counts) if count > 0]
-                   for counts in own_counts]
-    return whole_slot_bound(constants.parameters.workload_power, [worker.availability for worker in constants.workers],
-                            assigned_load, caps, remaining, own_classes, level)
+    power = constants.parameters.workload_power
+    availabilities = [worker.availability for worker in constants.workers]
+    if constants.own_whole_slot_sets:
+        own_classes = [[(load, count) for load, count in zip(constants.load_classes, worker_counts) if count > 0]
+                       for worker_counts in counts]
+        return own_whole_slot_bound(power, availabilities, assigned_load, caps, remaining, own_classes, level)
+    classes = [(load, count) for load, count in zip(constants.load_classes, counts) if count > 0]
+    return whole_slot_bound(power, availabilities, assigned_load, caps, remaining, classes, level)
 
 
 def _water_level(pool: list[tuple[float, float, float]], remaining: float) -> float:

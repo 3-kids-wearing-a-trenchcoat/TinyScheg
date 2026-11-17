@@ -332,9 +332,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       that nothing beats a schedule found early (deferred in Phase 10; the bounds taken up in Phase 11)
 - [ ] The rest look-ahead kept up to date incrementally, or with a quicker test for slots that add nothing, to cut its
       4–12% cost (ADR 0045); and the tangent search's dials tuned (ADR 0044). Only if ever worth it (2026-11-17)
-- [ ] A setting to turn the whole-slot bound's per-worker sets (ADR 0046) on or off, since they cost up to about a
-      third more time where roles and availability don't narrow the domains; later perhaps chosen automatically from
-      how constrained the input is (asked by the user, 2026-11-17)
+- [x] A setting to turn the whole-slot bound's per-worker sets (ADR 0046) on or off, since they cost up to about a
+      third more time where roles and availability don't narrow the domains, and chosen automatically from how
+      constrained the input is (asked by the user, done 2026-11-17, ADR 0047: `role_aware_bound`, `auto` by default)
 - [ ] A strong bound used only near the top of the tree, where a prune removes the most: a multiplier per slot, each
       worker's best set of slots found on its own, covering roles, overlaps, rest and workload together (too costly
       at every node; suggested 2026-11-16)

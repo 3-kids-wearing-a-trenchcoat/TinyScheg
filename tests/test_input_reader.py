@@ -194,6 +194,29 @@ def test_validation_runs_after_structure(tmp_path: pathlib.Path) -> None:
     assert problems_of(tmp_path, text) == ('worker #1 ("Anne"), likes: unknown worker "Nobody"',)
 
 
+# --- the role-aware bound setting (ADR 0047) ---
+
+def with_role_aware_bound(value: str) -> str:
+    """MINIMAL with a role_aware_bound setting."""
+    return MINIMAL.replace('  time: ["2025-01-01", "2025-01-02"]\n',
+                           f'  time: ["2025-01-01", "2025-01-02"]\n  role_aware_bound: {value}\n')
+
+
+def test_role_aware_bound_is_auto_when_omitted(tmp_path: pathlib.Path) -> None:
+    assert read_input(write(tmp_path, MINIMAL)).settings.role_aware_bound == "auto"
+
+
+@pytest.mark.parametrize(("value", "expected"), [("auto", "auto"), ('"on"', "on"), ('"off"', "off"),
+                                                 ("on", "on"), ("off", "off")])  # bare on and off are YAML booleans
+def test_role_aware_bound_values(tmp_path: pathlib.Path, value: str, expected: str) -> None:
+    assert read_input(write(tmp_path, with_role_aware_bound(value))).settings.role_aware_bound == expected
+
+
+def test_invalid_role_aware_bound(tmp_path: pathlib.Path) -> None:
+    assert problems_of(tmp_path, with_role_aware_bound("sometimes")) == (
+        "settings, role_aware_bound: must be one of auto, on, off, got 'sometimes'",)
+
+
 # --- scoring settings ---
 
 def with_scoring(text: str) -> str:

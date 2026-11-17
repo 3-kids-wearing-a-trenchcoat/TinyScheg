@@ -113,7 +113,8 @@ def _with_history(schedule_input: ScheduleInput) -> Problem:
     slots = all_slots(shifts)
     fixed = tuple([worker for _, workers in past for worker in workers] + [None] * sum(len(s.slots) for s, _ in new))
     start = history[0].schedule_input.settings.period.start
-    whole = Settings(DateTimeRange(start, settings.period.end), settings.min_rest, settings.scoring)
+    whole = Settings(DateTimeRange(start, settings.period.end), settings.min_rest, settings.scoring,
+                     settings.role_aware_bound)
     eligible = tuple(past_eligible) + tuple(initial_domain(slot, workers) for slot in slots[len(past_eligible):])
     neighbours = tuple(tuple(other for other in others if fixed[index] is None or fixed[other] is None)
                        for index, others in enumerate(difference_constraints(slots, settings.min_rest)))

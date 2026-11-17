@@ -11,7 +11,7 @@ import os
 
 from tinyscheg import cli
 from tinyscheg.cli import (EXIT_INTERRUPTED, EXIT_NO_SCHEDULE, EXIT_SUCCESS, EXIT_USAGE, default_output_path,
-                           describe_penalty, duration, main, percent)
+                           describe_penalty, describe_role_aware_bound, duration, main, percent)
 from tinyscheg.csp import search as search_module
 from tinyscheg.csp.search import SearchProgress, SearchResult
 from tinyscheg.csp.problem import build_problem
@@ -99,11 +99,44 @@ def test_end_to_end(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) 
     best = find_best_schedule(problem, constants)
     assert assignment == best.assignment
     assert penalty == f"{describe_penalty(score(constants, assignment))}, the best possible"
-    # each better schedule found is reported on standard error, the last being the one written
-    progress = captured.err.splitlines()
+    # standard error: whether the role-aware bound is used (ADR 0047), then each better schedule found, the last being
+    # the one written
+    note, *progress = captured.err.splitlines()
+    assert note == f"tinyscheg: {describe_role_aware_bound('auto', constants.own_whole_slot_sets)}"
     assert progress and all(line.startswith("tinyscheg: found penalty ") for line in progress)
     assert progress[-1].startswith(f"tinyscheg: found penalty {score(constants, assignment).total:.2f} after ")
 
+
+
+# --- the role-aware bound setting (ADR 0047) ---
+
+@pytest.mark.parametrize(("in_input", "on_command_line", "expected"), [
+    (None, None, None),                               # auto: whatever the input gives
+    ("off", None, "role-aware bound: off"),
+    ("off", "on", "role-aware bound: on"),            # the command line wins
+    ("on", "off", "role-aware bound: off"),
+    ("on", "auto", None),
+])
+def test_the_command_line_overrides_the_inputs_role_aware_bound(tmp_path: pathlib.Path,
+                                                                 capsys: pytest.CaptureFixture[str],
+                                                                 in_input: str | None, on_command_line: str | None,
+                                                                 expected: str | None) -> None:
+    text = SMALL if in_input is None else SMALL.replace("settings:\n", f'settings:\n  role_aware_bound: "{in_input}"\n')
+    input_path = write(tmp_path, text)
+    arguments = [str(input_path), "-o", str(tmp_path / "schedule.csv")]
+    if on_command_line is not None:
+        arguments += ["--role-aware-bound", on_command_line]
+    assert main(arguments) == EXIT_SUCCESS
+    note = capsys.readouterr().err.splitlines()[0]
+    if expected is None:
+        assert note.startswith("tinyscheg: role-aware bound: ") and note.endswith(" (chosen from the input)")
+    else:
+        assert note == f"tinyscheg: {expected}"
+
+
+def test_describe_role_aware_bound() -> None:
+    assert describe_role_aware_bound("auto", True) == "role-aware bound: on (chosen from the input)"
+    assert describe_role_aware_bound("off", False) == "role-aware bound: off"
 
 
 # --- progress and Ctrl+C (ADR 0035) ---
@@ -151,7 +184,8 @@ def test_plain_progress_lines(tmp_path: pathlib.Path, capsys: pytest.CaptureFixt
     monkeypatch.setattr(search_module, "PROGRESS_INTERVAL_NODES", 1)
     monkeypatch.setattr(cli, "PLAIN_PROGRESS_SECONDS", 0)
     assert main([str(write(tmp_path, SMALL)), "-o", str(tmp_path / "schedule.csv")]) == EXIT_SUCCESS
-    lines = capsys.readouterr().err.splitlines()
+    note, *lines = capsys.readouterr().err.splitlines()
+    assert note.startswith("tinyscheg: role-aware bound: ")  # first, before the search (ADR 0047)
     progress = [line for line in lines if "of the search finished after" in line]
     assert progress and all(line.startswith("tinyscheg: ") and " nodes, " in line for line in progress)
     assert all(line.startswith("tinyscheg: found penalty ") for line in lines if line not in progress)
@@ -267,7 +301,8 @@ def test_search_failure_says_where_it_got_stuck(tmp_path: pathlib.Path,
     output = tmp_path / "schedule.csv"
     output.write_text("an earlier schedule", encoding="utf-8")
     assert main([str(input_path), "-o", str(output)]) == EXIT_NO_SCHEDULE
-    assert capsys.readouterr().err == ("tinyscheg: no legal schedule exists; the search filled at most 2 of 4 slots, "
+    assert capsys.readouterr().err == ("tinyscheg: role-aware bound: off (chosen from the input)\n"
+                                       "tinyscheg: no legal schedule exists; the search filled at most 2 of 4 slots, "
                                        'and got stuck at gate, 2025-01-01 04:00–08:00 (role "any")\n')
     assert output.read_text(encoding="utf-8") == "an earlier schedule"  # left untouched
 

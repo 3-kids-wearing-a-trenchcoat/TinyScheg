@@ -4,8 +4,9 @@ import datetime as dt
 import pytest
 
 from tinyscheg.model.schedule_input import (DEFAULT_LIKES_WEIGHT, DEFAULT_MIN_REST, DEFAULT_NEUTRAL_PARTNER,
-                                            DEFAULT_REST_WEIGHT, DEFAULT_SHIFT_SHARE, DEFAULT_WORKLOAD_POWER,
-                                            DEFAULT_WORKLOAD_WEIGHT, MAX_NEUTRAL_PARTNER, ScoringParameters, Settings)
+                                            DEFAULT_REST_WEIGHT, DEFAULT_ROLE_AWARE_BOUND, DEFAULT_SHIFT_SHARE,
+                                            DEFAULT_WORKLOAD_POWER, DEFAULT_WORKLOAD_WEIGHT, MAX_NEUTRAL_PARTNER,
+                                            ScoringParameters, Settings)
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 
@@ -25,6 +26,12 @@ def test_settings_allow_zero_min_rest() -> None:
 def test_settings_reject_negative_min_rest() -> None:
     with pytest.raises(ValueError):
         Settings(hours(0, 12), dt.timedelta(hours=-1))
+
+
+def test_settings_role_aware_bound_default_and_validation() -> None:
+    assert Settings(hours(0, 12)).role_aware_bound == DEFAULT_ROLE_AWARE_BOUND == "auto"
+    with pytest.raises(ValueError):
+        Settings(hours(0, 12), role_aware_bound="sometimes")
 
 
 # --- scoring parameters ---

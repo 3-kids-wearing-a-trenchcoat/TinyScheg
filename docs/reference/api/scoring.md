@@ -19,7 +19,7 @@ The constants every penalty is computed from, calculated once per run, before th
 
 ### `build_constants(settings, workers, shifts, slots, domains) -> ScoringConstants`
 
-* `settings` — [`Settings`](schedule-input.md#class-settingsperiod-min_restdefault_min_rest-scoringscoringparameters),
+* `settings` — [`Settings`](schedule-input.md#class-settingsperiod-min_restdefault_min_rest-scoringscoringparameters-role_aware_bounddefault_role_aware_bound),
   for the period, the minimum rest and the scoring parameters.
 * `workers`, `shifts`, `slots` — in input and stable order, as in [`Problem`](problem.md).
 * `domains` — for each slot, the indexes of the workers who could fill it from scratch, as `Problem.scoring_domains`:
@@ -54,6 +54,17 @@ Immutable.
 * `load_classes`, `slot_load_class` — the distinct slot loads, ascending, and for each slot the index of its load
   among them, from `load_classes`, for the workload bound in whole slots
   ([ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md)).
+* `own_whole_slot_sets` — whether that bound takes each worker's sets from their own domain
+  ([ADR 0046](../../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md)), as the settings'
+  `role_aware_bound` resolves for the run (`uses_own_whole_slot_sets`,
+  [ADR 0047](../../decisions/0047-choosing-the-role-aware-bound.md)).
+
+### `uses_own_whole_slot_sets(setting, workers, domains, loads) -> bool`
+
+The role-aware bound's setting resolved: `"on"` gives `True`, `"off"` `False`, and `"auto"` `True` only where the
+slots' domains are of at least `AUTO_MIN_DISTINCT_DOMAINS` (3) kinds and at least `AUTO_MIN_LOAD_OUTSIDE` (0.2) of the
+load lies outside them: each slot's load times the number of workers not in its domain, over the total load times
+the number of workers. Fitted on the benchmark inputs (2026-11-17); a few microseconds.
 
 ### `class WorkerConstants`
 
@@ -243,7 +254,16 @@ same arithmetic.
 > [ADR 0044](../../decisions/0044-best-whole-slot-multiplier-by-tangents.md) and
 > [ADR 0046](../../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md).
 
-### `whole_slot_bound(power, availabilities, loads, caps, remaining, own_classes, level) -> float | None`
+### `whole_slot_bound(power, availabilities, loads, caps, remaining, classes, level) -> float | None`
+
+The bound with the global sets ([ADR 0040](../../decisions/0040-workload-bound-in-whole-slots.md)), used where the
+role-aware bound is off ([ADR 0047](../../decisions/0047-choosing-the-role-aware-bound.md)): $T_w$ is the exact
+combinations of the remaining slot loads (at most `MAX_LOAD_COMBINATIONS`), or else the intervals
+$\lbrace 0 \rbrace \cup [u, L] \cup [2u, 2L] \cup \dots$; both cut at the worker's cap and at
+$\lfloor \mathrm{cap} / u \rfloor$ slots. `classes` is (load, count) for every load at least one unfilled slot has,
+ascending. Otherwise as `own_whole_slot_bound`.
+
+### `own_whole_slot_bound(power, availabilities, loads, caps, remaining, own_classes, level) -> float | None`
 
 A lower bound on the sum of $\mathrm{av} \cdot (\text{load} / \mathrm{av})^p$ over every completion, handing out
 the unfilled slots whole, by Lagrangian relaxation: for any $\mu$,

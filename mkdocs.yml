@@ -104,6 +104,7 @@ nav:
       - 0044 Best whole-slot multiplier by tangents: decisions/0044-best-whole-slot-multiplier-by-tangents.md
       - 0045 A rest look-ahead: decisions/0045-rest-lookahead.md
       - 0046 Whole-slot sets from each worker's domain: decisions/0046-whole-slot-sets-from-each-workers-own-domain.md
+      - 0047 Choosing the role-aware bound: decisions/0047-choosing-the-role-aware-bound.md
 
 markdown_extensions:
   - admonition

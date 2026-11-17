@@ -9,6 +9,7 @@ from __future__ import annotations
 import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from tinyscheg.scoring.constants import ScoringConstants, integer_power
 from tinyscheg.scoring.penalty import (_assigned_load, _slots_by_worker, likes_total, normalized_likes,
@@ -30,7 +31,8 @@ class _Saved:
     position: int                                # where the slot went among their slots
     caps: tuple[tuple[int, float], ...]          # (worker, cap before), for every cap changed
     shift_bounds: tuple[tuple[int, float], ...]  # (shift index, its likes look-ahead before), for every one changed
-    own_counts: tuple[tuple[int, int], ...]      # (worker, load class) for every count of own slots lowered by one
+    counts_lowered: tuple[Any, ...]              # each count lowered by one: (worker, load class), or with the global
+                                                 # sets the load class
 
 
 class IncrementalScore:
@@ -39,7 +41,8 @@ class IncrementalScore:
     worker's load, rest deficit and slots in time order; and for the lower bound, each shift's likes look-ahead and each
     worker's workload cap. assign updates them, undo restores them; both must be called in step with the search's
     own assignments, the latest assignment undone first. For the workload bound in whole slots (ADR 0040), it also
-    counts, for each worker, the unfilled slots of each load in their domain (ADR 0046).
+    counts the unfilled slots of each load: overall, or for each worker the ones in their domain, as the run's sets
+    need them (ADR 0046, ADR 0047).
     """
 
     def __init__(self, constants: ScoringConstants, assignment: Sequence[int | None],
@@ -67,14 +70,20 @@ class IncrementalScore:
             self.likes_bound += shift_bound
         self.caps = [0.0] * len(constants.workers)
         self.remaining = 0.0
-        # per worker, per load class: the unfilled slots of that load in their domain
-        self.own_counts = [[0] * len(constants.load_classes) for _ in constants.workers]
+        # the unfilled slots per load class (with each worker's own sets, ADR 0046: per worker, those in their domain)
+        self.own_sets = constants.own_whole_slot_sets
+        self.counts: list[Any] = ([[0] * len(constants.load_classes) for _ in constants.workers] if self.own_sets
+                                  else [0] * len(constants.load_classes))
         for slot, domain in enumerate(domains):
             if assignment[slot] is None:
                 self.remaining += constants.slot_load[slot]
+                load_class = constants.slot_load_class[slot]
+                if not self.own_sets:
+                    self.counts[load_class] += 1
                 for worker in domain:
                     self.caps[worker] += constants.slot_load[slot]
-                    self.own_counts[worker][constants.slot_load_class[slot]] += 1
+                    if self.own_sets:
+                        self.counts[worker][load_class] += 1
         self._saved: list[_Saved] = []
         self._water: tuple[float, float] | None = None  # the current state's water-filling, once computed
 
@@ -171,7 +180,7 @@ class IncrementalScore:
         if constants.workload_unit == 0:
             return 0.0
         filled, level = self._water_filling()
-        whole = whole_slots(constants, self.load, self.caps, self.remaining, self.own_counts, level)
+        whole = whole_slots(constants, self.load, self.caps, self.remaining, self.counts, level)
         return (filled if whole is None else max(filled, whole)) / constants.workload_unit
 
     # --- assigning and undoing ---
@@ -205,14 +214,19 @@ class IncrementalScore:
         # the workload look-ahead: the slot's load is no longer to be spread, nor in anyone's cap or own slots; and a
         # worker dropped from a narrowed domain can no longer take that slot
         caps_before: dict[int, float] = {}
-        lowered: list[tuple[int, int]] = []  # (worker, load class) of each own count lowered
+        own_sets, counts = self.own_sets, self.counts
+        lowered: list[Any] = []  # each count lowered: (worker, load class), or with the global sets the load class
         self.remaining -= constants.slot_load[slot]
         load_class = constants.slot_load_class[slot]
+        if not own_sets:
+            counts[load_class] -= 1
+            lowered.append(load_class)
         for candidate in self.domains[slot]:
             caps_before.setdefault(candidate, self.caps[candidate])
             self.caps[candidate] -= constants.slot_load[slot]
-            self.own_counts[candidate][load_class] -= 1
-            lowered.append((candidate, load_class))
+            if own_sets:
+                counts[candidate][load_class] -= 1
+                lowered.append((candidate, load_class))
         for narrowed_slot, domain in before.items():
             current = set(self.domains[narrowed_slot])
             narrowed_class = constants.slot_load_class[narrowed_slot]
@@ -220,8 +234,9 @@ class IncrementalScore:
                 if dropped not in current:
                     caps_before.setdefault(dropped, self.caps[dropped])
                     self.caps[dropped] -= constants.slot_load[narrowed_slot]
-                    self.own_counts[dropped][narrowed_class] -= 1
-                    lowered.append((dropped, narrowed_class))
+                    if own_sets:
+                        counts[dropped][narrowed_class] -= 1
+                        lowered.append((dropped, narrowed_class))
         # the likes look-ahead: only the shifts with a slot assigned or narrowed can change
         for shift in changed_shifts:
             new = shift_likes_lower_bound(constants, constants.shifts[shift], self.assignment, self.domains)
@@ -237,8 +252,12 @@ class IncrementalScore:
         self._water = None
         self.likes, self.workload, self.rest = saved.likes, saved.workload, saved.rest
         self.likes_bound, self.remaining = saved.likes_bound, saved.remaining
-        for owner, load_class in saved.own_counts:
-            self.own_counts[owner][load_class] += 1
+        if self.own_sets:
+            for owner, load_class in saved.counts_lowered:
+                self.counts[owner][load_class] += 1
+        else:
+            for load_class in saved.counts_lowered:
+                self.counts[load_class] += 1
         self.load[saved.worker] = saved.load
         self.deficits[saved.worker] = saved.deficit
         del self.slots[saved.worker][saved.position]

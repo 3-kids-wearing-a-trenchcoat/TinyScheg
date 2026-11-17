@@ -225,9 +225,10 @@ Still deferred:
   6–10% less time on PyPy for the 16 inputs searched to the end, 60–71 and 3.5–3.9 times the progress on `multiday_05`
   and seed 3009, and `multiday_05` searched to the end in 689 s (3107 s before ADRs 0044–0046). Where roles and
   availability narrow the domains it prunes much more, but elsewhere its bookkeeping costs up to about a third more time
-  (`sweep_06`; `multiday_04` 0.9 times the progress). Deferred (asked by the user): a setting to turn it on or off, and
-  perhaps choosing it automatically from how constrained the input is (how much the domains are narrowed by roles and
-  unavailability).
+  (`sweep_06`; `multiday_04` 0.9 times the progress). Then done the same day, as the user asked: a setting to turn it on
+  or off, `auto` by default, choosing from how the input narrows the domains
+  ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)); right 24 times of 30 on the inputs it was fitted on,
+  and 15 of 17 on fresh ones, which had no input where on wins much. To revisit as more inputs are tried.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
