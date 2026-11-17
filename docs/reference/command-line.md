@@ -11,7 +11,7 @@ From the repository root, with the `tinyscheg` environment activated
 (see [Development setup](../how-to/development-setup.md)):
 
 ```bash
-python src/main.py INPUT [-o OUTPUT] [-j JOBS]
+python src/main.py INPUT [-o OUTPUT] [-j JOBS] [--role-aware-bound {auto,on,off}]
 ```
 
 * `INPUT` — the YAML input file (see [Input format](input-format.md)).
@@ -25,6 +25,13 @@ python src/main.py INPUT [-o OUTPUT] [-j JOBS]
   in a single process. With 8 processes on 8 cores, the search was about 7.6 times faster than with one
   (2026-11-15, on a desktop); on a laptop with 12 cores, 12 processes did best, held back by heat
   ([ADR 0043](../decisions/0043-one-process-per-physical-core.md)).
+* `--role-aware-bound {auto,on,off}` — whether the search's whole-slot bound limits each worker to the slots they can
+  fill ([ADR 0046](../decisions/0046-whole-slot-sets-from-each-workers-own-domain.md),
+  [ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)): faster where roles and unavailability narrow who
+  can fill what, up to about a third slower where they don't. `auto` chooses from how the input narrows the domains.
+  It overrides the input's `role_aware_bound` setting, which is `auto` if omitted: an option given on the command line
+  always wins over the same option in the input. The schedule is the same either way. What was used is said on
+  standard error before the search, e.g. `tinyscheg: role-aware bound: on (chosen from the input)`.
 
 An existing file at the output path is replaced, but only once a schedule has been found: if anything goes wrong, no
 file is written and an existing one is left as it was.

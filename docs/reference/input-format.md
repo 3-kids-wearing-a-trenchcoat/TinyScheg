@@ -27,6 +27,7 @@ General scheduler settings.
 | `time`     | pair of ISO 8601 strings  | Required. The time period to generate a schedule for, as `[start, end]`; `start` must be before `end`. |
 | `min_rest` | number (hours)            | Minimum time between two shifts assigned to the same worker (hard constraint). At least 0; if omitted, defaults to 6 hours. A worker's shifts are never back to back, even at 0. |
 | `scoring`  | mapping                   | Optional. Overrides scoring parameters; see [below](#scoring). |
+| `role_aware_bound` | `auto`, `on` or `off` | Optional, `auto` if omitted. Whether the search's whole-slot bound limits each worker to the slots they can fill: faster where roles and unavailability narrow who can fill what, slower where they don't; `auto` chooses from the input ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)). The schedule is the same either way. The command line's `--role-aware-bound` overrides it. |
 
 ```yaml
 settings:

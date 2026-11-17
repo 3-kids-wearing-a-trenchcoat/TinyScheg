@@ -1,6 +1,7 @@
 # 0046. The whole-slot bound's sets from each worker's own domain
 
-**Status:** Accepted. Amends [0040](0040-workload-bound-in-whole-slots.md) (the sets $T_w$).
+**Status:** Accepted. Amends [0040](0040-workload-bound-in-whole-slots.md) (the sets $T_w$). Amended by
+[0047](0047-choosing-the-role-aware-bound.md) (used where chosen: on, off, or automatically).
 
 ## Context
 

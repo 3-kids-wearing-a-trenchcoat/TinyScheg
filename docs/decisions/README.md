@@ -67,7 +67,8 @@ ADR that supersedes the old one.
 | [0043](0043-one-process-per-physical-core.md) | By default, one search process per physical core | Accepted |
 | [0044](0044-best-whole-slot-multiplier-by-tangents.md) | The whole-slot bound's best multiplier, found exactly by tangents | Accepted |
 | [0045](0045-rest-lookahead.md) | A rest look-ahead in the lower bound | Accepted |
-| [0046](0046-whole-slot-sets-from-each-workers-own-domain.md) | The whole-slot bound's sets from each worker's own domain | Accepted |
+| [0046](0046-whole-slot-sets-from-each-workers-own-domain.md) | The whole-slot bound's sets from each worker's own domain | Accepted, amended by [0047](0047-choosing-the-role-aware-bound.md) |
+| [0047](0047-choosing-the-role-aware-bound.md) | Choosing the role-aware bound: on, off, or automatically from the input | Accepted |
 
 ## Template
 

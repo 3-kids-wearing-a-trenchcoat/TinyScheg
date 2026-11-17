@@ -33,15 +33,18 @@ its constant above. There's no rest factor: the rest targets are derived from th
 **Raises** `TypeError` for a value that isn't a finite number, and `ValueError` for one out of range, or a
 `workload_power` that isn't a whole number; the message names the parameter.
 
-## `class Settings(period, min_rest=DEFAULT_MIN_REST, scoring=ScoringParameters())`
+## `class Settings(period, min_rest=DEFAULT_MIN_REST, scoring=ScoringParameters(), role_aware_bound=DEFAULT_ROLE_AWARE_BOUND)`
 
 General scheduler settings. Immutable.
 
 * `period` — [`DateTimeRange`](datetime-range.md), the time period to generate a schedule for.
 * `min_rest` — `datetime.timedelta`, the minimum time between two shifts assigned to the same worker. May be 0.
 * `scoring` — `ScoringParameters`.
+* `role_aware_bound` — one of `ROLE_AWARE_BOUND_CHOICES` (`"auto"`, `"on"`, `"off"`; default
+  `DEFAULT_ROLE_AWARE_BOUND`, `"auto"`): whether the search's whole-slot bound takes each worker's sets from their own
+  domain ([ADR 0047](../../decisions/0047-choosing-the-role-aware-bound.md)).
 
-**Raises** `ValueError` if `min_rest` is negative.
+**Raises** `ValueError` if `min_rest` is negative, or `role_aware_bound` isn't one of the choices.
 
 ## `class ScheduleInput(settings, workers, posts, history=())`
 
