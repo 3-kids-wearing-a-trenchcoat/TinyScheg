@@ -314,6 +314,12 @@ user's approval first.
 - [ ] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
       the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
       deferred item on 48-hour first periods reconsidered with them
+    - [x] After steps 2–4 (2026-11-17, 12 processes, PyPy, `auto`; see
+      [Future work](explanation/future-work.md#after-phase-11s-steps-24-2026-11-17)): the same schedules; first
+      periods 2 h 16 min in all against 7 h 22 (3.3 times), seed 3009 1 h 40 min against 5 h 57, `multiday_05` 4.2
+      times, `multiday_02` even; `multiday_04`'s second period 15% slower, `auto` choosing on where off is faster.
+      The deferred item stays open: seed 3009 is still well over half an hour
+    - [ ] After step 5, if it changes the search's speed
 
 ## Later
 

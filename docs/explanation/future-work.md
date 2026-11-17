@@ -274,8 +274,10 @@ current code, with the same schedules and node counts on every input (archived o
 ### Search time on 48-hour first periods
 
 > [!NOTE]
-> **Accepted for now** (2026-11-16, Phase 10); faster search through the bounds is taken up next, in
-> [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds).
+> **Accepted for now** (2026-11-16, Phase 10); faster search through the bounds is taken up in
+> [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds). Reconsidered after its steps 2–4
+> (2026-11-17, [below](#after-phase-11s-steps-24-2026-11-17)): 3.3 times faster in all, but seed 3009 still takes
+> 1 hour 40, so it stays open, to be looked at again after step 5.
 
 About half the generated 48-hour inputs took over half an hour to search as a first period, with no history, and
 some far longer ([the 48-hour check](tuning.md#the-48-hour-check-2026-11-1516)): seed 3009 took 6 hours on the laptop
@@ -287,6 +289,38 @@ seed 3009's came after 3¾ hours, and it was within 0.1% only after 31 minutes. 
 as history, the 48-hour second periods took at most 8½ minutes. What could help is
 [stronger pruning](#search-performance), and checking whether the schedules found early are as fair, by the audit, as
 the best one.
+
+#### After Phase 11's steps 2–4 (2026-11-17)
+
+The same 48-hour inputs searched to the end again on the laptop, with 12 processes on PyPy, after the exact
+multiplier, the rest look-ahead and the role-aware bound
+([ADRs 0044](../decisions/0044-best-whole-slot-multiplier-by-tangents.md)–[0047](../decisions/0047-choosing-the-role-aware-bound.md)),
+the role-aware bound at its default (`auto`), against [the times of 2026-11-16](#speeds-on-the-two-machines-2026-11-16).
+Every schedule is the recorded one:
+
+| Input | Role-aware bound (`auto`) | First 48 hours (on 2026-11-16) | Best found after (then) | Second 48 hours (then) |
+|---|---|---|---|---|
+| `multiday_01` | on | 271 s (372 s), 1.4× | 1 s (2 s) | 7 s (8 s) |
+| `multiday_02` | off | 98 s (88–99 s), even* | 44 s (39 s) | under 1 s (under 1 s) |
+| `multiday_03` | on | 260 s (363 s), 1.4× | 15 s (19 s) | 21 s (27 s), 1.3× |
+| `multiday_04` | on | 802 s (1,189 s), 1.5× | 140 s (196 s) | 175–185 s (154–156 s), 0.85×* |
+| `multiday_05` | on | 732 s (3,107 s), 4.2× | 42 s (132 s) | 234 s (505 s), 2.2× |
+| seed 3009 | on | **1 h 40 min** (5 h 57 min), 3.6× | 1 h 02 min (3 h 46 min) | 15 min (not measured) |
+
+\* Timed again in pairs, alternating with the code of 2026-11-16, as the first runs were slower (112 s and 184 s); the
+other figures are single runs, which vary by up to 15%.
+
+* **In all,** the six first periods took 2 hours 16 minutes, against 7 hours 22: 3.3 times faster. The second periods
+  of the tier's five took 446 s against 690 s.
+* **Seed 3009 finds its best schedule far sooner** (after 1 hour 02 instead of 3 hours 46), and is within 0.1% of it
+  after 8½ minutes instead of 31. Stopping with Ctrl+C early gives a schedule nearer the best than before.
+* **Still slow:** seed 3009's first period takes over the half hour or so that's acceptable for one schedule, and its
+  second period, 15 minutes, is the longest second period measured (the tier's took at most 8½).
+* **`multiday_02`**, loose and with no scarce roles, gained nothing: nothing tried in Phase 11 prunes more there.
+* **`auto` chose wrong on `multiday_04`'s second period:** with the role-aware bound off it takes 154–161 s, as on
+  2026-11-16, against 175–185 s on. Its first period, with it on, is 1.5 times faster, but wasn't timed with it off.
+  The bound's cost per node is what [Phase 11 step 5](../roadmap.md#phase-11-faster-search-through-the-bounds)
+  would cut first.
 
 ## Faster search by non-heuristic means
 
