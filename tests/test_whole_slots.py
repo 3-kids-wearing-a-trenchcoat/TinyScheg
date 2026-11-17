@@ -2,7 +2,6 @@
 each worker's own (ADR 0046), against brute force."""
 import dataclasses
 import random
-from collections import Counter
 from itertools import product
 
 import pytest
@@ -50,11 +49,11 @@ def brute_force(power: int, availabilities: list[float], loads: list[float], slo
     return best
 
 
-def own_classes(workers: int, slots: list[float], domains: list[list[int]]) -> list[list[tuple[float, int]]]:
-    """Per worker, (load, count) of the unfilled slots in their domain, ascending (ADR 0046)."""
-    return [[(load, count) for load, count in sorted(Counter(slot_load for slot_load, domain in zip(slots, domains)
-                                                             if worker in domain).items())]
-            for worker in range(workers)]
+def own_counts(workers: int, slots: list[float], domains: list[list[int]]) -> tuple[list[list[int]], tuple[float, ...]]:
+    """Per worker, how many unfilled slots in their domain have each load (ADR 0046), and the loads, ascending."""
+    load_classes = tuple(sorted(set(slots)))
+    return [[sum(1 for slot_load, domain in zip(slots, domains) if slot_load == load and worker in domain)
+             for load in load_classes] for worker in range(workers)], load_classes
 
 
 def global_classes(slots: list[float]) -> list[tuple[float, int]]:
@@ -76,7 +75,7 @@ def bounds(power: int, availabilities: list[float], loads: list[float], slots: l
     filled = sum(av * integer_power(min(max(ratio, level), highest), power) for ratio, av, highest in pool)
     if own:
         return filled, own_whole_slot_bound(power, availabilities, loads, caps, remaining,
-                                            own_classes(len(availabilities), slots, domains), level)
+                                            *own_counts(len(availabilities), slots, domains), level)
     return filled, whole_slot_bound(power, availabilities, loads, caps, remaining, global_classes(slots), level)
 
 
@@ -122,7 +121,7 @@ def long_search_bound(power: int, availabilities: list[float], loads: list[float
     remaining = sum(slots)
     if own:
         evaluate, at_zero = whole_slots._evaluator(power, availabilities, loads, caps, remaining,
-                                                   own_classes(len(availabilities), slots, domains))
+                                                   *own_counts(len(availabilities), slots, domains))
     else:
         classes = global_classes(slots)
         counts = [int(cap / classes[0][0] + whole_slots.LOAD_TOLERANCE) for cap in caps]
@@ -201,12 +200,12 @@ def test_each_worker_takes_only_slots_in_their_own_domain_by_hand() -> None:
 def test_no_bound_when_a_worker_with_no_availability_could_take_load() -> None:
     # their term isn't counted, so load they take is free: the sets would have to allow for it
     assert whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [(4.0, 1)], 0.5) is None
-    assert own_whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [[(4.0, 1)], [(4.0, 1)]], 0.5) is None
+    assert own_whole_slot_bound(2, [0.0, 8.0], [0.0, 0.0], [4.0, 4.0], 4.0, [[1], [1]], (4.0,), 0.5) is None
 
 
 def test_no_bound_with_nothing_left_to_fill() -> None:
     assert whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [], 0.0) is None
-    assert own_whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [[], []], 0.0) is None
+    assert own_whole_slot_bound(2, [8.0, 8.0], [2.0, 0.0], [0.0, 0.0], 0.0, [[], []], (), 0.0) is None
 
 
 @pytest.mark.parametrize("schedule_input", small_inputs())
@@ -234,3 +233,18 @@ def test_the_search_finds_the_same_schedule_with_either_sets(schedule_input: Sch
         results[setting] = find_best_schedule(problem, constants)
     assert (results["on"].assignment, results["on"].penalty) == (results["off"].assignment, results["off"].penalty)
     assert results["on"].nodes <= results["off"].nodes
+
+
+def test_the_sets_cache_is_kept_for_one_set_of_loads_and_limit_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    # the sets depend on the loads the counts are of and on MAX_LOAD_COMBINATIONS too, so either starts it afresh
+    cache = whole_slots._SetsCache()
+    built = cache.for_loads((1.0, 2.0), 64)
+    built[(1, 1)] = None
+    assert cache.for_loads((1.0, 2.0), 64) is built
+    assert cache.for_loads((1.0, 3.0), 64) == {}
+    cache.for_loads((1.0, 3.0), 64)[(1, 1)] = None
+    assert cache.for_loads((1.0, 3.0), 0) == {}
+    monkeypatch.setattr(whole_slots, "COMBINATIONS_CACHE_SIZE", 1)
+    full = cache.for_loads((1.0, 3.0), 0)
+    full.update({(1, 1): None, (2, 1): None})
+    assert cache.for_loads((1.0, 3.0), 0) == {}  # beyond its size, too

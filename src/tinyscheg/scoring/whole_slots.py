@@ -31,7 +31,6 @@ above a completion, and the search's result is exactly the same as without it.
 """
 from __future__ import annotations
 
-import functools
 import math
 from collections.abc import Callable, Sequence
 
@@ -42,7 +41,7 @@ from tinyscheg.scoring.constants import integer_power
 # looser intervals are used
 MAX_LOAD_COMBINATIONS = 64
 # Each worker's combinations depend only on their counts of slots per load, so they're kept for reuse: at most this
-# many different sets of counts at a time (a search meets far fewer)
+# many different sets of counts at a time (a search meets far fewer); beyond it, the cache starts afresh
 COMBINATIONS_CACHE_SIZE = 4096
 # The search for the best mu (ADR 0044). Bracketing: from the water level's marginal cost, mu is multiplied by this
 # until LB falls. 2 was measured (2026-11-17: 3-6 evaluations per bound, all certified)
@@ -102,7 +101,7 @@ def whole_slot_bound(power: int, availabilities: Sequence[float], loads: Sequenc
 
 
 def own_whole_slot_bound(power: int, availabilities: Sequence[float], loads: Sequence[float], caps: Sequence[float],
-                         remaining: float, own_classes: Sequence[Sequence[tuple[float, int]]],
+                         remaining: float, own_counts: Sequence[Sequence[int]], load_classes: tuple[float, ...],
                          level: float) -> float | None:
     """
     A lower bound on the sum of av * (load / av) ** p over every completion, handing out the unfilled slots whole,
@@ -112,8 +111,8 @@ def own_whole_slot_bound(power: int, availabilities: Sequence[float], loads: Seq
     :param loads: each worker's load so far
     :param caps: the most extra load each worker could get: the loads of the unfilled slots in their domains
     :param remaining: R, the load of the unfilled slots
-    :param own_classes: per worker, (load, how many unfilled slots in their domain have it) for every load at least
-    one of them has, ascending
+    :param own_counts: per worker, how many unfilled slots in their domain have each load of load_classes
+    :param load_classes: the schedule's distinct slot loads, ascending (ScoringConstants.load_classes)
     :param level: the water level of the water-filling bound, whose marginal cost is where mu's search starts
     :return: the bound, before normalizing and already lowered by ROUNDING_MARGIN; None if it doesn't apply (nothing
     left to fill, or a worker with no availability who could take load, whose share the penalty doesn't count)
@@ -122,7 +121,7 @@ def own_whole_slot_bound(power: int, availabilities: Sequence[float], loads: Seq
         return None
     if any(availability <= 0 and cap > LOAD_TOLERANCE for availability, cap in zip(availabilities, caps)):
         return None
-    evaluate, at_zero = _evaluator(power, availabilities, loads, caps, remaining, own_classes)
+    evaluate, at_zero = _evaluator(power, availabilities, loads, caps, remaining, own_counts, load_classes)
     best = _best_over_mu(evaluate, remaining, power * integer_power(level, power - 1), at_zero)
     return best - ROUNDING_MARGIN * abs(best)
 
@@ -212,12 +211,43 @@ def _term(power: int, availability: float, load: float, extra: float, mu: float)
     return availability * integer_power(total / availability, power) - mu * extra
 
 
-@functools.lru_cache(maxsize=COMBINATIONS_CACHE_SIZE)
+class _SetsCache:
+    """
+    Each worker's sets T_w by their counts of unfilled slots per load (step 5 of Phase 11): the same counts always
+    give the same sets, so they're built once. A plain dict keyed by the counts themselves, rather than
+    functools.lru_cache keyed by the (load, count) pairs: PyPy's lru_cache is written in Python, and building and
+    hashing the pairs at every bound cost as much again (2026-11-17: the search 11-32% faster on PyPy). The sets
+    also depend on the loads the counts are of, and on MAX_LOAD_COMBINATIONS, so it's kept for one of each at a time.
+    """
+
+    def __init__(self) -> None:
+        self.loads: tuple[float, ...] | None = None
+        self.most_combinations = -1
+        self.by_counts: dict[tuple[int, ...], _Sets] = {}
+
+    def for_loads(self, load_classes: tuple[float, ...], most_combinations: int) -> dict[tuple[int, ...], _Sets]:
+        """
+        The sets built so far for these loads and this limit, as a dict from a worker's counts to their sets; empty
+        when either changed, or when it holds more than COMBINATIONS_CACHE_SIZE
+        :param load_classes: the schedule's distinct slot loads, ascending
+        :param most_combinations: MAX_LOAD_COMBINATIONS
+        :return: the dict, to look up in and add to
+        """
+        if (load_classes != self.loads or most_combinations != self.most_combinations
+                or len(self.by_counts) > COMBINATIONS_CACHE_SIZE):
+            self.loads, self.most_combinations, self.by_counts = load_classes, most_combinations, {}
+        return self.by_counts
+
+
+_SETS_CACHE = _SetsCache()
+_NOT_BUILT = object()  # what the cache gives for counts whose sets aren't built yet
+
+
 def _own_sets(classes: tuple[tuple[float, int], ...], most_combinations: int) -> _Sets:
     """
-    One worker's sets T_w, from their counts of unfilled slots per load (the same counts always give the same sets)
+    One worker's sets T_w, from their counts of unfilled slots per load
     :param classes: (load, count) of the slots in their domain, ascending, every count at least 1
-    :param most_combinations: MAX_LOAD_COMBINATIONS (an argument so that the cache keeps it apart)
+    :param most_combinations: MAX_LOAD_COMBINATIONS
     :return: the sets, as _Sets describes them
     """
     if not classes:
@@ -238,7 +268,8 @@ def _own_sets(classes: tuple[tuple[float, int], ...], most_combinations: int) ->
 
 
 def _evaluator(power: int, availabilities: Sequence[float], loads: Sequence[float], caps: Sequence[float],
-               remaining: float, own_classes: Sequence[Sequence[tuple[float, int]]]) -> tuple[_Evaluate, float]:
+               remaining: float, own_counts: Sequence[Sequence[int]], load_classes: tuple[float, ...]
+               ) -> tuple[_Evaluate, float]:
     """
     LB(mu) over each worker's own sets, and LB(0)
     :param power: p
@@ -246,14 +277,22 @@ def _evaluator(power: int, availabilities: Sequence[float], loads: Sequence[floa
     :param loads: each worker's load so far
     :param caps: each worker's cap
     :param remaining: R
-    :param own_classes: per worker, (load, count) of the unfilled slots in their domain
+    :param own_counts: per worker, how many unfilled slots in their domain have each load of load_classes
+    :param load_classes: the schedule's distinct slot loads, ascending
     :return: (evaluate(mu), LB(0)); with mu = 0 nobody takes anything, since each term rises with the worker's load
     """
     workers = []  # (av, x, cap, sets) per worker with some availability
     at_zero = 0.0
-    for availability, load, cap, classes in zip(availabilities, loads, caps, own_classes):
+    most_combinations = MAX_LOAD_COMBINATIONS
+    built = _SETS_CACHE.for_loads(load_classes, most_combinations)
+    for availability, load, cap, counts in zip(availabilities, loads, caps, own_counts):
         if availability > 0:
-            workers.append((availability, load, cap, _own_sets(tuple(classes), MAX_LOAD_COMBINATIONS)))
+            key = tuple(counts)
+            sets = built.get(key, _NOT_BUILT)  # one lookup where the sets are built already, as they mostly are
+            if sets is _NOT_BUILT:
+                sets = built[key] = _own_sets(tuple((slot_load, count) for slot_load, count in zip(load_classes, counts)
+                                                    if count > 0), most_combinations)
+            workers.append((availability, load, cap, sets))
             at_zero += _term(power, availability, load, 0.0, 0.0)
     floor = math.floor
 
