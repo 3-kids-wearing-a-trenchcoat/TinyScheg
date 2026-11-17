@@ -236,10 +236,14 @@ Still deferred:
     for node, and 11–32% less time with the role-aware bound on (`sweep_11` 0.68, `sweep_06` 0.74, `multiday_04`
     0.80, seed 3009 0.85). It was where the bound's cost on PyPy lay: with it on, `multiday_04`'s second period was
     10% slower than with it off; now it's as fast.
-  * **The role-aware bound now costs little:** with the plain dict, on is as fast as off or faster on nearly every
-    input tried (`sweep_10` 1.56 times as fast, `sweep_11` 1.15, `multiday_04` 1.11), and slower only on `sweep_02`
-    and `multiday_02`, by about 5%. So `auto`'s rule ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)),
-    fitted to the old costs, now often chooses the slower one; to be measured again and revisited.
+  * **The role-aware bound now costs little,** and `auto`'s rule
+    ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)) is kept as it is. The comparisons it was fitted
+    and checked on, measured again with the plain dict (two rounds, three searches at a time): where on prunes more,
+    it still takes far less time (`sweep_08` and `sweep_12` 0.47 of off's, `confirm_01` 0.67); elsewhere the two are
+    now within about 5% (the held-out 48-hour inputs 0.99–1.06, against 0.83–0.88 times the progress before). In all,
+    51 comparisons: always off 1240 s, always on 1198 s, `auto` 1166 s, choosing right every time 1159 s. `auto` is
+    right 37 times, and its wrong choices now cost little. Making it always choose on would be simpler, at about 3%
+    more time in all; the user kept the rule (2026-11-17).
   * **Not taken: skipping children whose own penalty already reaches the pocket**, without setting them up (they'd be
     pruned at once: a child's bound is never below its penalty). Correct, but it skipped 0.3–11% of the nodes, and
     the check cost more than it saved: 14–36% slower on `sweep_04`, `sweep_08`, `sweep_11` and `multiday_02`.

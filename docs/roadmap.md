@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, in progress (steps 1–4 done, 2026-11-17).
+bounds, in progress (steps 1–5 done, 2026-11-17).
 
 ## Phase 1: Walking skeleton
 
@@ -308,7 +308,7 @@ user's approval first.
       `dev`: 6–10% less time on PyPy, 13% on CPython; `multiday_05` 60–71 and seed 3009 3.5–3.9 times the progress,
       `multiday_05` to the end in 689 s and 230 s for the two periods (3107 s and 505 s on 2026-11-16); up to about a
       third slower where domains aren't narrowed (`sweep_06`; `multiday_04` 0.9 times). An on/off setting deferred
-- [ ] **5. Smaller, if still worth it after 2–4:** the per-worker sets' bookkeeping made cheaper (ADR 0046); fixed data
+- [x] **5. Smaller, if still worth it after 2–4:** the per-worker sets' bookkeeping made cheaper (ADR 0046); fixed data
       not rebuilt at each node; children whose own penalty already reaches the pocket's skipped without being set up
       (0–16% of nodes); the whole-slot bound only where the cheap bound is near the pocket's (2026-11-17, lab first,
       one process on PyPy; see [Future work](explanation/future-work.md#search-performance))
@@ -325,8 +325,9 @@ user's approval first.
       `multiday_05` and `confirm_01` 0.85, `multiday_04` 0.87, `multiday_04`'s second period 0.89), seed 3009 0.96;
       where it's off, the code is unchanged (`sweep_11` 1.24 in the batch, 1.07 timed again alone, the same nodes);
       CPython 0.96–1.00 on 6 small inputs
-    - [ ] `auto`'s rule (ADR 0047) measured again with the cheaper bound: on is now as fast as off or faster on nearly
-      every input, slower only by about 5% (`sweep_02`, `multiday_02`); the user to decide what it becomes
+    - [x] `auto`'s rule (ADR 0047) measured again with the cheaper bound, on the comparisons it was fitted and checked
+      on: still the best of the policies (51 comparisons: always off 1240 s, always on 1198 s, `auto` 1166 s, the best
+      every time 1159 s), on and off now within about 5% where on prunes no more. The user kept the rule as it is
 - [ ] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
       the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
       deferred item on 48-hour first periods reconsidered with them
