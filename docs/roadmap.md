@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, in progress (steps 1–2 done, 2026-11-17).
+bounds, in progress (steps 1–3 done, 2026-11-17).
 
 ## Phase 1: Walking skeleton
 
@@ -282,14 +282,20 @@ user's approval first.
       processes; in one process against `dev`'s code, 12% less time on PyPy (16 inputs to the end), 15% less on
       CPython (6 small inputs), 1.3–1.7 times the progress on 48-hour inputs; up to 12% slower where it prunes no
       more (`sweep_11`)
-- [ ] **3. The rest look-ahead** (needs the user's approval), with an ADR: for each unfilled slot, the smallest
-      increase in the rest penalty among the workers still in its domain, measured against their current shifts;
-      slots that conflict pairwise (overlapping, or closer than the minimum rest) go to different workers, so the
-      heaviest such group is added to the bound. Two slots conflict exactly when the gap between them is shorter
-      than the minimum rest, or there's none, so conflicts follow time as between intervals, and the heaviest group
-      is found by one sweep over time. Kept up to date incrementally: an
-      assignment changes only the slots whose domain holds the assigned worker or was narrowed. Measured: 0–50%
-      fewer nodes, 2.6 times the progress on seed 3009. Same tests and check as step 2.
+- [x] **3. The rest look-ahead**, with [ADR 0045](decisions/0045-rest-lookahead.md) (done 2026-11-17): for each
+      unfilled slot, the smallest increase in the rest penalty among the workers still in its domain, against their
+      current shifts; slots that conflict pairwise go to different workers, so the heaviest such group is added to the
+      bound, found from the neighbour lists (conflicts follow time like intervals). Computed afresh where the rest of
+      the bound doesn't prune, and from scratch near a tie, so the decisions are the same with or without incremental
+      scores
+    - [x] Lab first: asked before the whole-slot part, it cost more than it saved; a quicker zero test saved a quarter
+      of its cost at most. The user chose the simple version, asked last
+    - [x] Tests: never above what a completion adds (brute force on partial schedules), above 0 on some; the same
+      search result with and without it
+    - [x] Check: the same schedules everywhere (alone and day 2, CPython and PyPy, 12 processes); one process against
+      `dev`: 4–7% less time on PyPy (`sweep_12` 35% less), seed 3009 2.3 and `multiday_04` 1.7–1.85 times the
+      progress; up to 12% slower where no rest cost is certain (`sweep_11`, `multiday_05`); as day 2 with 12
+      processes, 17–20% less
 - [ ] **4. A cheap role-aware workload bound:** designed and measured outside the program first, against the
       ceiling found with a price per slot (32–52% of the nodes the program keeps would be pruned, on inputs with
       scarce roles); candidates: water-filling where the workers who can fill a group of slots must take that
@@ -316,6 +322,8 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       compiled core and domains as bitsets decided against for now (see future work)
 - [ ] Faster search for 48-hour first periods, with no history: up to 6 hours on the laptop, most of it proving
       that nothing beats a schedule found early (deferred in Phase 10; the bounds taken up in Phase 11)
+- [ ] The rest look-ahead kept up to date incrementally, or with a quicker test for slots that add nothing, to cut its
+      4–12% cost (ADR 0045); and the tangent search's dials tuned (ADR 0044). Only if ever worth it (2026-11-17)
 - [ ] A strong bound used only near the top of the tree, where a prune removes the most: a multiplier per slot, each
       worker's best set of slots found on its own, covering roles, overlaps, rest and workload together (too costly
       at every node; suggested 2026-11-16)

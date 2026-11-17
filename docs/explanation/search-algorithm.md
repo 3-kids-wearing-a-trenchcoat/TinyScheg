@@ -161,13 +161,21 @@ penalty counts only the pairs already filled. So the bound looks ahead, using th
     (the same decisions, about 1.8 times faster on CPython, 2026-11-15).
 * **Likes:** each pair of slots in a shared shift will add both workers' like values of each other; a pair with an
   unfilled slot adds at least the lowest value the workers still in its domains could give.
-* **Rest:** the penalty so far. A worker can always be given no further shifts, so no future deficit is certain.
+* **Rest:** the penalty so far, and a look-ahead ([ADR 0045](../decisions/0045-rest-lookahead.md)). A worker can
+  always be given no further shifts, so no single future deficit is certain, but some slots can't avoid one: every
+  worker who could still take the slot already has a shift close to it. Each unfilled slot adds at least the
+  smallest increase in the rest penalty among those workers, since a worker's rest penalty never falls as shifts are
+  added. Slots too close together for one worker go to different workers, so such a group adds at least the sum of
+  its slots' increases; the heaviest group is added to the bound. Conflicts follow time, like overlapping intervals,
+  so every group lies within one slot and the earlier slots that conflict with it, and the heaviest is found in one
+  pass. It's asked only where the rest of the bound doesn't already prune: it costs about 4–12% of the search's time,
+  and saves up to half the nodes where rest is what's hard.
 
-Both look-aheads relax the problem (ignoring which slots overlap, and choosing each pair's best independently), so
-the bound may be lower than anything reachable, but never higher. A tighter bound only prunes branches that can't
-beat the pocket, so it changes how fast the search finishes, never which schedule it finds. Neither look-ahead
-assumes anything about shift lengths: in asymmetric schedules, with shifts of different lengths, dangling shifts or
-variations, it holds all the same, and the brute-force tests include such inputs.
+The look-aheads relax the problem (ignoring which slots overlap, choosing each pair's best independently, and each
+slot's cheapest worker on its own), so the bound may be lower than anything reachable, but never higher. A tighter bound
+only prunes branches that can't beat the pocket, so it changes how fast the search finishes, never which schedule it
+finds. None of the look-aheads assumes anything about shift lengths: in asymmetric schedules, with shifts of different
+lengths, dangling shifts or variations, it holds all the same, and the brute-force tests include such inputs.
 
 ### Incremental scoring
 

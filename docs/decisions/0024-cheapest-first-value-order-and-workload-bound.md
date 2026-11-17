@@ -1,7 +1,7 @@
 # 0024. Speed up branch and bound: cheapest-first value order and a lower bound on workload
 
 **Status:** Accepted. Amended by [0040](0040-workload-bound-in-whole-slots.md) (the workload bound is also taken in
-whole slots).
+whole slots) and [0045](0045-rest-lookahead.md) (a rest look-ahead).
 
 ## Context
 

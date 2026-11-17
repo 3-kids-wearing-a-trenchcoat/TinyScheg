@@ -45,7 +45,7 @@ ADR that supersedes the old one.
 | [0021](0021-power-function-for-workload-fairness.md) | Use a whole-number power for workload fairness | Accepted |
 | [0022](0022-scoring-parameters-with-defaults-and-input-overrides.md) | Scoring parameters: named defaults, optionally set in the input | Accepted, amended by [0023](0023-dislikes-outweigh-likes.md), [0028](0028-rest-factor-default-2-5.md), [0032](0032-flat-penalty-parts.md) and [0039](0039-default-weights-from-the-users-trade-offs.md) |
 | [0023](0023-dislikes-outweigh-likes.md) | A dislike outweighs a like: the neutral partner value stays below 1/2 | Accepted |
-| [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted, amended by [0040](0040-workload-bound-in-whole-slots.md) |
+| [0024](0024-cheapest-first-value-order-and-workload-bound.md) | Speed up branch and bound: cheapest-first value order and a lower bound on workload | Accepted, amended by [0040](0040-workload-bound-in-whole-slots.md) and [0045](0045-rest-lookahead.md) |
 | [0025](0025-order-interchangeable-slots.md) | Fill a shift's interchangeable slots in ascending worker order | Accepted |
 | [0026](0026-workload-counts-shifts-and-hours.md) | Workload counts shifts as well as hours | Accepted |
 | [0027](0027-incremental-scoring-for-steering.md) | Incremental scoring to steer the search, exact scoring to decide it | Accepted |
@@ -66,6 +66,7 @@ ADR that supersedes the old one.
 | [0042](0042-warn-when-the-next-period-cant-be-filled.md) | Warn when a schedule leaves the next period no legal schedule | Accepted |
 | [0043](0043-one-process-per-physical-core.md) | By default, one search process per physical core | Accepted |
 | [0044](0044-best-whole-slot-multiplier-by-tangents.md) | The whole-slot bound's best multiplier, found exactly by tangents | Accepted |
+| [0045](0045-rest-lookahead.md) | A rest look-ahead in the lower bound | Accepted |
 
 ## Template
 

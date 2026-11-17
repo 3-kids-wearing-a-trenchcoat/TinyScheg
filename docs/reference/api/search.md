@@ -76,7 +76,11 @@ cheapest first: by the penalty with them assigned, ties in input order
 ([ADR 0024](../../decisions/0024-cheapest-first-value-order-and-workload-bound.md)). Both are kept by an
 [`IncrementalScore`](scoring.md#incremental-module); a bound within `NEAR_TIE_MARGIN` (1e-9) of the pocket's penalty
 is computed from scratch, and so is every complete schedule's penalty
-([ADR 0027](../../decisions/0027-incremental-scoring-for-steering.md)).
+([ADR 0027](../../decisions/0027-incremental-scoring-for-steering.md)). The bound is checked in steps, each only if
+the one before doesn't already prune: without its whole-slot part, then in full, then with `rest_weight` times the
+rest look-ahead added ([ADR 0045](../../decisions/0045-rest-lookahead.md)), then from scratch near a tie
+(`lower_bound`, and the look-ahead of an `IncrementalScore` built from scratch), so that the decisions are the same
+with or without incremental scores.
 
 * `constants` — the [`ScoringConstants`](scoring.md#class-scoringconstants) of the same input.
 * `prune` — `False` only for testing: every branch is searched, to check that pruning loses nothing.
