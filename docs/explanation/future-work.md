@@ -229,6 +229,30 @@ Still deferred:
   or off, `auto` by default, choosing from how the input narrows the domains
   ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)); right 24 times of 30 on the inputs it was fitted on,
   and 15 of 17 on fresh ones, which had no input where on wins much. To revisit as more inputs are tried.
+
+  Phase 11 step 5 (2026-11-17), the smaller speed-ups, tried outside the program first, one process on PyPy:
+  * **Kept: each worker's sets cached in a plain dict** keyed by their counts, instead of `functools.lru_cache` keyed
+    by the (load, count) pairs built at every bound (PyPy runs its `lru_cache` as Python code). The same search, node
+    for node, and 11–32% less time with the role-aware bound on (`sweep_11` 0.68, `sweep_06` 0.74, `multiday_04`
+    0.80, seed 3009 0.85). It was where the bound's cost on PyPy lay: with it on, `multiday_04`'s second period was
+    10% slower than with it off; now it's as fast.
+  * **The role-aware bound now costs little:** with the plain dict, on is as fast as off or faster on nearly every
+    input tried (`sweep_10` 1.56 times as fast, `sweep_11` 1.15, `multiday_04` 1.11), and slower only on `sweep_02`
+    and `multiday_02`, by about 5%. So `auto`'s rule ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)),
+    fitted to the old costs, now often chooses the slower one; to be measured again and revisited.
+  * **Not taken: skipping children whose own penalty already reaches the pocket**, without setting them up (they'd be
+    pruned at once: a child's bound is never below its penalty). Correct, but it skipped 0.3–11% of the nodes, and
+    the check cost more than it saved: 14–36% slower on `sweep_04`, `sweep_08`, `sweep_11` and `multiday_02`.
+  * **Not taken: the whole-slot bound only where the cheap bound is near the pocket's.** Where it prunes, the cheap
+    bound isn't much nearer the pocket than where it doesn't: on `multiday_04`'s second period, skipping it 0.5% or
+    more below the pocket would save 18% of its calls but lose 3% of its prunes, each a whole subtree; and the gap
+    that matters differs by input (1% on `multiday_05`, 2% on `sweep_06`).
+  * **Not taken, a lead: each worker's possible extra loads as one sorted list,** their lowest term found by a binary
+    search instead of over every combination, with what doesn't change with $\mu$ computed once per bound. The same
+    search; 28% less time on CPython (`multiday_05`), but on PyPy, which already runs the loop over combinations
+    fast, even in all (12 inputs: 799 s against 791 s): 0.79 on `multiday_05`, 0.87 on `multiday_04`'s second period,
+    but 1.18–1.31 on `sweep_02`, `sweep_04` and `sweep_11`. Perhaps worth it in a form that uses the list only where
+    it's short. Written with Python's `bisect` instead of the search written out, it was slower still.
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long
