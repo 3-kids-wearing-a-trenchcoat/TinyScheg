@@ -141,9 +141,10 @@ When working on this repository, you MUST follow these rules:
 ### Branching
 * Work on the single existing branch that isn't `main`. Consolidate work onto that one working branch rather than
   juggling several in parallel.
-* Exception: an experiment (e.g. a speed-up that's kept only if it proves worthwhile) may get its own branch split
-  from the working branch, one experiment at a time. If it's kept, merge it into the working branch; if not, leave
-  it unmerged (never delete it) and record its outcome on the working branch.
+* Exception: with my permission, a piece of work (e.g. a speed-up that's kept only if it proves worthwhile) may get
+  its own dedicated branch split from the working branch (`dev`), one at a time. When it's done, and again only with
+  my permission, either merge it into the working branch and then delete it, or discard it outright (delete it
+  unmerged, recording its outcome on the working branch).
 * If no such branch exists (e.g. the previous one was merged and deleted), create a new one from `main`.
 * If a branch exists and you are not sure whether you should use it or not, ask before continuing.
 * Before applying git operations, make sure you're on the intended branch, as I may merge and delete branches and
@@ -159,6 +160,8 @@ You are allowed to:
 * `git revert` (only for commits on your branch)
 * `git merge <branch>` — LOCAL merges into your working branch only (e.g. consolidating another feature branch onto
   it). Never into `main`.
+* `git branch -d <branch>` / `git branch -D <branch>` — only for a dedicated branch split from the working branch (see
+  Branching), and only with my permission.
 
 ### Forbidden Git Operations
 You are STRICTLY FORBIDDEN from:
@@ -169,7 +172,7 @@ You are STRICTLY FORBIDDEN from:
 * Any operation that affects the `main` branch (including merging into it)
 
 ### Safety Rules
-* Never delete branches.
+* Never delete branches, except a dedicated branch as described under Branching, with my permission.
 * Never rewrite history (`rebase`, `commit --amend`, etc.).
 * Only modify files relevant to the current task.
 * Keep commits small and descriptive.
