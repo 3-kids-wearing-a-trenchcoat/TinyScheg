@@ -111,6 +111,45 @@ class IncrementalScore:
         unit = self.constants.workload_unit
         return self._weighted_bound(self._water_filling()[0] / unit if unit else 0.0)
 
+    def rest_lookahead(self, neighbours: Sequence[Sequence[int]]) -> float:
+        """
+        The rest look-ahead (ADR 0045): the least the rest penalty must still grow, before rest_weight. Each unfilled
+        slot s would raise the rest penalty by at least m(s), the smallest increase among the workers still in its
+        domain, against their current slots: a worker's rest term never falls as slots are added. Slots that conflict
+        pairwise go to different workers, so a group of them adds at least the sum of their m(s). Conflicts follow
+        time like intervals' overlaps (each slot reaching from its start to its end plus the minimum rest), so every
+        such group lies within one slot t and the slots before it that conflict with t, and the heaviest group is
+        the heaviest of those
+        :param neighbours: for each slot, the slots it conflicts with, ascending (Problem.neighbours)
+        :return: the heaviest group's sum of m(s); 0 if no unfilled slot would raise the rest penalty
+        """
+        weights: dict[int, float] = {}  # m(s) of each unfilled slot where it isn't 0
+        for slot, worker in enumerate(self.assignment):
+            if worker is not None:
+                continue
+            least = None
+            for candidate in self.domains[slot]:
+                increase = self._rest_delta(candidate, slot)[0]
+                if increase <= 0:  # a worker who'd take it with no added deficit: m(s) = 0
+                    least = None
+                    break
+                if least is None or increase < least:
+                    least = increase
+            if least is not None:
+                weights[slot] = least
+        heaviest = 0.0
+        for slot, weight in weights.items():
+            group = weight
+            for other in neighbours[slot]:  # the earlier slots that conflict with it
+                if other >= slot:
+                    break
+                other_weight = weights.get(other)
+                if other_weight is not None:
+                    group += other_weight
+            if group > heaviest:
+                heaviest = group
+        return heaviest
+
     def _weighted_bound(self, workload: float) -> float:
         """The bound's weighted sum, from its workload part (normalized); the same expression for both bounds."""
         constants = self.constants

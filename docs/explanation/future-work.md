@@ -170,7 +170,8 @@ Still deferred:
   (37 inputs traced, byte for byte); about 1.8 times faster on CPython (the example 31 s to 18 s), and 1.0–1.3 times
   on PyPy, varying from run to run with its just-in-time compiler.
 
-  Still open: a rest look-ahead (none is valid that's cheap, since a worker can always get no further shifts), caps
+  Still open: a rest look-ahead (none is valid that's cheap, since a worker can always get no further shifts; one was
+  found on 2026-11-17, below), caps
   that account for overlapping slots, and whole-slot sets per worker that count only the slots in their own domains
   (tighter, but they'd have to be kept up to date as forward checking narrows the domains). Candidates for
   [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds) (2026-11-16): a per-slot rest look-ahead (slots
@@ -207,6 +208,16 @@ Still deferred:
   `sweep_11`). Computing it from each worker's convex envelope instead gave the same bound but cost far more on PyPy
   (searches about 2.5 times as long as with tangents, and 0.27–0.40 times their progress on 48-hour inputs); it was
   faster only on CPython's small inputs.
+
+  Done on 2026-11-17: the rest look-ahead ([ADR 0045](../decisions/0045-rest-lookahead.md)), asked only where the
+  rest of the bound doesn't prune; the same schedules, 4–7% less time on PyPy for the 16 inputs searched to the end
+  (`sweep_12` about 35% less), 2.3 and 1.7–1.85 times the progress on seed 3009 and `multiday_04`, and with 12
+  processes, 17–20% less time as day 2. Its cost, 4–12% of the search's time, is a loss where no slot's rest cost is
+  certain (`multiday_05` 0.85–0.94 times the progress, `sweep_11` 10–13% slower). Left for if it's ever worth it: the
+  look-ahead kept up to date incrementally (which slots could add anything, which changes only near each
+  assignment), and a quicker test for slots that add nothing (each candidate's nearest slots' deficits, before the
+  full increase; about a quarter of the cost on some inputs, none on others). Also left: tuning the tangent search's
+  `MU_GROWTH` and `OPTIMUM_GAP` (ADR 0044), which costs up to 12% where it prunes no more (`sweep_11`).
 * **A limit.** Stop the search after a given time or number of nodes and return the best pocket schedule found so
   far. A node limit keeps the result deterministic; a time limit makes it depend on the machine. With either, value
   ordering affects the *result* and not just the speed. Decided against (2026-11-11, confirmed 2026-11-12): long

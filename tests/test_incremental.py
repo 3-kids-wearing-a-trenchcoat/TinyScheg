@@ -1,11 +1,13 @@
 """Tests for tinyscheg.scoring.incremental, against the from-scratch scoring as the oracle (ADR 0027)."""
 import random
+from itertools import product
 
 import pytest
 
+from schedule_checker import hard_constraint_violations
 from test_search import constants_of, small_inputs
 from tinyscheg.csp.problem import build_problem
-from tinyscheg.csp.search import choose_slot
+from tinyscheg.csp.search import choose_slot, find_best_schedule
 from tinyscheg.csp.state import SearchState
 from tinyscheg.model.schedule_input import ScheduleInput
 from tinyscheg.scoring.incremental import IncrementalScore
@@ -14,6 +16,7 @@ from tinyscheg.scoring.penalty import lower_bound, score
 STEPS = 200             # random assignments and backtracks per input
 UNDO_CHANCE = 0.35      # the chance that a step backtracks rather than assigns
 TOLERANCE = 1e-9        # rounding differences allowed between the incremental and from-scratch values
+LOOKAHEAD_PARTIALS = 20  # partial schedules checked per small input in the rest look-ahead test
 
 
 def assert_matches(incremental: IncrementalScore, state: SearchState) -> None:
@@ -97,3 +100,42 @@ def test_an_incremental_score_can_start_from_a_partly_filled_schedule() -> None:
     state.undo(changes)
     incremental.undo()
     assert_matches(incremental, state)
+
+
+def test_the_rest_lookahead_is_never_above_what_a_completion_adds() -> None:
+    # ADR 0045: on partial schedules of the small inputs (some slots of a legal schedule left unfilled, the domains as
+    # forward checking leaves them), the rest so far plus the look-ahead is never above the rest of any completion;
+    # and it means something: it's above 0 on some of them
+    rng = random.Random(0)
+    positive = 0
+    for schedule_input in small_inputs():
+        problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+        legal = [assignment for assignment in product(*problem.domains)
+                 if not hard_constraint_violations(schedule_input, problem.slots, assignment)]
+        for _ in range(LOOKAHEAD_PARTIALS if legal else 0):
+            source = rng.choice(legal)
+            partial = [worker if rng.random() < 0.5 else None for worker in source]
+            domains = [tuple(worker for worker in domain
+                             if all(partial[neighbour] != worker for neighbour in problem.neighbours[slot]))
+                       if partial[slot] is None else (partial[slot],)
+                       for slot, domain in enumerate(problem.domains)]
+            completions = [assignment for assignment in legal
+                           if all(filled is None or filled == worker for filled, worker in zip(partial, assignment))]
+            least_rest = min(score(constants, assignment).rest for assignment in completions)
+            incremental = IncrementalScore(constants, partial, domains)
+            lookahead = incremental.rest_lookahead(problem.neighbours)
+            assert incremental.rest + lookahead <= least_rest + TOLERANCE
+            positive += lookahead > 0
+    assert positive > 0
+
+
+@pytest.mark.parametrize("schedule_input", small_inputs())
+def test_the_search_finds_the_same_schedule_with_and_without_the_rest_lookahead(
+        schedule_input: ScheduleInput, monkeypatch: pytest.MonkeyPatch) -> None:
+    # ADR 0045: a valid bound only cuts branches that can't beat the pocket, so the result is exactly the same
+    problem, constants = build_problem(schedule_input), constants_of(schedule_input)
+    with_it = find_best_schedule(problem, constants)
+    monkeypatch.setattr(IncrementalScore, "rest_lookahead", lambda self, neighbours: 0.0)
+    without_it = find_best_schedule(problem, constants)
+    assert (with_it.assignment, with_it.penalty) == (without_it.assignment, without_it.penalty)
+    assert with_it.nodes <= without_it.nodes

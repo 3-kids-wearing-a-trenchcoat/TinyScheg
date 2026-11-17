@@ -224,6 +224,7 @@ class _Search:
         pocket = self._pocket_total()
         if pocket is None:
             return False
+        rest_weight = self.constants.parameters.rest_weight
         if self.scores is not None:
             # The bound without its costly whole-slot part first: never above the full one, so where it already
             # prunes, the full one would too, and the decision is the same (2026-11-15)
@@ -233,9 +234,16 @@ class _Search:
             bound = self.scores.bound()
             if bound >= pocket + NEAR_TIE_MARGIN:
                 return True
+            # ADR 0045: with the rest the unfilled slots must still add, asked only where the bound alone doesn't prune
+            bound += rest_weight * self.scores.rest_lookahead(self.problem.neighbours)
+            if bound >= pocket + NEAR_TIE_MARGIN:
+                return True
             if bound <= pocket - NEAR_TIE_MARGIN:
                 return False
-        exact = lower_bound(self.constants, self.state.assigned, self.state.domains)
+        # from scratch, the rest look-ahead too, so that the decision is the same with or without incremental scores
+        lookahead = IncrementalScore(self.constants, self.state.assigned, self.state.domains).rest_lookahead(
+            self.problem.neighbours)
+        exact = lower_bound(self.constants, self.state.assigned, self.state.domains) + rest_weight * lookahead
         return exact >= pocket if self._ties_lose() else exact > pocket
 
     def _pocket_total(self) -> float | None:

@@ -102,6 +102,7 @@ nav:
       - 0042 Next-period warning: decisions/0042-warn-when-the-next-period-cant-be-filled.md
       - 0043 One process per core: decisions/0043-one-process-per-physical-core.md
       - 0044 Best whole-slot multiplier by tangents: decisions/0044-best-whole-slot-multiplier-by-tangents.md
+      - 0045 A rest look-ahead: decisions/0045-rest-lookahead.md
 
 markdown_extensions:
   - admonition

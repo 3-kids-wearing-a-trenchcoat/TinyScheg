@@ -297,6 +297,12 @@ Methods:
   expression, so never above `bound()`. The search checks it first, and computes `bound()`, whose whole-slot part
   costs most of the search's time, only where it doesn't already reach the pocket: the same decisions, at less cost
   (2026-11-15). The water-filling is computed once per state, for both, until the next `assign` or `undo`.
+* `rest_lookahead(neighbours)` — the rest look-ahead
+  ([ADR 0045](../../decisions/0045-rest-lookahead.md)), before `rest_weight`: for each unfilled slot, the smallest
+  increase in the rest penalty among the workers still in its domain against their current slots (`_rest_delta`),
+  0 as soon as one would add nothing; then the heaviest group of pairwise conflicting slots, each slot $t$ with the
+  earlier slots among its `neighbours` (the problem's, ascending). Computed from scratch on each call. Not part of
+  `bound()`, which stays equal to `lower_bound`.
 * `assign(slot, worker, narrowed)` — update the totals after the search assigned the slot; `narrowed` is the change
   record's `saved_domains`, (slot, domain before) pairs. Only the assigned worker's load and rest, the shifts with a
   slot assigned or narrowed, the caps of the workers dropped from a domain, and the count of unfilled slots of the
