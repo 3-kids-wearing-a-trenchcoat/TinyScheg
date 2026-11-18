@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinyscheg.model.shift import Shift
-from tinyscheg.scoring.constants import (DISLIKED_PARTNER, ScoringConstants, hours, integer_power, like_value,
-                                         rest_target)
+from tinyscheg.scoring.constants import (DISLIKED_PARTNER, MICROSECONDS_PER_HOUR, ScoringConstants, integer_power,
+                                         like_value, rest_target)
 from tinyscheg.scoring.whole_slots import own_whole_slot_bound, whole_slot_bound
 
 
@@ -381,7 +381,9 @@ def rest_deficit(constants: ScoringConstants, worker: int, earlier: int, later: 
     :return: the deficit, in hours
     """
     away = constants.unavailable_at_start[worker][later] - constants.unavailable_at_end[worker][earlier]
-    rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end) - away
+    # in whole microseconds worked out once, which gives exactly the hours datetime arithmetic would
+    gap = constants.slot_start_microseconds[later] - constants.slot_end_microseconds[earlier]
+    rest = gap / MICROSECONDS_PER_HOUR - away
     target = rest_target(constants.rest_factor, constants.slot_hours[earlier], constants.slot_hours[later])
     return max(0.0, target - rest)
 
