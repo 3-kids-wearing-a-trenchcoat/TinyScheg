@@ -354,7 +354,7 @@ schedules, and how many searches can be run at once. Every measurement is made o
 `multiday_05` and seed 3009 (with a node limit where searching to the end takes too long). After each, its results
 and conclusions are reported to the user.
 
-- [ ] **1. Measure,** one at a time, in this order (the first four decide which of the others are worth making):
+- [x] **1. Measure,** one at a time, in this order (the first four decide which of the others are worth making):
     - [x] The best penalty known from the start: the pocket's threshold set to the best penalty plus the near-tie
       margin, which keeps the same schedule; how much time goes to searching before the best schedule is found (done
       2026-11-18, the same schedule in all 41 searches): the 16 small inputs, one process, 0.72 of the nodes and 0.74
@@ -427,7 +427,11 @@ and conclusions are reported to the user.
       process, against about 96 s of searching one after another, so a large batch would run about twice as fast
       side by side. Starting up and reading the input: 0.3–0.6 s on PyPy, 0.1–0.16 s on CPython, which is faster on
       searches of under about 2 s
-    - [ ] Parallel search: the speed-up with 1–12 processes, and how long each process waits for work
+    - [x] Parallel search: the speed-up with 1–12 processes, and how long each process waits for work (done
+      2026-11-18, PyPy, on the laptop): with 12 processes 2.8–4.9 times one process' speed (`sweep_02` 4.86,
+      `confirm_01` 4.41, `sweep_11`'s second period 3.48, slower than with 8), with 2 processes 1.8–2.0; the processes
+      are busy 94–100% of the time, idle at the end under 2%, and the nodes about the same: what's lost is each
+      process's own speed as more run (4 full and 8 compact cores, and heat), not the search's division of work
 - [ ] **2. Choose** what to build, from the measurements, with the user; the steps for it are added here
 
 ## Later
