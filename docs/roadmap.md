@@ -376,8 +376,14 @@ and conclusions are reported to the user.
       the nodes aren't piled up just short of being pruned, except on `multiday_05` (3% leaves 0.17), and least on the
       loose `multiday_02` (10% leaves 0.78). Most kept nodes are in the middle and lower part of the tree, where they
       have only 5–15% of the root's gap left
-    - [ ] The gap left after Phase 11: at sampled deep nodes, the bound against the best completion, split into
-      workload (whole slots, roles, slots too close together for one worker), rest and likes
+    - [x] The gap left after Phase 11: at sampled deep nodes, the bound against the best completion, split into
+      workload (whole slots, roles, slots too close together for one worker), rest and likes (done 2026-11-18, about
+      110 kept nodes with at most 14 slots left on each of 34 searches): on average rest 43% of the gap, workload
+      30%, likes 27%; 63% is each part's own bound's slack (rest 28%, workload 24%, likes 11%) and 37% the best
+      completion's trade-offs between the parts, which no bound on one part sees. Of the workload's own slack,
+      slots too close together for one worker are only 4% of the gap; the rest (19%) is how slots and workers are
+      matched given roles and whole slots, which the one multiplier doesn't see: on `multiday_04` and `multiday_05`
+      that's 80–92% of the gap. The rest's own slack is largest on second periods
     - [ ] Workload caps that count slots too close together for one worker: how much more they'd prune
     - [ ] Exactly tied schedules: how often two schedules tie at the best penalty, which decides whether another
       order of the search would change any result
