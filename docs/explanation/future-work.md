@@ -302,10 +302,13 @@ current code, with the same schedules and node counts on every input (archived o
 ### Search time on 48-hour first periods
 
 > [!NOTE]
-> **Accepted for now** (2026-11-16, Phase 10); faster search through the bounds is taken up in
-> [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds). Reconsidered after its steps 2–4
-> (2026-11-17, [below](#after-phase-11s-steps-24-2026-11-17)): 3.3 times faster in all, but seed 3009 still takes
-> 1 hour 40, so it stays open, to be looked at again after step 5.
+> **Accepted for now** (2026-11-16, Phase 10); faster search through the bounds was taken up in
+> [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds), complete on 2026-11-18. Reconsidered after it
+> ([below](#after-phase-11s-step-5-2026-11-18)): 3.7 times faster in all, the tier's five inputs in 2–12 minutes, but
+> seed 3009 still takes 1 hour 28, so it stays deferred (the user's choice, 2026-11-18). Leads left: each worker's
+> extra loads as a sorted list where it's short ([Search performance](#search-performance), step 5), the rest
+> look-ahead kept up to date incrementally, and the tangent search's dials; and, as before, workload slack from slots
+> too close together for one worker to take both.
 
 About half the generated 48-hour inputs took over half an hour to search as a first period, with no history, and
 some far longer ([the 48-hour check](tuning.md#the-48-hour-check-2026-11-1516)): seed 3009 took 6 hours on the laptop

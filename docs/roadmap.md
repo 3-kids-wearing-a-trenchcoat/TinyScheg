@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, in progress (steps 1–5 done, 2026-11-17).
+bounds, complete (2026-11-18).
 
 ## Phase 1: Walking skeleton
 
@@ -328,7 +328,7 @@ user's approval first.
     - [x] `auto`'s rule (ADR 0047) measured again with the cheaper bound, on the comparisons it was fitted and checked
       on: still the best of the policies (51 comparisons: always off 1240 s, always on 1198 s, `auto` 1166 s, the best
       every time 1159 s), on and off now within about 5% where on prunes no more. The user kept the rule as it is
-- [ ] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
+- [x] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
       the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
       deferred item on 48-hour first periods reconsidered with them
     - [x] After steps 2–4 (2026-11-17, 12 processes, PyPy, `auto`; see
@@ -340,7 +340,9 @@ user's approval first.
       [Future work](explanation/future-work.md#after-phase-11s-step-5-2026-11-18)): the same schedules; first periods
       2 h in all (3.7 times the speed of 2026-11-16), seed 3009 1 h 28 min, `multiday_05` 619 s (5.0 times); 7–15% less
       than after steps 2–4 wherever the role-aware bound is on
-    - [ ] The deferred item on 48-hour first periods reconsidered with these, by the user
+    - [x] The deferred item on 48-hour first periods reconsidered with these (2026-11-18): kept deferred, with the
+      new numbers and the leads left (the user closed Phase 11). The tier's five now take 2–12 minutes; seed 3009,
+      one generated input, is the outlier at 1 h 28 min, within 0.1% of its best after 8
 
 ## Later
 
@@ -355,8 +357,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [x] Faster search by non-heuristic means, as far as it's worth going: PyPy for development runs (ADR 0033),
       parallel search (Phase 9, ADR 0041), and the bound without its whole-slot part checked first (2026-11-15); a
       compiled core and domains as bitsets decided against for now (see future work)
-- [ ] Faster search for 48-hour first periods, with no history: up to 6 hours on the laptop, most of it proving
-      that nothing beats a schedule found early (deferred in Phase 10; the bounds taken up in Phase 11)
+- [ ] Faster search for 48-hour first periods, with no history: after Phase 11, 2–12 minutes for the tier's five and
+      1 hour 28 for seed 3009 on the laptop (6 hours before), most of it proving that nothing beats a schedule found
+      early (deferred in Phase 10, reconsidered and kept deferred at the end of Phase 11, 2026-11-18). Leads: each
+      worker's extra loads as a sorted list where it's short (step 5: 0.79 on `multiday_05`, slower on small inputs)
 - [ ] The rest look-ahead kept up to date incrementally, or with a quicker test for slots that add nothing, to cut its
       4–12% cost (ADR 0045); and the tangent search's dials tuned (ADR 0044). Only if ever worth it (2026-11-17)
 - [x] A setting to turn the whole-slot bound's per-worker sets (ADR 0046) on or off, since they cost up to about a
