@@ -419,8 +419,14 @@ and conclusions are reported to the user.
       nodes, an equal one (a tie) at up to 26%, but only deep in the tree, where little is left below; pruning both
       (the equal ones by a fixed rule for which twin to keep) left 0.998 of the nodes. Not worth building in this
       form; the ties of measurement 6 would need a test that sees symmetry higher up
-    - [ ] Many searches at once: a batch run one after another with 12 processes each against side by side with one
-      process each, and the cost of starting up and warming up on small inputs
+    - [x] Many searches at once: a batch run one after another with 12 processes each against side by side with one
+      process each, and the cost of starting up and warming up on small inputs (done 2026-11-18, 30 searches, each
+      a fresh process, two rounds): PyPy one after another with 12 processes 99–107 s, side by side with one process
+      131–141 s, 6 at a time with 2 processes 95–96 s; CPython 193 s and 536 s. Side by side, each search ran about 1.35
+      times as long as alone (heat), and the batch waited on its longest search; their time added up to 43 s per
+      process, against about 96 s of searching one after another, so a large batch would run about twice as fast
+      side by side. Starting up and reading the input: 0.3–0.6 s on PyPy, 0.1–0.16 s on CPython, which is faster on
+      searches of under about 2 s
     - [ ] Parallel search: the speed-up with 1–12 processes, and how long each process waits for work
 - [ ] **2. Choose** what to build, from the measurements, with the user; the steps for it are added here
 
