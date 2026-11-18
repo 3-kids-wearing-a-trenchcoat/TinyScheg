@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, complete (2026-11-18).
+bounds, complete (2026-11-18); Phase 12, where speed is left on the table, started (2026-11-18).
 
 ## Phase 1: Walking skeleton
 
@@ -343,6 +343,39 @@ user's approval first.
     - [x] The deferred item on 48-hour first periods reconsidered with these (2026-11-18): kept deferred, with the
       new numbers and the leads left (the user closed Phase 11). The tier's five now take 2–12 minutes; seed 3009,
       one generated input, is the outlier at 1 h 28 min, within 0.1% of its best after 8
+
+## Phase 12: Where speed is left on the table
+
+Before the defaults are tuned further, which will mean generating many schedules, the speed-ups not yet explored are
+measured, to see which are worth building (planned 2026-11-18). Phase 11 worked on the bounds and the cost per node;
+this phase also looks at when the best schedule is found, the shape of the search tree, dominance between partial
+schedules, and how many searches can be run at once. Every measurement is made outside the program (a lab copy under
+`tools/benchmarks/results/`), on the example and the 15 benchmark inputs searched to the end, and on `multiday_04`,
+`multiday_05` and seed 3009 (with a node limit where searching to the end takes too long). After each, its results
+and conclusions are reported to the user.
+
+- [ ] **1. Measure,** one at a time, in this order (the first four decide which of the others are worth making):
+    - [ ] The best penalty known from the start: the pocket's threshold set to the best penalty plus the near-tie
+      margin, which keeps the same schedule; how much time goes to searching before the best schedule is found
+    - [ ] A fresh profile on PyPy: where each node's time goes after Phase 11, and code that leaves the JIT's
+      compiled code
+    - [ ] How close the kept nodes come to being pruned: the gap between each kept node's bound and the threshold, by
+      depth; whether a slightly tighter bound would prune much
+    - [ ] The gap left after Phase 11: at sampled deep nodes, the bound against the best completion, split into
+      workload (whole slots, roles, slots too close together for one worker), rest and likes
+    - [ ] Workload caps that count slots too close together for one worker: how much more they'd prune
+    - [ ] Exactly tied schedules: how often two schedules tie at the best penalty, which decides whether another
+      order of the search would change any result
+    - [ ] Other orders of the slots (largest rise of the bound, largest regret, by time), with the threshold at the
+      best penalty: the effect of the tree's shape alone
+    - [ ] Each worker's number of shifts decided first: how many vectors of counts have a workload bound below the
+      best penalty
+    - [ ] Dominance: how often swapping filled slots between two workers lowers the penalty without changing what's
+      left to fill
+    - [ ] Many searches at once: a batch run one after another with 12 processes each against side by side with one
+      process each, and the cost of starting up and warming up on small inputs
+    - [ ] Parallel search: the speed-up with 1–12 processes, and how long each process waits for work
+- [ ] **2. Choose** what to build, from the measurements, with the user; the steps for it are added here
 
 ## Later
 
