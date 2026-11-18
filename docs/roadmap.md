@@ -437,9 +437,14 @@ and conclusions are reported to the user.
       every node and schedule exactly the same (a valid bound changes only the nodes), checked as in Phase 11, and is
       judged by time; each is on its own branch from `dev`, with the user's approval, and needs no ADR where it
       changes no behaviour (as with Phase 11 step 5)
-- [ ] **3. The rest's hours without date and time arithmetic:** each slot's start and end in whole microseconds from
+- [x] **3. The rest's hours without date and time arithmetic:** each slot's start and end in whole microseconds from
       the first slot's, worked out once in the scoring constants, instead of subtracting datetimes at every rest
-      (PyPy runs `datetime` as Python code); the same values, exactly (measurement 2: 8–17% less time)
+      (PyPy runs `datetime` as Python code); the same values, exactly (done 2026-11-18, the user approving it, on
+      branch `phase12-rest-hours`). Check: every rest's deficit equal to the old arithmetic to the last bit (tests);
+      the same nodes, schedules and penalties as `dev` on every input alone and as day 2, one process on PyPy and
+      CPython and 12 processes on both. About 4–5% less time, not the 8–17% measurement 2 suggested (its baseline was
+      slowed by heat): seed 3009 0.95, `confirm_01` 0.96, `multiday_04` 0.96, `multiday_05` 0.99, `sweep_11` within
+      noise (2 million nodes, three alternating rounds); the benchmark set 0.964 on PyPy, 0.974 on CPython
 - [ ] **4. A cheaper water-filling** (lab first: fewer allocations with the same arithmetic; the change points kept
       sorted from node to node; each worker's term reused), kept in the simplest form whose gain holds
 - [ ] **5. The exact matching workload bound** (measurement 5), made cheap enough to pay: planned after step 4
