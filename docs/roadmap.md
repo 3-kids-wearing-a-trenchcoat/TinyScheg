@@ -369,8 +369,13 @@ and conclusions are reported to the user.
       13–20%, the rest look-ahead up to 20%, the rest small (rough, overlapping figures). The rest's hours computed
       from whole microseconds worked out once, instead of subtracting datetimes at every call (PyPy runs `datetime`
       as Python code): exactly the same values, 8–17% less time; a candidate to build, with a cheaper water-filling
-    - [ ] How close the kept nodes come to being pruned: the gap between each kept node's bound and the threshold, by
-      depth; whether a slightly tighter bound would prune much
+    - [x] How close the kept nodes come to being pruned: the gap between each kept node's bound and the threshold, by
+      depth; whether a slightly tighter bound would prune much (done 2026-11-18, the proof's nodes, with the threshold
+      at the best penalty): the root's bound is 1–8% below the best penalty; a bound higher by 1% of that gap at every
+      node would leave 0.91 of the nodes, by 3% 0.77, by 10% 0.44, by 30% 0.09 (the inputs searched to the end), so
+      the nodes aren't piled up just short of being pruned, except on `multiday_05` (3% leaves 0.17), and least on the
+      loose `multiday_02` (10% leaves 0.78). Most kept nodes are in the middle and lower part of the tree, where they
+      have only 5–15% of the root's gap left
     - [ ] The gap left after Phase 11: at sampled deep nodes, the bound against the best completion, split into
       workload (whole slots, roles, slots too close together for one worker), rest and likes
     - [ ] Workload caps that count slots too close together for one worker: how much more they'd prune
