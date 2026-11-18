@@ -355,8 +355,13 @@ schedules, and how many searches can be run at once. Every measurement is made o
 and conclusions are reported to the user.
 
 - [ ] **1. Measure,** one at a time, in this order (the first four decide which of the others are worth making):
-    - [ ] The best penalty known from the start: the pocket's threshold set to the best penalty plus the near-tie
-      margin, which keeps the same schedule; how much time goes to searching before the best schedule is found
+    - [x] The best penalty known from the start: the pocket's threshold set to the best penalty plus the near-tie
+      margin, which keeps the same schedule; how much time goes to searching before the best schedule is found (done
+      2026-11-18, the same schedule in all 41 searches): the 16 small inputs, one process, 0.72 of the nodes and 0.74
+      of the time (first periods 0.33–1.00, second periods 0.13–0.95); the 48-hour first periods, 12 processes,
+      0.93–0.99 of the time, seed 3009 0.90 (1 h 19 against 1 h 28), though its best comes at 54 minutes; their second
+      periods 0.73–0.87. On the slow searches nearly all the time is the proof, which no better first schedule
+      shortens; a better first schedule would help short searches, as tuning runs them, most
     - [ ] A fresh profile on PyPy: where each node's time goes after Phase 11, and code that leaves the JIT's
       compiled code
     - [ ] How close the kept nodes come to being pruned: the gap between each kept node's bound and the threshold, by
