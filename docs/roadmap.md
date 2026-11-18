@@ -413,8 +413,12 @@ and conclusions are reported to the user.
       a few one- or two-load inputs (`sweep_04`, `sweep_01`, `multiday_02`), thousands to a million on most small
       inputs, over 2 million (where counting stopped) on 25 of 40, every 48-hour input but `multiday_02` among them:
       deciding the counts first would mean far too many searches; not worth building
-    - [ ] Dominance: how often swapping filled slots between two workers lowers the penalty without changing what's
-      left to fill
+    - [x] Dominance: how often swapping filled slots between two workers lowers the penalty without changing what's
+      left to fill (done 2026-11-18, with a safe test: the same loads, their shifts full, no unfilled slot near
+      either or among their neighbours, nobody's deficit higher): a strictly better swap at under 0.5% of the kept
+      nodes, an equal one (a tie) at up to 26%, but only deep in the tree, where little is left below; pruning both
+      (the equal ones by a fixed rule for which twin to keep) left 0.998 of the nodes. Not worth building in this
+      form; the ties of measurement 6 would need a test that sees symmetry higher up
     - [ ] Many searches at once: a batch run one after another with 12 processes each against side by side with one
       process each, and the cost of starting up and warming up on small inputs
     - [ ] Parallel search: the speed-up with 1–12 processes, and how long each process waits for work
