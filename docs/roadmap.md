@@ -432,7 +432,18 @@ and conclusions are reported to the user.
       `confirm_01` 4.41, `sweep_11`'s second period 3.48, slower than with 8), with 2 processes 1.8–2.0; the processes
       are busy 94–100% of the time, idle at the end under 2%, and the nodes about the same: what's lost is each
       process's own speed as more run (4 full and 8 compact cores, and heat), not the search's division of work
-- [ ] **2. Choose** what to build, from the measurements, with the user; the steps for it are added here
+- [x] **2. Choose** what to build, from the measurements, with the user (2026-11-18): cheaper nodes first (the lower
+      hanging fruit), then the exact matching bound; the rest deferred (see [Later](#later)). Each step below keeps
+      every node and schedule exactly the same (a valid bound changes only the nodes), checked as in Phase 11, and is
+      judged by time; each is on its own branch from `dev`, with the user's approval, and needs no ADR where it
+      changes no behaviour (as with Phase 11 step 5)
+- [ ] **3. The rest's hours without date and time arithmetic:** each slot's start and end in whole microseconds from
+      the first slot's, worked out once in the scoring constants, instead of subtracting datetimes at every rest
+      (PyPy runs `datetime` as Python code); the same values, exactly (measurement 2: 8–17% less time)
+- [ ] **4. A cheaper water-filling** (lab first: fewer allocations with the same arithmetic; the change points kept
+      sorted from node to node; each worker's term reused), kept in the simplest form whose gain holds
+- [ ] **5. The exact matching workload bound** (measurement 5), made cheap enough to pay: planned after step 4
+- [ ] **6. Docs:** the API reference, the scoring and search explanations, future work, and the 48-hour times again
 
 ## Later
 
@@ -443,7 +454,17 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       that account for overlaps, and symmetry between identical workers, rare in the benchmark; Phase 11 takes up
       the rest look-ahead, the exact multiplier and roles). Left after Phase 11's measurement: workload slack from
       slots too close together for one worker to take both, which no bound tried sees, and loose inputs with no
-      scarce roles (`multiday_02`), where nothing tried helped more than 7%
+      scarce roles (`multiday_02`), where nothing tried helped more than 7%. Left after Phase 12's measurements
+      (2026-11-18; see [Future work](explanation/future-work.md#phase-12s-measurements-2026-11-18)), besides the
+      matching bound taken up in Phase 12: a stronger rest bound (the largest part of the gap left, 43%, and seed
+      3009's); a portfolio of slot orders in the parallel search (each order far better on some inputs), which would
+      need a tie rule that doesn't depend on the order; bounds across the parts (37% of the gap is what the best
+      completion trades between them); dominance higher in the tree than a safe swap test sees. Measured and dropped:
+      caps for slots too close together for one worker (4% of the gap), each worker's number of shifts decided first
+      (millions of vectors of counts), and any single other order of the slots
+- [ ] Tuning tool: run many searches side by side with one or two processes each, the longest first (measurement
+      10: about twice the throughput on a large batch), and start each run's threshold from the previous setting's
+      best schedule (measurement 1: the same schedule, 0.74 of the time on the small inputs) (2026-11-18)
 - [x] Faster search by non-heuristic means, as far as it's worth going: PyPy for development runs (ADR 0033),
       parallel search (Phase 9, ADR 0041), and the bound without its whole-slot part checked first (2026-11-15); a
       compiled core and domains as bitsets decided against for now (see future work)

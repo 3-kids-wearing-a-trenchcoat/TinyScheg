@@ -376,6 +376,60 @@ time after steps 2–4 (above) and on 2026-11-16 alongside. Every schedule is th
 * **Seed 3009** finds its best schedule after 54 minutes, and is within 0.1% of it after under 8 minutes. Its first
   period is still about three times the half hour or so that's acceptable for one schedule.
 
+### Phase 12's measurements (2026-11-18)
+
+> [!NOTE]
+> **Measured; partly taken up.** [Phase 12](../roadmap.md#phase-12-where-speed-is-left-on-the-table) measured, outside
+> the program, where speed was still left; the exact matching bound and cheaper nodes are being built there, and the
+> rest is deferred or dropped, as below.
+
+Eleven measurements, on the example and the 15 benchmark inputs (alone and as day 2), the multiday tier and seed 3009,
+each keeping exactly the program's schedule wherever a schedule could change only by ties:
+
+1. **The best penalty known from the start** (the pocket's threshold set to it, which keeps the same schedule): 0.74
+   of the time on the small inputs, 0.90–0.99 on 48-hour first periods (seed 3009 0.90, though its best comes at 54
+   of 88 minutes), 0.73–0.87 on their second periods. The slow searches are almost all proof, which a better first
+   schedule doesn't shorten.
+2. **Where a node's time goes** (PyPy): 10–12 µs a node on every input; the JIT healthy. cProfile triples the time
+   and inflates small functions, so each part was timed by running it twice: water-filling 17–42%, the whole-slot
+   bound 20–35% where it's on, the rest changes 13–20%, the rest look-ahead up to 20%. The rest's hours computed
+   from whole microseconds instead of datetimes: the same values, 8–17% less time.
+3. **How close the kept nodes come to being pruned:** the root's bound is 1–8% below the best penalty; a bound
+   higher at every node by 1% of that gap would leave 0.91 of the nodes, by 10% 0.44, by 30% 0.09. Most kept nodes are
+   in the middle and lower part of the tree, with 5–15% of the root's gap left.
+4. **The gap at deep nodes, split up** (the bound against the best completion, at about 110 kept nodes with at most
+   14 slots left per search): rest 43%, workload 30%, likes 27%; 63% is each part's own bound's slack, 37% what the
+   best completion trades between the parts. Slots too close together for one worker are 4%; how slots and workers
+   are matched given roles and whole slots is 19%, and 80–92% of the gap on `multiday_04` and `multiday_05`.
+5. **An exact matching bound for workload** (conflicts relaxed: a greedy over the workers' counts, exact since they
+   form a polymatroid, the few slots of another load enumerated), asked where the program's bounds don't prune: the
+   same schedules; 0.55 of the nodes on the small inputs (`confirm_03` 0.015); `multiday_05` searched to the end in
+   104,698 nodes (about 248 million before); `multiday_04` 18 times the progress, seed 3009 1.4 times. Rounding the
+   other loads instead pruned almost nothing. As prototyped it costs 1–3.6 ms a call.
+6. **Ties:** more than one schedule at the best penalty on 24 of 37 searches, often hundreds or thousands; none
+   that aren't exact; almost none from identical workers.
+7. **Other orders of the slots** (the threshold at the best penalty): none better overall (mrv with regret 1.05 of
+   the nodes, the cheapest worker's cost 1.49, regret 2.08, by time about 20), but each far better on some inputs
+   (by time `multiday_02` 6.9 times the progress, the cheapest worker's cost `multiday_05` 15.5 times) and far worse on
+   others, and each keeps another tied schedule on some.
+8. **Each worker's number of shifts decided first:** 120–360 vectors of counts that could still beat the best on a
+   few one- or two-load inputs, over 2 million on most.
+9. **Dominance** (a swap of two filled slots that changes nothing the future sees): a strictly better one at under
+   0.5% of the kept nodes, an equal one (a tie) at up to 26%, but only deep in the tree: pruning both left 0.998 of
+   the nodes.
+10. **Many searches at once** (30 searches, each a fresh process): one after another with 12 processes 99–107 s, side
+    by side with one process 131–141 s (heat, and the longest search), 6 at a time with 2 processes 95 s; side by
+    side, the searching added up to 43 s per process against 96 s, so a large batch would run about twice as fast.
+    Starting up: 0.3–0.6 s on PyPy, 0.1–0.16 s on CPython.
+11. **The parallel speed-up on the laptop:** 2.8–4.9 times with 12 processes; the processes busy 94–100% of the time
+    and the nodes about the same, so what's lost is each process's own speed (4 full and 8 compact cores, and heat).
+
+Taken up in Phase 12: the rest's hours without datetimes, a cheaper water-filling, and the exact matching bound.
+Deferred: a stronger rest bound; a portfolio of slot orders in the parallel search, which would need a tie rule that
+doesn't depend on the order; bounds across the parts; dominance higher in the tree; and, for the tuning tool, running
+searches side by side and starting each run's threshold from the previous setting's best schedule. Dropped: caps for
+slots too close together for one worker, the counts decided first, and any single other order.
+
 ## Faster search by non-heuristic means
 
 > [!NOTE]
