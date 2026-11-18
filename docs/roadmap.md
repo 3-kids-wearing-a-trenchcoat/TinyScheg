@@ -362,8 +362,13 @@ and conclusions are reported to the user.
       0.93–0.99 of the time, seed 3009 0.90 (1 h 19 against 1 h 28), though its best comes at 54 minutes; their second
       periods 0.73–0.87. On the slow searches nearly all the time is the proof, which no better first schedule
       shortens; a better first schedule would help short searches, as tuning runs them, most
-    - [ ] A fresh profile on PyPy: where each node's time goes after Phase 11, and code that leaves the JIT's
-      compiled code
+    - [x] A fresh profile on PyPy: where each node's time goes after Phase 11, and code that leaves the JIT's
+      compiled code (done 2026-11-18): 10–12 µs per node on every input; the JIT healthy (under 1 s of tracing in
+      30 s, few aborts); cProfile triples the time and inflates small functions, so each part was also timed by running
+      it twice: water-filling about 17–42% of the time, the whole-slot bound 20–35% where it's on, the rest changes
+      13–20%, the rest look-ahead up to 20%, the rest small (rough, overlapping figures). The rest's hours computed
+      from whole microseconds worked out once, instead of subtracting datetimes at every call (PyPy runs `datetime`
+      as Python code): exactly the same values, 8–17% less time; a candidate to build, with a cheaper water-filling
     - [ ] How close the kept nodes come to being pruned: the gap between each kept node's bound and the threshold, by
       depth; whether a slightly tighter bound would prune much
     - [ ] The gap left after Phase 11: at sampled deep nodes, the bound against the best completion, split into
