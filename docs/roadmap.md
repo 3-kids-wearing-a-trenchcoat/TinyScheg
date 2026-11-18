@@ -445,9 +445,16 @@ and conclusions are reported to the user.
       CPython and 12 processes on both. About 4–5% less time, not the 8–17% measurement 2 suggested (its baseline was
       slowed by heat): seed 3009 0.95, `confirm_01` 0.96, `multiday_04` 0.96, `multiday_05` 0.99, `sweep_11` within
       noise (2 million nodes, three alternating rounds); the benchmark set 0.964 on PyPy, 0.974 on CPython
-- [ ] **4. A cheaper water-filling** (lab first: fewer allocations with the same arithmetic; the change points kept
+- [ ] **4. The exact matching workload bound** (measurement 5), made cheap enough to pay (moved before the
+      water-filling by the user, 2026-11-18: it changes what a node costs, which the water-filling's gain depends on)
+    - [ ] Lab first, each version checked to be valid and to decide as the prototype does: asking only whether it
+      prunes (stopping at the first way of handing out the odd-load slots that comes in below the threshold, and
+      skipping those a cheap estimate puts above it); skipping the matching where each worker's best count on their
+      own can already be matched; starting from the parent's matching; the per-worker slot lists kept up to date;
+      asking it only near the threshold. Then where it goes in the bound's order, and whether it gets a setting
+    - [ ] An ADR, the code (on its own branch), tests, the check, the 48-hour times
+- [ ] **5. A cheaper water-filling** (lab first: fewer allocations with the same arithmetic; the change points kept
       sorted from node to node; each worker's term reused), kept in the simplest form whose gain holds
-- [ ] **5. The exact matching workload bound** (measurement 5), made cheap enough to pay: planned after step 4
 - [ ] **6. Docs:** the API reference, the scoring and search explanations, future work, and the 48-hour times again
 
 ## Later
