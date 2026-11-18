@@ -384,9 +384,22 @@ and conclusions are reported to the user.
       slots too close together for one worker are only 4% of the gap; the rest (19%) is how slots and workers are
       matched given roles and whole slots, which the one multiplier doesn't see: on `multiday_04` and `multiday_05`
       that's 80–92% of the gap. The rest's own slack is largest on second periods
-    - [ ] Workload caps that count slots too close together for one worker: how much more they'd prune
-    - [ ] Exactly tied schedules: how often two schedules tie at the best penalty, which decides whether another
-      order of the search would change any result
+    - [x] ~~Workload caps that count slots too close together for one worker~~, replaced by the user (2026-11-18)
+      after measurement 4 found those slots only 4% of the gap: a workload bound that matches the unfilled slots to
+      the workers in their domains, conflicts relaxed, exactly (a greedy over the counts, exact as they form a
+      polymatroid; the few slots of another load than the commonest enumerated). Done 2026-11-18, outside the
+      program, asked where the program's bounds don't prune: the same schedule on every input; 0.55 of the nodes on
+      the 29 small searches run to the end (`confirm_03` 0.015, `sweep_07` 0.16, `sweep_09`'s second period 0.23,
+      the example 0.45, `confirm_01` 0.52; no change on `sweep_02`, `sweep_04`, `sweep_11`, where too many slots
+      have another load to enumerate); `multiday_05` searched to the end in 104,698 nodes (about 248 million in the
+      program's proof), seed 3009 1.4 times the progress in 5 million nodes. Versions that round the other loads
+      instead were valid but pruned almost nothing. As written it costs up to about 3 ms a call, most of the time
+    - [x] Exactly tied schedules: how often two schedules tie at the best penalty, which decides whether another
+      order of the search would change any result (done 2026-11-18): more than one on 24 of 37 searches, often
+      hundreds or thousands (`sweep_06` 4,416, `confirm_01` 1,728; `multiday_05` 640 in its first 100 million
+      nodes), fewer on second periods; none within 1e-6 that aren't exact; almost none from identical workers. Another
+      order would usually keep another schedule, so it would need a tie rule of its own; and the tree is full of
+      equivalent subtrees, which makes dominance worth measuring
     - [ ] Other orders of the slots (largest rise of the bound, largest regret, by time), with the threshold at the
       best penalty: the effect of the tree's shape alone
     - [ ] Each worker's number of shifts decided first: how many vectors of counts have a workload bound below the
