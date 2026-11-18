@@ -15,6 +15,10 @@ from tinyscheg.model.worker import Worker
 from tinyscheg.timing.datetime_range import DateTimeRange
 
 _ONE_HOUR = dt.timedelta(hours=1)
+_ONE_MICROSECOND = dt.timedelta(microseconds=1)
+# An hour in whole microseconds, the unit timedelta keeps its durations in: a rest's hours are its microseconds divided
+# by this, which rounds exactly as dividing the timedelta by an hour does (both divide the same two integers)
+MICROSECONDS_PER_HOUR = _ONE_HOUR // _ONE_MICROSECOND
 
 # The like function l(x), with beta (a disliked partner) as the unit. Only the ratio alpha / beta matters, since the
 # likes penalty is measured in units of beta; alpha is the neutral_partner parameter.
@@ -54,7 +58,9 @@ class ScoringConstants:
     of work; rest_scale is one typical rest target, gamma times the mean slot length, the unit each worker's squared
     hours short are measured in. unavailable_at_start[w][i] and unavailable_at_end[w][i] are worker w's unavailable
     hours before slot i starts and ends, so that a rest counts only the time they were available (ADR 0038).
-    pair_values[w][p] is what workers w and p add to the likes total as a pair, before
+    slot_start_microseconds[i] and slot_end_microseconds[i] are when slot i starts and ends, in whole microseconds from
+    the first slot's start: worked out once, so that the search's rests need no datetime arithmetic (2026-11-18:
+    PyPy runs datetime as Python code). pair_values[w][p] is what workers w and p add to the likes total as a pair, before
     dividing by the shift's other slots: both workers' like values of each other, computed once since the search asks
     for them at every step. load_classes holds the schedule's distinct slot loads, ascending, and slot_load_class[i]
     the index of slot i's load among them, for the workload bound in whole slots (ADR 0040). own_whole_slot_sets says
@@ -75,6 +81,8 @@ class ScoringConstants:
     rest_scale: float
     unavailable_at_start: tuple[tuple[float, ...], ...]
     unavailable_at_end: tuple[tuple[float, ...], ...]
+    slot_start_microseconds: tuple[int, ...]
+    slot_end_microseconds: tuple[int, ...]
     pair_values: tuple[tuple[float, ...], ...]
     load_classes: tuple[float, ...]
     slot_load_class: tuple[int, ...]
@@ -84,6 +92,11 @@ class ScoringConstants:
 def hours(length: dt.timedelta) -> float:
     """A duration in hours."""
     return length / _ONE_HOUR
+
+
+def whole_microseconds(length: dt.timedelta) -> int:
+    """A duration in whole microseconds, exactly (timedelta keeps its durations as whole microseconds)."""
+    return length // _ONE_MICROSECOND
 
 
 def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Sequence[Shift], slots: Sequence[Slot],
@@ -121,6 +134,7 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
             worst_deficit=worst_deficit(ranges, min_rest, factor, worker.unavailable),
             likes=frozenset(index_of[name] for name in worker.likes),
             dislikes=frozenset(index_of[name] for name in worker.dislikes)))
+    origin = slots[0].time.start if slots else None
     return ScoringConstants(
         parameters=parameters,
         min_rest=min_rest,
@@ -138,6 +152,8 @@ def build_constants(settings: Settings, workers: Sequence[Worker], shifts: Seque
                                    for worker in workers),
         unavailable_at_end=tuple(tuple(unavailable_before(worker.unavailable, slot.time.end) for slot in slots)
                                  for worker in workers),
+        slot_start_microseconds=tuple(whole_microseconds(slot.time.start - origin) for slot in slots),
+        slot_end_microseconds=tuple(whole_microseconds(slot.time.end - origin) for slot in slots),
         pair_values=pair_values(worker_constants, parameters.neutral_partner),
         load_classes=classes,
         slot_load_class=slot_classes,

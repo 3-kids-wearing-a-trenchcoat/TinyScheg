@@ -8,13 +8,14 @@ from itertools import product
 import pytest
 
 from schedule_checker import hard_constraint_violations
+from tinyscheg.csp.next_period import next_period_input
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import DEFAULT_NEUTRAL_PARTNER, ScheduleInput, ScoringParameters, Settings
 from tinyscheg.model.worker import Worker
 from tinyscheg.parsing.input_reader import read_input
-from tinyscheg.scoring.constants import ScoringConstants, build_constants, rest_target
+from tinyscheg.scoring.constants import ScoringConstants, build_constants, hours, rest_target
 from tinyscheg.scoring.penalty import (_water_level, likes_penalty, rest_deficit, rest_penalty, rest_term, score,
                                        workload_penalty)
 from tinyscheg.timing.datetime_range import DateTimeRange
@@ -137,6 +138,56 @@ def test_unavailable_time_inside_a_rest_isnt_rest() -> None:
     assert rest_deficit(constants, 0, 0, 6) == pytest.approx(max(0.0, target - 10))
     assert rest_deficit(constants, 1, 0, 9) == pytest.approx(max(0.0, target - 4))
     assert rest_deficit(constants, 0, 0, 9) == pytest.approx(max(0.0, target - 16))  # Anne: all 16 hours count
+
+
+def datetime_rest_deficit(constants: ScoringConstants, worker: int, earlier: int, later: int) -> float:
+    """rest_deficit as computed before 2026-11-18, with datetime arithmetic: the reference it must equal exactly."""
+    away = constants.unavailable_at_start[worker][later] - constants.unavailable_at_end[worker][earlier]
+    rest = hours(constants.slots[later].time.start - constants.slots[earlier].time.end) - away
+    target = rest_target(constants.rest_factor, constants.slot_hours[earlier], constants.slot_hours[later])
+    return max(0.0, target - rest)
+
+
+def assert_rest_deficits_match_datetime_arithmetic(constants: ScoringConstants) -> None:
+    """rest_deficit equal, to the last bit, to datetime arithmetic on every pair of slots, for every worker."""
+    slots = range(len(constants.slots))
+    for worker in range(len(constants.workers)):
+        for earlier, later in product(slots, slots):
+            if earlier < later:
+                assert rest_deficit(constants, worker, earlier, later) == datetime_rest_deficit(constants, worker,
+                                                                                                earlier, later)
+
+
+def test_rest_deficits_match_datetime_arithmetic_on_the_example_and_its_next_period() -> None:
+    # the rests' hours come from whole microseconds worked out once (2026-11-18); they must be exactly the hours
+    # datetime arithmetic gives, or the search could decide differently
+    schedule_input = read_input(EXAMPLE_INPUT)
+    problem = build_problem(schedule_input)
+    assert_rest_deficits_match_datetime_arithmetic(
+        build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                        problem.scoring_domains))
+    first = find_first_schedule(problem).assignment
+    following = build_problem(next_period_input(schedule_input, first))  # with the first period as its history
+    assert_rest_deficits_match_datetime_arithmetic(
+        build_constants(following.settings, following.workers, following.shifts, following.slots,
+                        following.scoring_domains))
+
+
+def test_rest_deficits_match_datetime_arithmetic_with_odd_times() -> None:
+    # shifts of 2 hours, 1 second and 7 microseconds from a start with microseconds: rests that aren't whole hours,
+    # nor whole seconds, and an unavailability that isn't either
+    start = dt.datetime(2025, 1, 1, 0, 0, 0, 123457)
+    length = dt.timedelta(hours=2, seconds=1, microseconds=7)
+    period = DateTimeRange(start, start + 12 * length)
+    away = DateTimeRange(start + 3 * length + dt.timedelta(microseconds=3), start + 5 * length)
+    workers = (Worker("Anne"), Worker("Bob", unavailable=(away,)))
+    post = Post("post", ShiftRules(length, (("any", 1),)))
+    schedule_input = ScheduleInput(Settings(period, dt.timedelta(0)), workers, (post,))
+    problem = build_problem(schedule_input)
+    constants = build_constants(schedule_input.settings, problem.workers, problem.shifts, problem.slots,
+                                problem.scoring_domains)
+    assert len(constants.slots) == 12
+    assert_rest_deficits_match_datetime_arithmetic(constants)
 
 
 def test_no_rest_penalty_when_the_minimum_rest_meets_the_target() -> None:

@@ -46,6 +46,10 @@ Immutable.
 * `unavailable_at_start`, `unavailable_at_end` — `tuple[tuple[float, ...], ...]`: for each worker and slot, the
   worker's unavailable hours before the slot starts and ends, from `unavailable_before`; a rest's available time is
   its length less the difference ([ADR 0038](../../decisions/0038-rests-count-only-available-time.md)).
+* `slot_start_microseconds`, `slot_end_microseconds` — `tuple[int, ...]`: when each slot starts and ends, in whole
+  microseconds from the first slot's start (`whole_microseconds`). A rest's hours are the difference divided by
+  `MICROSECONDS_PER_HOUR`, exactly the hours datetime arithmetic gives (both divide the same two integers), without
+  subtracting datetimes at every rest the search scores (PyPy runs `datetime` as Python code; 2026-11-18).
 * `rest_scale` — $\tau = \gamma \cdot \overline{|s|}$, one typical rest target (the mean slot length times $\gamma$),
   the unit each worker's squared hours short are measured in.
 * `pair_values` — `tuple[tuple[float, ...], ...]`: `pair_values[w][p]` is what workers `w` and `p` add to the likes
@@ -141,6 +145,10 @@ of the same length are; a load a rounding apart gets a class of its own, which o
 ### `hours(length) -> float`
 
 A `datetime.timedelta` in hours.
+
+### `whole_microseconds(length) -> int`
+
+A `datetime.timedelta` in whole microseconds, exactly. `MICROSECONDS_PER_HOUR` is an hour in the same unit.
 
 ## `penalty` module
 
@@ -242,7 +250,8 @@ worker's term.
 before dividing by their units), `shift_likes_lower_bound(constants, shift, assignment, domains)` (one shift's share of the likes
 look-ahead),
 `pair_like_value(constants, worker, partner)` (both workers' like values of each other, from `pair_values`), `normalized_likes(constants,
-total)`, `rest_deficit(constants, worker, earlier, later)` (one rest's deficit, its rest in available time),
+total)`, `rest_deficit(constants, worker, earlier, later)` (one rest's deficit, its rest in available time, from the slots'
+times in whole microseconds),
 `worker_deficits` and `rest_term` (above). Both modules use them, so that they do the
 same arithmetic.
 
