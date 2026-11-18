@@ -408,8 +408,11 @@ and conclusions are reported to the user.
       of 31, mostly second periods (`sweep_04`'s 0.14, `sweep_03`'s 0.18); by time `multiday_02` 6.9 times the
       progress, the cheapest worker's cost `multiday_05` 15.5 times, and each far worse elsewhere. Another order
       usually keeps another tied schedule (6–12 of 31)
-    - [ ] Each worker's number of shifts decided first: how many vectors of counts have a workload bound below the
-      best penalty
+    - [x] Each worker's number of shifts decided first: how many vectors of counts have a workload bound below the
+      best penalty (done 2026-11-18, at the root, conflicts relaxed, an upper estimate where loads differ): 120–360 on
+      a few one- or two-load inputs (`sweep_04`, `sweep_01`, `multiday_02`), thousands to a million on most small
+      inputs, over 2 million (where counting stopped) on 25 of 40, every 48-hour input but `multiday_02` among them:
+      deciding the counts first would mean far too many searches; not worth building
     - [ ] Dominance: how often swapping filled slots between two workers lowers the penalty without changing what's
       left to fill
     - [ ] Many searches at once: a batch run one after another with 12 processes each against side by side with one
