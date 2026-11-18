@@ -400,8 +400,14 @@ and conclusions are reported to the user.
       nodes), fewer on second periods; none within 1e-6 that aren't exact; almost none from identical workers. Another
       order would usually keep another schedule, so it would need a tie rule of its own; and the tree is full of
       equivalent subtrees, which makes dominance worth measuring
-    - [ ] Other orders of the slots (largest rise of the bound, largest regret, by time), with the threshold at the
-      best penalty: the effect of the tree's shape alone
+    - [x] Other orders of the slots (largest rise of the bound, largest regret, by time), with the threshold at the
+      best penalty: the effect of the tree's shape alone (done 2026-11-18; the bound's rise taken as the cheapest
+      worker's cost, and regret's also as mrv's tie-break): no order beats the program's overall (31 searches to
+      the end: the cheapest worker's cost 1.49 of its nodes, regret 2.08, mrv with regret 1.05, by time 20, five
+      of its searches stopped at 50 million nodes), but every order is far better somewhere: mrv with regret on 17
+      of 31, mostly second periods (`sweep_04`'s 0.14, `sweep_03`'s 0.18); by time `multiday_02` 6.9 times the
+      progress, the cheapest worker's cost `multiday_05` 15.5 times, and each far worse elsewhere. Another order
+      usually keeps another tied schedule (6–12 of 31)
     - [ ] Each worker's number of shifts decided first: how many vectors of counts have a workload bound below the
       best penalty
     - [ ] Dominance: how often swapping filled slots between two workers lowers the penalty without changing what's
