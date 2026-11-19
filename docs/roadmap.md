@@ -483,11 +483,20 @@ answer, the audit asserts only what holds under every reasonable answer.
 - [ ] **1. Decide** what the audit is, a group of decisions at a time, each discussed with the user (the options,
       examples, a recommendation). The decisions depend on each other, so they're taken in this order, going back
       where a later one changes an earlier one; decisions found along the way are added in their place:
-    - [ ] **Foundations:** for each kind, whether a grievance is an event in itself (a shift with someone the worker
-      dislikes) or exists only when a peer got off better (load), which decides the one-shift tolerance and what a
-      harmless fix is; how many grievances one gap between two workers is (one per pair, as today, grows with the
-      number of peers); the horizon (the whole schedule, with the history the input carries); the workers the audit
-      models (today self-centred and jealous)
+    - [x] **Foundations** (decided 2026-11-19): a grievance is an **event** the worker can point to (an extra shift,
+      a short rest, a shift with someone they dislike), not a comparison that counts only past a tolerance, which
+      would build in "someone had to"; whatever line an event needs is drawn from the schedule itself, so that the
+      same work and rest for everyone is fair however long they are. So the audit measures fairness, not how good the
+      schedule is otherwise, and tuning reads it together with the measures that don't come from the audit (everyone
+      resting less but equally is no grievance; among the tuning results so far, something like it appeared once, on
+      one input, by an hour). Where an event is measured against peers (load), it's against the **best-off peer**,
+      not one per peer, which grew with the number of peers. The horizon stays the whole schedule, with the history
+      the input carries, fixes changing only the new period. The audit models workers **sensitive to being treated
+      unfairly**: each points to every way they were worse off than a peer, never to a way they were better off, and
+      makes the strongest case they can (hence the best-off peer; and they never set a boon against a straw).
+      Taken up in later groups: a short rest needs a line drawn from the schedule (rest); and for load, no change is
+      harmless any more (moving a shift turns one worker's extra shift into another's), so changes are reported by
+      what they remove and what they create (easy fixes)
     - [ ] **Who is compared with whom:** peers as workers available at least as long (today), or loads in proportion
       to availability; availability in hours only, or also by whether there was work in those hours; roles ignored
       when finding grievances
