@@ -380,8 +380,8 @@ time after steps 2–4 (above) and on 2026-11-16 alongside. Every schedule is th
 
 > [!NOTE]
 > **Measured; partly taken up.** [Phase 12](../roadmap.md#phase-12-where-speed-is-left-on-the-table) measured, outside
-> the program, where speed was still left; the exact matching bound and cheaper nodes are being built there, and the
-> rest is deferred or dropped, as below.
+> the program, where speed was still left; it built one cheaper node step (a rest's hours from whole microseconds),
+> stopped the exact matching bound after its lab, and deferred or dropped the rest, as below.
 
 Eleven measurements, on the example and the 15 benchmark inputs (alone and as day 2), the multiday tier and seed 3009,
 each keeping exactly the program's schedule wherever a schedule could change only by ties:
@@ -424,11 +424,48 @@ each keeping exactly the program's schedule wherever a schedule could change onl
 11. **The parallel speed-up on the laptop:** 2.8–4.9 times with 12 processes; the processes busy 94–100% of the time
     and the nodes about the same, so what's lost is each process's own speed (4 full and 8 compact cores, and heat).
 
-Taken up in Phase 12: the rest's hours without datetimes, a cheaper water-filling, and the exact matching bound.
-Deferred: a stronger rest bound; a portfolio of slot orders in the parallel search, which would need a tie rule that
+Taken up in Phase 12: the rest's hours without datetimes (built: the same values, about 4–5% less time), a cheaper
+water-filling and the exact matching bound (both stopped by the user on 2026-11-19, the speed work having reached
+diminishing returns; see below). Deferred: a stronger rest bound; a portfolio of slot orders in the parallel search, which would need a tie rule that
 doesn't depend on the order; bounds across the parts; dominance higher in the tree; and, for the tuning tool, running
 searches side by side and starting each run's threshold from the previous setting's best schedule. Dropped: caps for
 slots too close together for one worker, the counts decided first, and any single other order.
+
+#### The exact matching bound's lab (2026-11-18 to 2026-11-19)
+
+> [!NOTE]
+> **Not yet implemented.** Stopped after its lab; kept as a possible opt-in setting
+> ([Later](../roadmap.md#later)).
+
+Four versions of measurement 5's matching bound were written outside the program, each checked to prune exactly
+where the prototype does, so the schedules stayed the same everywhere. The first asks only whether the bound prunes:
+it stops at the first way of handing out the odd-load slots that comes in below the threshold, skips those a cheap
+estimate puts above it, and skips the matching altogether where each worker's best count on their own can already be
+matched, which is so for over 95% of the calls: most of the gain is from handling the odd loads in whole slots
+exactly, not from who can fill what. The later versions repair the counts by exchanges instead of enumerating: from
+about 200–530 µs a call down to 40–140 µs on the small inputs, and 1.6 ms on `multiday_04`, where who can fill what
+binds at 80% of the calls. Used in place of the whole-slot bound (which, where it's exact, it never falls below), it
+pruned nothing more.
+
+Against the program (the last version, on PyPy, one process):
+
+| Input | Matching bound against the program |
+|---|---|
+| `multiday_05` | searched to the end in 9 s (the program: about 10 minutes on 12 processes) |
+| `multiday_04` | about 90 times the progress in a million nodes |
+| `confirm_03`, `sweep_07`, `confirm_01` | 0.30, 0.81, 0.91 of the time |
+| the small inputs, together | 1.45 times the time (308 s to 446 s; 27 of 30 slower) |
+| seed 3009 | 0.58 of the progress (its gap is mostly rest) |
+| `multiday_02` | 0.41 of the progress |
+
+Part of the cost is the lab's (it works out the rest look-ahead again), but not enough to change the picture. What
+stopped it is choosing when to use it: inputs that look alike from outside (long, with roles) gain hugely or lose,
+the role-aware bound's `auto` rule doesn't separate them (the inputs it turns on are still 1.19 times slower in total,
+seed 3009 worse), and choosing during the search would be one more elaborate layer for a gain on a few inputs. An
+opt-in setting, off by default, would make the search no slower for anyone, but a user couldn't tell when to turn it
+on other than by trying both, so it was left out until tuning or a real input shows a need. A cheaper water-filling
+(measurement 2's largest part of a node) was stopped with it, before its lab: step 3, measured at 8–17% in the lab,
+gave 4–5% in the program, and this would likely give a similar few percent.
 
 ## Faster search by non-heuristic means
 

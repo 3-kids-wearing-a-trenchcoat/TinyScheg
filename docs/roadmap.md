@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, complete (2026-11-18); Phase 12, where speed is left on the table, started (2026-11-18).
+bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19).
 
 ## Phase 1: Walking skeleton
 
@@ -445,17 +445,24 @@ and conclusions are reported to the user.
       CPython and 12 processes on both. About 4–5% less time, not the 8–17% measurement 2 suggested (its baseline was
       slowed by heat): seed 3009 0.95, `confirm_01` 0.96, `multiday_04` 0.96, `multiday_05` 0.99, `sweep_11` within
       noise (2 million nodes, three alternating rounds); the benchmark set 0.964 on PyPy, 0.974 on CPython
-- [ ] **4. The exact matching workload bound** (measurement 5), made cheap enough to pay (moved before the
-      water-filling by the user, 2026-11-18: it changes what a node costs, which the water-filling's gain depends on)
-    - [ ] Lab first, each version checked to be valid and to decide as the prototype does: asking only whether it
-      prunes (stopping at the first way of handing out the odd-load slots that comes in below the threshold, and
-      skipping those a cheap estimate puts above it); skipping the matching where each worker's best count on their
-      own can already be matched; starting from the parent's matching; the per-worker slot lists kept up to date;
-      asking it only near the threshold. Then where it goes in the bound's order, and whether it gets a setting
-    - [ ] An ADR, the code (on its own branch), tests, the check, the 48-hour times
-- [ ] **5. A cheaper water-filling** (lab first: fewer allocations with the same arithmetic; the change points kept
-      sorted from node to node; each worker's term reused), kept in the simplest form whose gain holds
-- [ ] **6. Docs:** the API reference, the scoring and search explanations, future work, and the 48-hour times again
+- [x] ~~**4. The exact matching workload bound**~~ (measurement 5), made cheap enough to pay (moved before the
+      water-filling by the user, 2026-11-18): lab done, stopped by the user (2026-11-19), not built
+    - [x] Lab, each version checked to decide exactly as the prototype does (four versions, the last asking only
+      whether it prunes, skipping the matching where each worker's best count on their own can already be matched,
+      and repairing the counts by exchanges otherwise): 40 µs to 1.6 ms a call; the same schedules everywhere.
+      Against the program: `multiday_05` searched to the end in 9 s on one process (about 10 minutes on 12),
+      `multiday_04` about 90 times the progress, `confirm_03` 0.30 of the time; but the small inputs 1.45 times
+      slower in total (27 of 30 slower), seed 3009 0.58 of the progress, `multiday_02` 0.41. No rule found that tells
+      the inputs it helps from those it slows (the role-aware bound's `auto` doesn't), and a setting a user can't know
+      when to turn on wasn't worth its upkeep. Kept for [Later](#later) as an opt-in setting
+    - [x] ~~An ADR, the code (on its own branch), tests, the check, the 48-hour times~~ (stopped with the step)
+- [x] ~~**5. A cheaper water-filling**~~ (lab first: fewer allocations with the same arithmetic; the change points
+      kept sorted from node to node; each worker's term reused): stopped by the user before its lab (2026-11-19),
+      the gain likely small (step 3's measured 4–5% against measurement 2's 8–17%), as speed work had reached
+      diminishing returns
+- [x] **6. Docs:** the API reference (done with step 3), future work (the matching bound's lab, 2026-11-19); the
+      scoring and search explanations unchanged (step 3 changes no behaviour), and the 48-hour times not measured
+      again for step 3's 4–5%
 
 ## Later
 
@@ -474,6 +481,10 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       completion trades between them); dominance higher in the tree than a safe swap test sees. Measured and dropped:
       caps for slots too close together for one worker (4% of the gap), each worker's number of shifts decided first
       (millions of vectors of counts), and any single other order of the slots
+- [ ] The exact matching workload bound as an opt-in setting, off by default, for long schedules where roles and
+      availability narrow who can fill what (Phase 12 step 4's lab, stopped 2026-11-19: up to about 90 times faster on
+      `multiday_04` and `multiday_05`, up to 2.4 times slower elsewhere, with no rule found for when to use it); built
+      only if tuning or a real input shows a need. The lab's code is in the local, untracked lab folder
 - [ ] Tuning tool: run many searches side by side with one or two processes each, the longest first (measurement
       10: about twice the throughput on a large batch), and start each run's threshold from the previous setting's
       best schedule (measurement 1: the same schedule, 0.74 of the time on the small inputs) (2026-11-18)
