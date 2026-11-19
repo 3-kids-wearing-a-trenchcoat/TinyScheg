@@ -497,9 +497,17 @@ answer, the audit asserts only what holds under every reasonable answer.
       Taken up in later groups: a short rest needs a line drawn from the schedule (rest); and for load, no change is
       harmless any more (moving a shift turns one worker's extra shift into another's), so changes are reported by
       what they remove and what they create (easy fixes)
-    - [ ] **Who is compared with whom:** peers as workers available at least as long (today), or loads in proportion
-      to availability; availability in hours only, or also by whether there was work in those hours; roles ignored
-      when finding grievances
+    - [x] **Who is compared with whom** (decided 2026-11-19): load is judged **in proportion to availability**, the
+      project's own workload policy ([ADR 0013](decisions/0013-availability-weighted-workload.md)), in shifts and in
+      hours (how an hours excess becomes events is the load group's): each worker is compared only with peers
+      available at least as long, whose load is scaled down to the worker's availability, never up (scaling up a
+      barely available peer's load would turn a fraction of a shift into whole grievances), and only whole extra
+      shifts count. Availability counts only the hours when at least one post is staffed (being unavailable when there
+      was nothing to do costs nothing, so it doesn't lower what a worker owes), not weighted by how much work there was
+      (a different policy, which ADR 0013 doesn't adopt; to revisit if it turns out to matter). Roles stay ignored when
+      finding grievances: availability defines what a worker owes, roles only limit what they can do ("a role isn't a
+      punishment"), and the fix search shows when nothing could be done. Still missed: a worker available longer,
+      against one available much less who did proportionally less
     - [ ] **Load:** shifts and hours, with no exchange rate; the one-shift tolerance; dropping the 24-hour window, after
       a lab check of what it catches (cramming, which short rests also show; where the window happens to fall; one
       heavy day of long shifts)
