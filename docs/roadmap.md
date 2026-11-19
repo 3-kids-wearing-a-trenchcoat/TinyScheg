@@ -701,8 +701,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       changes judged together; step 4 checks the new search finds them
 - [x] Tuning: check the defaults on 48-hour schedules, including load within a day (done in Phase 10: they hold, for
       now)
-- [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
-      wrong (see `explanation/future-work.md`)
+- [ ] Scoring: a fairness term for liked pairings, if the new audit's missing likes (ADR 0049), read in tuning, show
+      their uneven spread matters (it used to say: if counting liked-partner complaints apart turns out wrong; see
+      `explanation/future-work.md`)
 - [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one
       convex function, so that a liked shift makes up for a short straw (deferred until the weight re-check, now
       done)

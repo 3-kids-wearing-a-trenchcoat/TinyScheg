@@ -1,12 +1,15 @@
 # Schedule audit
 
-The schedule audit is a **development tool**: it judges a finished schedule the way its workers would, to check that
-the [scoring](scoring.md) and its tuning don't produce schedules that workers would rightly complain about, such as
-unfairness concentrated on a few workers. It isn't part of TinyScheg's regular operation.
+The schedule audit is a **development tool**. It judges a finished schedule the way its workers would, to check that
+the [scoring](scoring.md) and its [tuning](tuning.md) don't produce schedules that workers would rightly hold against
+them. It isn't part of TinyScheg's regular operation.
 
-> [!NOTE]
-> **Implemented** in `tools/audit.py` and `tools/audit_sample.py`, and covered by tests. See
-> [Auditing a schedule](../how-to/audit-a-schedule.md) for how to run it.
+> [!WARNING]
+> **Not yet implemented.** Decided on 2026-11-19
+> ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md)),
+> and to be built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. Until then, `tools/audit.py` and
+> `tools/audit_sample.py` do what's described under [the audit until Phase 13](#the-audit-until-phase-13). See
+> [Auditing a schedule](../how-to/audit-a-schedule.md) for how to run them.
 
 ## Why a separate audit
 
@@ -14,213 +17,288 @@ The internal penalty has to be cheap, monotone along the search and measured in 
 summary of fairness. The audit has none of those constraints: it can be slow and detailed, and it describes each
 worker's experience in the terms workers actually use. Comparing the two shows where the summary misses something.
 
-To keep the comparison meaningful, the audit is **independent**: it uses `tinyscheg.model` and `tinyscheg.parsing`
-to read the input and list the shifts, the written schedule file for the assignment
-([`tinyscheg.parsing.schedule_reader`](../reference/api/parsing.md#schedule_reader-module), in any of the output formats),
-and the independent hard-constraint checker, which also checks the minimum rest after each worker's history shifts
-([`tools/schedule_checker.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/tools/schedule_checker.py))
-for legality — and nothing from `csp/` or `scoring/`. A bug or blind spot there can't hide the same one here.
+To keep the comparison meaningful, the audit is **independent**. To read the input and list the shifts, it uses
+`tinyscheg.model`, `tinyscheg.parsing` and `tinyscheg.timing`. It reads the assignment from the written schedule file
+([`tinyscheg.parsing.schedule_reader`](../reference/api/parsing.md#schedule_reader-module), in any of the output
+formats). For legality, it uses the independent hard-constraint checker
+([`tools/schedule_checker.py`](https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg/blob/main/tools/schedule_checker.py)),
+which also checks the minimum rest after each worker's history shifts. It has its own legality check for fixes and
+uses nothing from `csp/` or `scoring/`, so a bug or blind spot there can't hide the same one here, and the model never
+grades itself.
+
+## The audit only observes
+
+The audit lists, for each worker, the **grievances** they can point to, with their facts and the fixes found for
+them. Nothing in it has a number or value to tune:
+* no scores or severities;
+* no summary verdict;
+* no "unavoidable" label;
+* no kind of grievance set apart or weighed against another.
+
+What matters more is decided where the results are read, in [tuning](tuning.md):
+* one kind of grievance against another;
+* evenness against the total;
+* which grievances could have been avoided.
+
+That way, a surprising result can be traced either to the audit describing the schedule wrongly or to how it was
+read.
 
 ## How workers judge a schedule
 
-The audit is built on how workers actually react to a schedule. It models **self-centred, jealous workers**, whose
-two questions are "why is he getting more than me?" and "why wasn't my request met, when it easily could have been by
-doing X?":
+The audit models workers who are **sensitive to being treated unfairly**:
 
-* **Relative, not absolute.** Workers compare themselves with each other: not "why do I have three shifts today?"
-  but "why am I doing three shifts today when X only does two?".
-* **Each schedule sets its own norms.** What's good or bad is judged against what the schedule usually gives, not
-  against an absolute standard. If a schedule usually gives 12 hours of rest, a worker with two 8-hour rests drew
-  short straws, though 8 hours is generous in itself; if everyone rests 6 hours, a 6-hour rest is just the norm.
-* **Unavoidable unevenness is tolerated.** If everyone does two shifts and one worker does three, someone had to.
-  If everyone does two and one worker does four, that's an outrage: it could have been two workers doing three.
-* **Complaints aren't a failure in themselves.** Most are unavoidable. Complaints that could have been fixed
-  **easily**, such as by swapping two workers' posts in the same hour, are what's bad.
-* **The short straw.** Workers accept that someone has to get the bad end of a schedule, but are very sensitive to
-  getting it **more often** than others.
+* **Each grievance is an event the worker can point to:** an extra shift, a rest shorter than someone else's, a shift
+  with someone they dislike. There's no tolerance. In a 2-2-3 split, the worker with 3 has a grievance, though
+  someone had to do the third shift; whether it could have gone elsewhere is a fact the [easy fixes](#easy-fixes)
+  report.
+* **Worse off only, and the strongest case they can.** Each worker points to every way they were worse off than a
+  peer, never to a way they were better off. Each measures themselves against the peer who makes their case best:
+  the **best-off peer**, the one giving the most events.
+* **No netting.** A boon (a shift with a friend) is never set against a straw (a short rest), by the workers or by the
+  audit.
+* **Lines are drawn from the schedule itself.** No line is set by hand, so if everyone does the same work and rests
+  the same, it's fair however long either is.
+* **Fairness only.** The audit doesn't measure how good the schedule is otherwise. Everyone resting less, but
+  equally, is no grievance (levelling down). Tuning reads the audit together with measures that don't come from it.
 
-Every shift counts the same, whatever the time of day: the audit, like the scoring, makes no distinction between day
+Every shift counts the same, whatever the time of day. Like the scoring, the audit makes no distinction between day
 and night shifts.
 
-## Complaints
+## Grievances
 
-Every criterion produces **complaints**, each by one worker (A) against another (B) about one measure, over one
-window of time:
+There are four kinds: [load](#load), [rest](#rest), [disliked partners](#disliked-partners) and
+[missing likes](#missing-likes). Each is judged over the whole schedule, with its [history](#with-a-history) if it has
+one. Roles are ignored when finding grievances: availability defines what a worker owes, and roles only limit what
+they can do ("a role isn't a punishment"). Whether anything could have been done is what the easy fixes show.
 
-* **Peers.** A complains about B only if B was **available at least as long** as A during the window, and for some
-  time at all: B had no excuse.
-* **Tolerance.** A complains only if A's measure exceeds B's by **more than** `TOLERANCE` (1). One extra is
-  tolerated; two is a complaint.
-* **Severity** is how far the gap goes past the tolerance: a gap of 2 has severity 1, a gap of 3 severity 2.
-* **Roles aren't considered** when finding complaints. A worker carrying more because few others have a role still
-  complains; whether anything could have been done is the question of [easy fixes](#easy-fixes).
-
-A worker's availability during a window is the part of the window inside the period, minus their unavailability.
+**Availability** is counted only in the hours when at least one post is staffed. Being unavailable when there was
+nothing to do costs nothing, so it doesn't lower what a worker owes.
 
 ### Load
 
-Load is compared over the **whole period** and **in any day**: each worker wants to do no more than anyone else,
-both during the day and in the schedule overall.
+Load is judged **in proportion to availability**, the project's workload policy
+([ADR 0013](../decisions/0013-availability-weighted-workload.md)). It's measured in **shifts** and in **hours**,
+with no exchange rate between the two.
 
-* **A day is any 24 hours** (`DAY_LENGTH`) within the period, wherever it starts. Midnight means nothing special, as
-  the schedule makes no distinction between day and night: two shifts two hours apart are on the same day even if
-  midnight falls between them. A shift counts in **every day it overlaps**, with the hours of it that fall in that
-  day: a 14:00–20:00 shift counts in the day from 17:00, with 3 hours.
-* In practice, the windows compared start at each shift's start, end at each shift's end, and start and end at the
-  period's ends; whatever shifts overlap some 24 hours also overlap one of those.
-* A worker complains about a peer **once** for the day, over the window where the gap is widest, so overlapping
-  windows don't count the same extra load several times. Peers are found per window, as usual.
-* A period of 24 hours or less has no separate day comparison: the whole period is the day.
-* Load is measured both in **shifts** and in **hours**, with **no exchange rate** between the two: A did more than B
-  only if A did more by one measure and **no less by the other**. More shifts but fewer hours, or the reverse, isn't
-  more load, and there's no complaint either way.
-* The gap is then the larger of the difference in shifts and the difference in hours divided by **A's own shortest
-  shift** in the window, with the same tolerance of one. Moving a shift of h hours from A to B turns a gap of g hours
-  into g − 2h, which is narrower only if h is less than g: so a gap in hours no larger than A's shortest shift can't
-  be narrowed by moving one of A's shifts, just as a gap of one shift can't. With equal shift lengths, the two
-  measures agree.
+* **Peers.** A worker is compared only with peers available at least as long, and for some time at all.
+* **Scaled down, never up.** The peer's shifts and hours are scaled to the worker's availability. A peer available
+  48 hours who did 4 shifts counts, for a worker available 40 hours, as 3⅓. Scaling up a barely available peer's load
+  would turn a fraction of a shift into whole grievances.
+* **More only by one measure and no less by the other.** More shifts but fewer hours than the scaled peer, or the
+  reverse, isn't more load.
+* **Each whole extra shift is an event.** Fractions don't count, so 5 shifts against 3⅓ is 1 event.
+* **An excess in hours is counted in the worker's own shifts, shortest first.** It's as many events as the shortest
+  shifts that fit in it. 5 hours more, with shifts of 3 hours, is 1 event, so each event is a shift the worker can
+  point to.
+* **Where both measures show more, the larger count** is taken. The best-off peer is the one giving the most events.
 
-For example, if A did 4 shifts of 4 hours within some 24 hours and B, available all that time, did 2, the gap is 2
-and A has a complaint of severity 1 against B. If A did two 6-hour shifts and B a 6-hour and a 2-hour shift (12
-hours against 8, as many shifts), the gap of 4 hours is less than A's shortest shift: tolerated, since giving B
-either of A's shifts would leave them further apart. If instead A did a 2-hour and a 12-hour shift and B two 4-hour
-shifts (14 hours against 8), the gap is 6 / 2 = 3, severity 2: A's 2-hour shift could have gone to B.
+There's no separate comparison within a day. Work concentrated in time shows as [rest](#rest) events, since a rest is
+judged with the shifts around it.
 
-(Decided 2026-11-13, with the user aspiring not to decide how much an extra shift is worth. It used to be the larger
-of the difference in shifts and the difference in hours over the window's longest shift: an exchange rate, which in
-the day-2 checks let a fix give a worker who did fewer but longer shifts another one and leave them 4-6 hours above
-everyone, as "within the tolerance". Counting a shift only in the days it started in let a 6-hour shift that began
-3 hours before a window count for nothing in it.)
+**Still missed:** a worker available longer, against one available much less who did proportionally less. A peer's
+load is never scaled up, so that pair isn't compared.
 
-(Decided 2026-11-12. Days used to be calendar days, from midnight, with a shift belonging to the day it starts on.
-In the tuning checks, almost every per-day complaint came from that split alone: in a schedule starting at 16:00,
-a worker with shifts at 01:00 and 12:00 complained about one who worked 20:00–00:00, though their loads over the
-schedule were within the tolerance, and a 22:00–04:00 shift counted for nothing on the day most of its hours fell
-on.)
+### Rest
 
-### Short straws
+* **A rest** is the time between two of a worker's consecutive shifts, counting only the part when they were
+  available, as in the scoring ([ADR 0038](../decisions/0038-rests-count-only-available-time.md)).
+  * Unavailability is neither work nor rest. The time between two periods of a [history](#with-a-history) counts as
+    unavailable for everyone.
+  * The legal minimum rest stays on the clock: it's a rule of what's legal, not something the audit judges.
+  * The rests before a worker's first shift and after their last aren't judged.
+* **A rest is judged with the shifts around it,** as rest per hour of the two shifts: the rest divided by
+  $(|s| + |s'|) / 2$, the shape of the scoring's rest target
+  ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). With shifts of equal length, it's
+  just the rest. 6 hours between a 12-hour and a 2-hour shift is shorter than 6 hours between two 2-hour shifts.
+* **Compared rest by rest, against the best-off peer.**
+  * Each worker's rests are sorted shortest first and compared with the peer's in the same places, up to the smaller
+    number of rests.
+  * Each place where the worker's rest is shorter is an event.
+  * How much shorter is a fact on it, in hours: how much longer it would have to be to match the peer's, for shifts
+    this long.
+* **Every worker is a peer.** Rests aren't scaled, since they're already measured in available time and per hour of
+  work.
 
-A **short straw** is a bad draw. Each worker's short straws over the whole period are counted, and compared between
-peers (available at least as long over the whole period) with the same tolerance:
+The same rests for everyone give no event, however long they are. Pairing the rests in any other order than shortest
+with shortest would give events even then.
 
-* **Short rest** — a rest between two of the worker's shifts that's more than `SHORT_REST_MARGIN` (2 hours) shorter
-  than the schedule's **typical rest**: the median of all the rests between shifts in the schedule, everyone's
-  together. (Decided 2026-11-12; it used to be any rest under `min_rest + SHORT_REST_MARGIN`, close to the legal
-  minimum, but in the tuning benchmarks most rests were that short, so it counted the norm as a straw.)
-  The norm is the **audited schedule's**: [easy fixes](#easy-fixes) are judged against it, not against a norm of
-  their own. (Decided 2026-11-13: otherwise a fix that shortens rests lowers the median, and with it the threshold,
-  so that short rests stop counting; in a day-2 check, a fix cut the most crammed worker's rest from 10 hours to 6
-  and the audit counted fewer short straws.)
-* **Disliked partner** — each shift shared with a worker they dislike.
+### Disliked partners
 
-Having the most shifts in a day isn't a short straw: [load](#load) already compares load in any day, with the same
-tolerance. Counting it again would count one extra shift twice, since two shifts on one day usually also mean a short
-rest: a worker with two close shifts would be 2 straws ahead of a peer with one shift, a complaint, although the load
-gap of one shift is tolerated. (An earlier version did count it, and the first tuning baseline was dominated by such
-complaints.)
+A worker's **partners** are the workers in the other slots of the same shift, as in the scoring. **Each disliked
+person in a shift is an event in itself,** with no peer, since the aim is no disliked pairing at all
+([ADR 0049](../decisions/0049-partners-in-the-audit.md)):
+* X and Y in one shift are two events.
+* 5 shifts with X are five.
+* The size of the crew doesn't dilute it.
+* Each worker's own list counts. If A dislikes X but X doesn't dislike A, only A has the event.
 
-### Pairings
+### Missing likes
 
-* Every shift a worker shares with someone they dislike is listed on their card (and counts as a short straw).
-* Among workers who like anyone, A complains about B if B shared shifts with someone they like more often than A did,
-  by more than the tolerance (peers over the whole period, as above).
+A missing like is a grievance only against a peer. It's judged by the worker's **own** likes applied to the peer's
+shifts: "your shifts would have put me with someone I like more often than mine did".
+
+* **Counting.** For each person the worker likes, count the peer's shifts with that person in them (apart from the
+  worker and the peer), and the worker's own shifts with them.
+* **Scaling.** If the peer did more shifts, their count is scaled down to the worker's number of shifts, never up.
+* **Events.** Each whole pairing more is an event, one of the peer's shifts the worker can point to.
+* **Peers.** Every worker can be the peer, and the best-off peer is the one giving the most events. A worker who
+  likes nobody has no such grievance.
+
+Each worker's **liked pairings** (their boon) are a fact on their card, not a grievance. Tuning reads them as a
+total, and worker by worker.
+
+This is the **least settled** of the audit's decisions. The alternative kept for a revisit is no like grievance at
+all, only the boon count ([ADR 0049](../decisions/0049-partners-in-the-audit.md)).
 
 ## Easy fixes
 
-Every complaint is checked for an **easy fix**: a short chain of simple, legal changes that removes it. A complaint
-with an easy fix is one workers would rightly hold against the schedule; for one without, **no easy fix was found**,
-which doesn't prove there's none, only that none was found quickly. The simple changes are:
+An **easy fix** is a **nearby schedule** in which the grievance is gone: the audited schedule with a few changes.
 
-* **Move** — give one slot to a different worker.
-* **Swap** — two workers exchange slots, such as two posts in the same hour.
+* **The changes** are moves (a slot given to another worker) and swaps (two workers exchanging slots in different
+  shifts). They're made in the new period only, since the history is what happened. A grievance about the history
+  that has a fix is one the new period could have made up for.
+* **The nearby schedule must be legal.** The changes only describe how it differs from the audited one, so their
+  order doesn't matter. The search reaches it one legal change at a time, in every order, and tests check on small
+  inputs that this misses nothing.
+* **The fix's size** is its number of changes, a fact on it.
 
-A chain has at most `MAX_CHANGES` (3) changes. Each must be **legal** and **harmless**. The audited schedule itself
-is checked once by the independent hard-constraint checker; after that, a change can only break a rule through what
-it changes, so only that is checked: the roles and availability of the slots it gives away, and the rests of the
-workers receiving them (a rest below zero is an overlap). A test confirms this always agrees with the full checker.
-Harmless means: compared with the audited schedule, it creates no new complaint, makes no existing complaint more
-severe, for anyone, and gives **nobody a short straw** of any kind they didn't have (a short rest by the audited
-schedule's norm, or a disliked partner). Otherwise the fix only moves the problem around. A straw happens to a worker
-whatever the others have, so it counts even when the worker stays within the tolerance and nobody would complain.
-(Decided 2026-11-13: in a day-2 check, a fix gave a worker a new 6-hour rest, allowed because their count of straws
-stayed within one of the others'.) Nor may it make anyone's **short rests shorter**: comparing a worker's rests
-shortest first, no short rest after the change may be shorter than the one in its place before. Counting straws alone
-missed this: two rests of 12 hours becoming 7 and 17, below a norm of 14, is one short rest fewer, but the one left
-is close to the minimum (decided 2026-11-16, found on a 48-hour benchmark input).
+**Only the nearby schedule is judged,** never each step on the way. It's audited afresh by the same rules, with its
+own best-off peers, and compared with the audited schedule worker by worker and kind by kind, never across kinds:
 
-Chains are found greedily, which keeps the search quick:
+1. **The grievance is gone.** The worker has fewer events of that kind (with that person, for partners).
+2. **The worker is better off** in that kind's own terms: worse in none of its facts, and better in at least one.
+   * Load: no more shifts and no more hours, and fewer of one.
+   * Rest: the new rests, compared with the old as with a peer's, none shorter and at least one longer.
+   * Disliked partner: one shift fewer with that person.
+   * Missing like: one more with them.
 
-1. First, every single change is tried, and each complaint a harmless one removes gets it as its fix.
-2. Then, for each complaint left, most severe first, the harmless change that lowers its severity most is taken, then
-   the next from there, until it's removed or `MAX_CHANGES` changes are made. A wide gap needs several moves:
-   six shifts against none narrows by two with each move, so it takes three. A chain found for one complaint is also
-   given to every other complaint left that it removes.
+   So making the peer worse off is no fix. If A's shortest rest is 6 hours and B's is 8, cutting B's to 6 removes
+   A's event, but A gained nothing.
+3. **Harmless or a transfer.** The fix is **harmless** if no worker, the aggrieved one included in other kinds, has
+   more events of any kind, or a rest event larger when sorted by size. Otherwise it's a **transfer**, reported with
+   exactly what it creates and for whom.
+   * With no tolerance, most load fixes are transfers: the extra shift in a 2-2-3 split can only move.
+   * A fix is dropped when another creates a subset of what it creates, with no more changes. A harmless fix creates
+     nothing, so it drops every transfer of its size or larger.
 
-The card names the changes, e.g. "easy fix: giving Siduri front gate 2025-01-01 07:00–10:00 instead of Jack, then
-giving Shamhat front gate 2025-01-02 07:00–10:00 instead of Jack".
+**The search is complete up to K changes,** smallest fix first. K is a command-line option, 3 by default.
+* Its only shortcut can't lose a fix: at least one change must touch the grievance's workers.
+* So "no fix" is an exact claim, always stated with its K: "no fix of up to 3 changes". K sets how far the claim
+  reaches, not what a grievance is.
+* K = 0 turns the search off, with no claim about fixes either way.
+* Each change more multiplies the time by about the number of legal changes: about 30 on 24-hour schedules, 90 on
+  48-hour ones. Up to 3 changes takes seconds on the example and up to about 5 minutes on a 48-hour schedule.
 
-Each candidate change is audited in full, which is slow but straightforward.
+A lab check on 2026-11-19, with the earlier grievance definitions, showed what a complete search finds that greedy
+chains miss. On 200 samples of the example, every complaint the greedy chains left without a fix had one of 2 or 3
+changes. Requiring each step to be harmless had blocked them: in some samples, almost nothing is reachable that way
+([ADR 0048](../decisions/0048-an-audit-that-only-observes.md)).
 
 ## The report
 
-* A **card per worker**: their shifts and hours (overall, and in their busiest 24 hours) against their availability, their shortest
-  rests, their short straws, who they shared shifts with, and their complaints, most severe first, each with its
-  easy fix, if one was found.
-* A **group summary**: the number of complaints and how many have an easy fix; the total severity of those with an
-  easy fix and of those without; how many workers have any complaint; and **concentration**, the share of all severity held by the worker
-  with the most, with the workers ranked by severity. All of these leave out liked-partner complaints, which are
-  counted apart (below).
+* **K** comes first.
+* **A card per worker** comes next. It shows their facts:
+  * shifts and hours;
+  * availability (while a post is staffed);
+  * their rests;
+  * their partners, with counts;
+  * their liked pairings.
 
-### Liked-partner complaints are counted apart
+  Then each grievance:
+  * what it points to;
+  * the peer it's measured against, with both sides' facts in natural units;
+  * its size, where it has one;
+  * its smallest harmless fix, or its transfers, or "no fix of up to K changes". An event wholly in the history (a
+    rest between two history shifts, a disliked partner in a history shift) says so instead, since no change can
+    reach it.
 
-Decided 2026-11-11, during the tuning baseline. Liked-partner complaints are still listed on the cards, with their
-easy fixes, but the summary's main measures (and so tuning's priorities) leave them out; their number and severity are
-reported on a line of their own.
+  A rest event shows the shifts around it and who was in them, so that a short rest into a shift with a friend can be
+  seen. For example:
 
-* **Why.** Once the double-counted short straws were gone, 28 of the baseline's 34 distinct problems with an easy fix
-  were liked-partner complaints, and in every one, the fix *raised* the likes penalty as well as the others. The likes
-  penalty rewards how much liked pairing there is in total, not how evenly it's spread, so no parameter setting can
-  remove them; only a change to the formula could. It also isn't clear that workers hold "they got their friends
-  more often than I got mine" against a schedule the way they hold load or short straws against it.
-* **The alternative not taken:** a fairness term in the likes penalty, each worker's shortfall of liked pairings
-  through a convex function, as workload does ([Future work](future-work.md#a-fairness-term-for-liked-pairings)).
-* **Signs this was the wrong choice:** workers complaining about who got paired with their friends; schedules whose
-  liked-partner severity (shown by `tools/tune.py report`) grows as settings get better on the main measures; or
-  cards read by hand where the liked-partner complaints look like the ones that matter most.
+  ```
+  Dana: 5 shifts, 15 h; available 40 h (of 48 h with a post staffed)
+    rests: 4 h, 6 h, 10 h, 12 h
+    partners: Eli ×2, Gil ×1, Ivo ×1; liked pairings: 2
+    grievances:
+      load: 1 extra shift (5 shifts, 15 h; Finn's 4, 12 h, scaled to Dana's availability: 3.33, 10 h)
+        transfers (1 change): give Gil Dana's Tue 13:00-16:00 -> creates Gil: 1 extra shift
+                              give Hana Dana's Tue 13:00-16:00 -> creates Hana: 1 extra shift
+      rest: 4 h, Tue 16:00-20:00, between Tue 13:00-16:00 (with Eli) and Tue 20:00-23:00 (with Gil);
+            2 h shorter than Finn's shortest rest, for shifts this long
+        fix (2 changes): give Gil Dana's Tue 20:00-23:00; give Dana Gil's Wed 08:00-11:00
+      disliked partner: Wed 14:00-17:00, with Ivo
+        no fix of up to 3 changes
+  ```
+
+  All transfers are shown, one per line, until reading cards shows that's too long.
+* **A closing table** of counts, per worker and per kind. Each cell gives the events, and how many of them have a
+  harmless fix, how many only transfers, how many no fix within K, and how many lie wholly in the history.
+  * Workers are listed in input order, since ranking them would take a rule across kinds.
+  * Nothing is added across kinds.
+
+With `--json`, the audit prints the same content as JSON instead, for tools.
+[`tools/tune.py`](tuning.md) records the following from it, for each run and per kind:
+* the events;
+* the most aggrieved worker's events;
+* the events with a harmless fix.
+
+It also records the liked-pairings total and K.
 
 ## With a history
 
-> [!NOTE]
-> **Implemented**, and covered by tests (`tests/test_audit.py`, `tests/test_history_input.py`).
-
 A schedule with a [history](../reference/input-format.md#history) is audited **together with it, as one schedule**,
 as the scoring sees it ([ADR 0031](../decisions/0031-history-as-the-filled-part-of-one-schedule.md)): workers judge
-the new schedule by everything they've done, so load, short straws and pairings are compared over the history and
-the new period together. The audit builds the whole schedule itself, from the model alone, independently of
-`tinyscheg.csp`:
+the new schedule by everything they've done. The audit builds the whole schedule itself, from the model alone,
+independently of `tinyscheg.csp`:
 
-* each previous schedule's shifts, from its own input, with its workers matched by name (slots of workers who have
-  left dropped), then the new period's;
-* each worker's availability in each window from each period's input, none during a period whose input they weren't
-  in (they joined later) and none between periods;
-* **easy fixes may change only the new period**: the history is what happened. A complaint about the history with
-  an easy fix is one the new schedule could have made up for and didn't.
+* each previous schedule's shifts come from its own input, with its workers matched by name (slots of workers who
+  have left are dropped), then the new period's;
+* each worker's availability comes from each period's input. They have none during a period whose input they weren't
+  in (they joined later), and nobody has any between periods;
+* **easy fixes change only the new period.** An event wholly in the history says so on the card.
 
 ## Sampling
 
 To compare the audit with the internal penalty, the sampler makes many legal schedules for one input by shuffling the
-workers' order before the search, then audits and scores each. It reports:
+workers' order before the search, then audits and scores each. It reports, per kind:
 
-* the **rank correlation** (Spearman) between the internal penalty and the severity with an easy fix, and between
-  the penalty and the total severity;
-* **disagreements**: the schedules among the best by internal penalty that have the most severity with an easy fix,
-  with their summaries.
+* the **rank correlation** (Spearman) between the internal penalty and the number of events;
+* **disagreements**: the schedules among the best by internal penalty that still have grievances with a harmless
+  fix. A harmless fix in the penalty's favourite schedule is a direct sign the penalty missed something.
 
-These are first legal schedules (the sampler doesn't use [branch and bound](search-algorithm.md#branch-and-bound-the-pocket),
-which would give the same best schedule every time), not a random sample of all legal ones, which is enough to find
-blind spots.
+These are first legal schedules (the sampler doesn't use
+[branch and bound](search-algorithm.md#branch-and-bound-the-pocket), which would give the same best schedule every
+time), not a random sample of all legal ones, which is enough to find blind spots.
 
 ## Parameters
 
-Named constants at the top of the audit's code: `TOLERANCE` (1), `DAY_LENGTH` (24 hours), `SHORT_REST_MARGIN`
-(2 hours), `MAX_CHANGES` (3). They're the audit's own, and unrelated to the [scoring parameters](scoring.md#parameters).
+Only how far "no fix" reaches: K, 3 by default (a named constant), set with a command-line option, and recorded with
+every result. Besides that, only how many decimals numbers are shown with. There's no tolerance, margin or weight:
+every rule is a sentence about how workers judge.
+
+## The audit until Phase 13
+
+> [!NOTE]
+> **Implemented** in `tools/audit.py` and `tools/audit_sample.py`, and covered by tests, until it's rebuilt in
+> [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The full description is in this page's history
+> (before 2026-11-19), and what's wrong with it in [ADR 0048](../decisions/0048-an-audit-that-only-observes.md).
+
+* **Complaints, per pair.** Each complaint was by one worker against one peer (a peer available at least as long),
+  past a **tolerance** of one. Its **severity** was how far past the tolerance it went.
+* **Load** was compared over the whole schedule and in any 24 hours, with an excess in hours divided by the worker's
+  shortest shift.
+* **Short straws** were counted and compared: a rest more than 2 hours below the schedule's median rest, and a shift
+  with anyone disliked, added together one for one.
+* **Liked pairings** were compared between workers who like anyone, each by their own list.
+* **Easy fixes** were greedy chains of at most 3 moves and swaps, each one harmless and narrowing the complaint.
+* **The group summary** gave the severity with and without an easy fix, and the share of all severity held by the
+  most aggrieved worker. Tuning ranked settings by these.
+
+### Liked-partner complaints are counted apart
+
+Decided on 2026-11-11, and replaced by [ADR 0049](../decisions/0049-partners-in-the-audit.md):
+* The cards listed liked-partner complaints with their easy fixes, but the summary's main measures (and so tuning's
+  priorities) left them out.
+* The likes penalty rewards how much liked pairing there is in total, not how evenly it's spread, so no parameter
+  setting could remove them.
+* It wasn't clear workers hold "they got their friends more often than I got mine" against a schedule.

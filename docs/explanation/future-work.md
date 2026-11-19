@@ -607,13 +607,15 @@ close to another forced shift).
 ## A fairness term for liked pairings
 
 > [!WARNING]
-> **Not yet implemented.** The alternative not taken, 2026-11-11; revisit if the
-> [choice made instead](schedule-audit.md#liked-partner-complaints-are-counted-apart) turns out wrong.
+> **Not yet implemented.** The alternative not taken, 2026-11-11, when the audit
+> [counted liked-partner complaints apart](schedule-audit.md#liked-partner-complaints-are-counted-apart); revisit if
+> the new audit's [missing likes](schedule-audit.md#missing-likes)
+> ([ADR 0049](../decisions/0049-partners-in-the-audit.md)), read in tuning, show the uneven spread matters.
 
 The likes penalty rewards the total of liked pairing, not how evenly it's spread, so the best schedule can leave one
-worker never sharing a shift with anyone they like while a pair of friends share several. The audit counts such
-liked-partner complaints apart instead of fixing them through tuning. If they turn out to matter, the fix is in the
-formula: each worker's shortfall of liked pairings through a convex function, as workload does, which needs an ADR,
+worker never sharing a shift with anyone they like while a pair of friends share several. The audit used to count
+such liked-partner complaints apart instead of fixing them through tuning; the new audit lists them like any other
+kind, and the reading weighs them last. If they turn out to matter, the fix is in the formula: each worker's shortfall of liked pairings through a convex function, as workload does, which needs an ADR,
 a check that the penalty stays monotone along the search, and new tuning runs.
 
 ## Compensation across the parts of the penalty
