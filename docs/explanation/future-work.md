@@ -687,7 +687,8 @@ open: about half the generated 48-hour inputs took over half an hour to search, 
 ## Schedule audit
 
 > [!WARNING]
-> **Not yet implemented.** Low priority; deferred 2026-11-11.
+> **Not yet implemented.** Deferred 2026-11-11; taken up in
+> [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 4.
 
 * **Samples with no easy fix at all.** In one sample of the example (seed 16 of `tools/audit_sample.py`, 2026-11-11),
   none of its 74 complaints had an easy fix, though most samples have many. With the audit and search of 2026-11-15,

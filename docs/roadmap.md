@@ -9,7 +9,8 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19).
+bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19); Phase 13, a reliable audit, started
+(2026-11-19).
 
 ## Phase 1: Walking skeleton
 
@@ -464,6 +465,56 @@ and conclusions are reported to the user.
       scoring and search explanations unchanged (step 3 changes no behaviour), and the 48-hour times not measured
       again for step 3's 4–5%
 
+## Phase 13: A reliable audit
+
+The [schedule audit](explanation/schedule-audit.md) is what the scoring is tuned against, so before the scoring
+changes again, the audit is made reliable (planned with the user, 2026-11-19). Today it puts values on what it finds:
+short rests and disliked partners are added together one for one, a short rest is a fixed margin below the typical
+rest, severities are summed across kinds and across pairs of workers (so the totals grow with the number of peers),
+load is also compared in any 24 hours, and fixes are found greedily, with at most three changes. The aim is an audit
+that only **observes**, with nothing given a number or value to tune: for each worker, a list of grievances, each one
+event the worker can point to (such as an extra shift, a short rest, or a shift with someone they dislike), with its
+facts and an easy fix where one is found; no scores, no summary verdict, no "unavoidable" label, and no kind set
+apart. What matters more (one kind against another, evenness against the total, which grievances could have been
+avoided) is decided where the results are read, in tuning, outside the audit, so that a surprising result can be
+traced either to the audit describing the schedule wrongly or to how it was read. Where a question has no clear
+answer, the audit asserts only what holds under every reasonable answer.
+
+- [ ] **1. Decide** what the audit is, a group of decisions at a time, each discussed with the user (the options,
+      examples, a recommendation). The decisions depend on each other, so they're taken in this order, going back
+      where a later one changes an earlier one; decisions found along the way are added in their place:
+    - [ ] **Foundations:** for each kind, whether a grievance is an event in itself (a shift with someone the worker
+      dislikes) or exists only when a peer got off better (load), which decides the one-shift tolerance and what a
+      harmless fix is; how many grievances one gap between two workers is (one per pair, as today, grows with the
+      number of peers); the horizon (the whole schedule, with the history the input carries); the workers the audit
+      models (today self-centred and jealous)
+    - [ ] **Who is compared with whom:** peers as workers available at least as long (today), or loads in proportion
+      to availability; availability in hours only, or also by whether there was work in those hours; roles ignored
+      when finding grievances
+    - [ ] **Load:** shifts and hours, with no exchange rate; the one-shift tolerance; dropping the 24-hour window, after
+      a lab check of what it catches (cramming, which short rests also show; where the window happens to fall; one
+      heavy day of long shifts)
+    - [ ] **Rest:** the whole gap between two shifts, or only its available part (as in the scoring,
+      [ADR 0038](decisions/0038-rests-count-only-available-time.md)); "short" with no margin, and what "typical" is;
+      a rest judged together with the shifts around it
+    - [ ] **Partners:** a disliked partner counted per shared shift or per person; what grievance a missing like is,
+      and who takes part
+    - [ ] **Easy fixes:** moves and swaps, in the new period only, judged by the audited schedule's own norm; harmless
+      as nobody getting a new or worse grievance; no cap on the chain, each change narrowing the grievance; how
+      thorough the search is (what "no easy fix found" is worth); whether changes that move a grievance to someone
+      else are reported too
+    - [ ] **Output and checking:** what a card shows for each grievance, and whether the audit prints any totals; a
+      machine-readable output, and how far `tools/tune.py`'s report and `tools/audit_sample.py`'s comparison with the
+      penalty are adapted to it; independence from `csp/` and `scoring/`; how the audit is validated
+- [ ] **2. Design:** the decisions as an ADR; the [schedule audit](explanation/schedule-audit.md) and
+      [tuning](explanation/tuning.md) pages rewritten to match
+- [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), a hand-made test for each decision, and
+      `tools/tune.py` reading its output
+- [ ] **4. Validation:** the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
+      appear and disappear explained, and cards read by hand; why some sampled schedules had no easy fix at all
+      (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later))
+- [ ] **5. Docs:** the how-to, the status table, future work
+
 ## Later
 
 Not scheduled; see [Future work](explanation/future-work.md) for each.
@@ -506,7 +557,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Parallel search where processes are spawned (Windows, macOS): measure the start-up cost, and reconsider the
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible
-- [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example)
+- [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example); taken up in Phase 13, step 4
 - [x] Tuning: check the defaults on 48-hour schedules, including load within a day (done in Phase 10: they hold, for
       now)
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
