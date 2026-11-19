@@ -686,14 +686,19 @@ open: about half the generated 48-hour inputs took over half an hour to search, 
 
 ## Schedule audit
 
-> [!WARNING]
-> **Not yet implemented.** Deferred 2026-11-11; taken up in
-> [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 4.
+> [!NOTE]
+> **Answered** on 2026-11-19, in [Phase 13](../roadmap.md#phase-13-a-reliable-audit)'s decisions (easy fixes);
+> deferred 2026-11-11. Step 4 checks that the new fix search finds the fixes.
 
 * **Samples with no easy fix at all.** In one sample of the example (seed 16 of `tools/audit_sample.py`, 2026-11-11),
   none of its 74 complaints had an easy fix, though most samples have many. With the audit and search of 2026-11-15,
   seed 16 has fixes, but 4 of 200 samples have none (seeds 150, 165, 174 and 190; seed 150 has 18 complaints). Worth
   finding out why: whether the greedy chain search misses fixes there, or the schedule really has none.
+  **The answer:** the search misses them. It requires each change of a chain to be harmless on its own, and on
+  three of those seeds at most 28 schedules can be reached that way. Yet every complaint on all four has a fix of
+  2 or 3 changes judged together (on seed 150, for example, two moves that each create a complaint on their own and
+  balance each other out). So a fix is now a nearby schedule, judged only as a whole, and found by a complete search up to a
+  stated number of changes.
 
 ## Documentation
 

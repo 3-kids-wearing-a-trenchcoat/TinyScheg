@@ -572,10 +572,40 @@ answer, the audit asserts only what holds under every reasonable answer.
       standing against at most one rest event of the same worker and never against load. Taken up in the output
       group: each rest event showing the shifts around it and who was in them, so that a short rest into a shift
       with a friend can be seen
-    - [ ] **Easy fixes:** moves and swaps, in the new period only, judged by the audited schedule's own norm; harmless
-      as nobody getting a new or worse grievance; no cap on the chain, each change narrowing the grievance; how
-      thorough the search is (what "no easy fix found" is worth); whether changes that move a grievance to someone
-      else are reported too
+    - [x] **Easy fixes** (decided 2026-11-19, after a lab check): a fix is a **nearby schedule**, the audited one
+      with a few changes (moves, a slot given to another worker, and swaps, two workers exchanging slots in different
+      shifts), in the new period only (a grievance about the history with a fix is one the new period could have made
+      up for), and legal; the changes only describe how it differs, so their order doesn't matter (the search reaches
+      it one legal change at a time, in every order, and tests check on small inputs that this misses nothing), and
+      their number, the fix's size, is a fact on it. Only the nearby schedule is judged: audited afresh by the same
+      rules (with its own best-off peers; no line from the audited schedule is held steady) and compared with the
+      audited one worker by worker and kind by kind, never across kinds. The grievance is gone (the worker has fewer
+      events of that kind, with that person for partners); the worker is **better off** in that kind's own terms,
+      worse in none of its facts and better in at least one (load: no more shifts and no more hours, fewer of one;
+      rest: the new rests compared with the old as with a peer's, none shorter and one longer; dislike: one shift
+      fewer with that person; missing like: one more with them), so that making the peer worse off (levelling down)
+      is no fix; and the fix is **harmless** if no worker, the aggrieved one included in other kinds, has more events
+      of any kind, or a rest event larger when sorted by size. A fix that isn't harmless, a **transfer**, is reported
+      too, with exactly what it creates and for whom (with no tolerance, most load fixes are transfers: the extra
+      shift in a 2-2-3 can only move); a fix is dropped when another creates a subset of what it creates with no more
+      changes (a set comparison, not an exchange rate), so a harmless fix, creating nothing, drops every transfer of
+      its size or larger. The search is **complete up to K changes**, the smallest fix first, with only a shortcut
+      that can't lose a fix (at least one change touching the grievance's workers), so "no fix" is an exact claim,
+      always stated with its K ("no fix of up to 3 changes"): K sets how far the claim reaches, not what a grievance
+      is. K is a command-line option of the audit (and of `tools/tune.py`, which passes it on), 3 by default (a named
+      constant), not part of the input, which describes the schedule; 0 turns the search off, with no claim about
+      fixes either way; each change more multiplies the time by about the number of legal changes (about 30 on
+      24-hour schedules, 90 on 48-hour ones). The lab check (2026-11-19, with today's grievance definitions): on 200
+      samples of the example, greedy found fixes for 2,522 of 3,131 complaints, and each of the other 609 had a fix
+      of 2 or 3 changes judged together; on the 75 stored tuning schedules, 164 more had a fix within 3 changes,
+      besides greedy's 358 (most of their complaints are about the history), and 10 needed 4 or more. Requiring each
+      step to be harmless and to narrow the grievance blocks preparing steps, and is why seeds 150, 165, 174 and 190
+      had no fix at all (on three of them, at most 28 schedules can be reached by harmless steps), though each of
+      their complaints has a fix of 2 or 3 changes. Complete up to 3 changes takes up to about 5 minutes on a 48-hour
+      schedule and seconds on the example; 4 would take about 100 times more, and 2 misses over a quarter of what 3
+      adds to greedy (172 of 609 on the example, 44 of 164 on the tuning schedules). Taken up in the output group:
+      how a grievance's transfers are shown; K shown with every claim and recorded in the machine output, and
+      comparisons between audits made with different K flagged
     - [ ] **Output and checking:** what a card shows for each grievance, and whether the audit prints any totals; a
       machine-readable output, and how far `tools/tune.py`'s report and `tools/audit_sample.py`'s comparison with the
       penalty are adapted to it; independence from `csp/` and `scoring/`; how the audit is validated
@@ -584,8 +614,9 @@ answer, the audit asserts only what holds under every reasonable answer.
 - [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), a hand-made test for each decision, and
       `tools/tune.py` reading its output
 - [ ] **4. Validation:** the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
-      appear and disappear explained, and cards read by hand; why some sampled schedules had no easy fix at all
-      (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later))
+      appear and disappear explained, and cards read by hand; the sampled schedules that had no easy fix at all
+      (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later) and answered in step 1) checked to
+      have fixes with the new search
 - [ ] **5. Docs:** the how-to, the status table, future work
 
 ## Later
@@ -630,7 +661,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
 - [ ] Parallel search where processes are spawned (Windows, macOS): measure the start-up cost, and reconsider the
       default if need be, before distribution
 - [ ] Explaining more fully why an input is infeasible
-- [ ] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example); taken up in Phase 13, step 4
+- [x] Audit: why some samples have no easy fix at all (e.g. seed 150 of the example); answered in Phase 13, step 1
+      (2026-11-19): requiring each step of a fix to be harmless, though each complaint there has a fix of 2 or 3
+      changes judged together; step 4 checks the new search finds them
 - [x] Tuning: check the defaults on 48-hour schedules, including load within a day (done in Phase 10: they hold, for
       now)
 - [ ] Scoring: a fairness term for liked pairings, if counting liked-partner complaints apart in the audit turns out
