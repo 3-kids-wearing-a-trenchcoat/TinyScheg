@@ -4,12 +4,14 @@ The schedule audit is a **development tool**. It judges a finished schedule the 
 the [scoring](scoring.md) and its [tuning](tuning.md) don't produce schedules that workers would rightly hold against
 them. It isn't part of TinyScheg's regular operation.
 
-> [!WARNING]
-> **Not yet implemented.** Decided on 2026-11-19
+> [!IMPORTANT]
+> **Partially implemented.** Decided on 2026-11-19
 > ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md)),
-> and to be built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. Until then, `tools/audit.py` and
-> `tools/audit_sample.py` do what's described under [the audit until Phase 13](#the-audit-until-phase-13). See
-> [Auditing a schedule](../how-to/audit-a-schedule.md) for how to run them.
+> and being built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The [grievances](#grievances) are
+> in `tools/audit.py` (`find_grievances`) and tested; the [easy fixes](#easy-fixes), [the report](#the-report) and
+> the tools reading it aren't yet. Until they are, `tools/audit.py` and `tools/audit_sample.py` do what's described
+> under [the audit until Phase 13](#the-audit-until-phase-13). See [Auditing a schedule](../how-to/audit-a-schedule.md)
+> for how to run them.
 
 ## Why a separate audit
 

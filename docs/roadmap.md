@@ -649,7 +649,9 @@ answer, the audit asserts only what holds under every reasonable answer.
       the most aggrieved worker's, then all; rest read in hours short too; dominance, with no single ranking; between
       settings neither of which dominates, the user's rules applied by hand, worker by worker; the earlier results
       kept as history, measured with the old audit, and ADR 0039's defaults standing
-- [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), a hand-made test for each decision, and
+- [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), in four parts, each with its tests: the
+      grievances (done 2026-11-19), the fix search, the report, and the tools reading it; the old audit's code stays
+      beside the new until the last, so every tool keeps working; a hand-made test for each decision, and
       `tools/tune.py` reading its output: the measures per kind (for rest also in hours short), dominance, and
       `tools/tune.py compare` for reading two settings worker by worker
       ([reading the audit](explanation/tuning.md#reading-the-audit))

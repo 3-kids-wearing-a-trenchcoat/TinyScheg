@@ -8,11 +8,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import itertools
+import math
 import pathlib
 import statistics
 import sys
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
 
 from schedule_checker import hard_constraint_violations
@@ -33,6 +34,8 @@ SHORT_REST_MARGIN = dt.timedelta(hours=2)   # a rest shorter than the schedule's
 MAX_CHANGES = 3                             # an easy fix is a chain of at most this many moves and swaps
 SEVERITY_EPSILON = 1e-9                     # severities closer than this are equal (hours are divided as floats)
 SHOWN_DECIMALS = 2                          # decimals shown for hours and severities
+EPSILON = 1e-9                              # hours (and fractions of a shift or a pairing) closer than this are equal:
+                                            # they're computed as floats
 
 WHOLE_PERIOD = "overall"                    # the label of the window covering the whole period
 ANY_DAY = f"in any {DAY_LENGTH / dt.timedelta(hours=1):g} hours"  # the label of load complaints over day windows
@@ -84,11 +87,76 @@ class AuditContext:
     likes: tuple[frozenset[int], ...]
     dislikes: tuple[frozenset[int], ...]
     fixed_slots: int = 0
+    staffed_availability: tuple[float, ...] = ()           # per worker: hours available while a post is staffed
+    away: tuple[tuple[DateTimeRange, ...], ...] = ()        # per worker: when they could neither work nor rest
 
 
 def hours(length: dt.timedelta) -> float:
     """A datetime.timedelta in hours."""
     return length / dt.timedelta(hours=1)
+
+
+def merged(ranges: Iterable[DateTimeRange]) -> list[DateTimeRange]:
+    """Ranges joined where they overlap or touch, in time order."""
+    result: list[DateTimeRange] = []
+    for time in sorted(ranges):
+        if result and time.start <= result[-1].end:
+            if time.end > result[-1].end:
+                result[-1] = DateTimeRange(result[-1].start, time.end)
+        else:
+            result.append(time)
+    return result
+
+
+def staffed_hours(staffed: Sequence[DateTimeRange], periods: Sequence[tuple[DateTimeRange, Sequence[Worker | None]]],
+                  index: int) -> float:
+    """
+    A worker's availability as the audit counts it (ADR 0048): the hours when at least one post is staffed, in the
+    periods whose input they were in, minus their unavailability
+    :param staffed: when at least one post is staffed, merged
+    :param periods: every period of the whole schedule, each with each worker as they were in its input (None if they
+    weren't in it)
+    :param index: the worker's index
+    :return: the hours
+    """
+    return math.fsum(available_hours(then[index].unavailable, time, part)
+                     for part, then in periods if then[index] is not None for time in staffed)
+
+
+def away_times(periods: Sequence[tuple[DateTimeRange, Sequence[Worker | None]]],
+               index: int) -> tuple[DateTimeRange, ...]:
+    """
+    When a worker could neither work nor rest, over the whole schedule (ADR 0038): their unavailability in each period
+    whose input they were in, every period whose input they weren't in, and the time between periods
+    :param periods: every period of the whole schedule, in time order, each with each worker as they were in its input
+    :param index: the worker's index
+    :return: the times, merged, in time order
+    """
+    times: list[DateTimeRange] = []
+    for part, then in periods:
+        if then[index] is None:
+            times.append(part)
+        else:
+            times += [inside for absence in then[index].unavailable
+                      if (inside := absence.intersection(part)) is not None]
+    times += [DateTimeRange(earlier.end, later.start)
+              for (earlier, _), (later, _) in zip(periods, periods[1:]) if earlier.end < later.start]
+    return tuple(merged(times))
+
+
+def available_between(away: Sequence[DateTimeRange], start: dt.datetime, end: dt.datetime) -> float:
+    """
+    The available part of the time between two moments
+    :param away: when the worker could neither work nor rest, merged, as away_times gives it
+    :param start: datetime.datetime
+    :param end: datetime.datetime, after start
+    :return: the hours from start to end, minus the time away within them
+    """
+    left = end - start
+    for absence in away:  # merged, so no time is taken off twice
+        if absence.start < end and start < absence.end:
+            left -= min(end, absence.end) - max(start, absence.start)
+    return hours(left)
 
 
 def day_windows(period: DateTimeRange, shifts: Sequence[Shift]) -> list[Window]:
@@ -132,7 +200,7 @@ def available_hours(unavailable: Sequence[DateTimeRange], window: DateTimeRange,
 
 def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots: Sequence[Slot],
                   periods: Sequence[tuple[DateTimeRange, Sequence[Worker | None]]] = (),
-                  fixed_slots: int = 0) -> AuditContext:
+                  fixed_slots: int = 0, staffed: Sequence[DateTimeRange] = ()) -> AuditContext:
     """
     Compute what the audit needs about an input, whatever the assignment
     :param schedule_input: ScheduleInput
@@ -141,10 +209,12 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
     :param periods: with a history, every period of the whole schedule in time order, each with each worker as they
     were in that period's input (None if they weren't in it), for availability; empty for the input's period alone
     :param fixed_slots: with a history, how many of the slots (the first ones) are the history's
+    :param staffed: when at least one post is staffed; empty for the times of the shifts given
     :return: the AuditContext
     """
     if not periods:
         periods = [(schedule_input.settings.period, schedule_input.workers)]
+    staffed = merged(staffed or (shift.time for shift in shifts))
     period = DateTimeRange(periods[0][0].start, periods[-1][0].end)
     windows = tuple(day_windows(period, shifts)) + (Window(WHOLE_PERIOD, period),)
     overlapping = [[(window.label, hours(inside.duration)) for window in windows
@@ -163,7 +233,10 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
         occupied=frozenset(label for labels in shift_windows for label in labels),
         likes=tuple(frozenset(index_of[name] for name in worker.likes) for worker in schedule_input.workers),
         dislikes=tuple(frozenset(index_of[name] for name in worker.dislikes) for worker in schedule_input.workers),
-        fixed_slots=fixed_slots)
+        fixed_slots=fixed_slots,
+        staffed_availability=tuple(staffed_hours(staffed, periods, index)
+                                   for index in range(len(schedule_input.workers))),
+        away=tuple(away_times(periods, index) for index in range(len(schedule_input.workers))))
 
 
 def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
@@ -181,12 +254,14 @@ def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
     history = sorted(schedule_input.history, key=lambda previous: previous.schedule_input.settings.period.start)
     parts: list[tuple[Shift, list[int]]] = []
     periods: list[tuple[DateTimeRange, list[Worker | None]]] = []
+    staffed: list[DateTimeRange] = [shift.time for shift in shifts]
     for previous in history:
         names = [worker.name for worker in previous.schedule_input.workers]
         then = {worker.name: worker for worker in previous.schedule_input.workers}
         periods.append((previous.schedule_input.settings.period,
                         [then.get(worker.name) for worker in schedule_input.workers]))
         for shift in generate_shifts(previous.schedule_input.posts, previous.schedule_input.settings.period):
+            staffed.append(shift.time)  # staffed, even if only by workers who have since left
             kept = [slot for slot in shift.slots if names[previous.assignment[slot.index]] in index_of]
             if kept:
                 parts.append((replace(shift, slots=tuple(kept)),
@@ -202,7 +277,7 @@ def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
         next_slot += len(slots)
         whole.append(replace(shift, index=shift_index, slots=slots))
     whole_assignment = tuple(worker for _, workers in parts for worker in workers)
-    return build_context(schedule_input, whole, all_slots(whole), periods, fixed_slots), whole_assignment
+    return build_context(schedule_input, whole, all_slots(whole), periods, fixed_slots, staffed), whole_assignment
 
 
 # --- each worker's statistics ---
@@ -425,6 +500,287 @@ def _liked_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> 
             for worker, other in _pairs(context, WHOLE_PERIOD)
             if context.likes[worker] and context.likes[other]
             and (gap := stats[other].liked_shared - stats[worker].liked_shared) > TOLERANCE]
+
+
+# --- grievances (ADR 0048, ADR 0049): each worker's events, against the best-off peer ---
+
+@dataclass(frozen=True, slots=True)
+class Rest:
+    """
+    A rest between two of a worker's consecutive shifts (by index): its available part in hours (ADR 0038), the mean
+    length of the two shifts, and the rest per hour of them, which rests are compared by (ADR 0036's shape)
+    """
+    before: int
+    after: int
+    hours: float
+    shift_hours: float
+
+    @property
+    def per_hour(self) -> float:
+        """The rest per hour of the two shifts around it."""
+        return self.hours / self.shift_hours
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerFacts:
+    """
+    One worker's side of a schedule: their shifts (by index, in time order) and hours, their availability while a post
+    is staffed, their rests (in time order), how many shifts they shared with each other worker, and their liked
+    pairings (each liked person in each of their shifts)
+    """
+    shifts: tuple[int, ...]
+    hours: float
+    availability: float
+    rests: tuple[Rest, ...]
+    partners: dict[int, int]
+    liked_pairings: int
+
+
+@dataclass(frozen=True, slots=True)
+class LoadGrievance:
+    """
+    A worker's extra shifts against their best-off peer, whose shifts and hours are scaled down to the worker's
+    availability: events is how many whole extra shifts that is
+    """
+    worker: int
+    peer: int
+    events: int
+    peer_shifts: float
+    peer_hours: float
+
+
+@dataclass(frozen=True, slots=True)
+class RestEvent:
+    """
+    One of a worker's rests shorter than their peer's in its place, both sorted shortest first (per hour of the shifts
+    around them): shortfall is how many hours longer it would have to be to match the peer's, for shifts this long
+    """
+    rest: Rest
+    peer_rest: Rest
+    shortfall: float
+
+
+@dataclass(frozen=True, slots=True)
+class RestGrievance:
+    """A worker's rests shorter than their best-off peer's, shortest first."""
+    worker: int
+    peer: int
+    events: tuple[RestEvent, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DislikeEvent:
+    """A person a worker dislikes, in one of the worker's shifts (by index): an event in itself (ADR 0049)."""
+    shift: int
+    person: int
+
+
+@dataclass(frozen=True, slots=True)
+class MissingLike:
+    """
+    The pairings with one liked person a worker missed against their peer (ADR 0049): the peer's shifts with that
+    person in them (apart from the worker and the peer), scaled down to the worker's number of shifts if the peer did
+    more, against the worker's own shifts with them; events is how many whole pairings more that is
+    """
+    person: int
+    events: int
+    own: int
+    peer_shifts: tuple[int, ...]
+    peer_scaled: float
+
+
+@dataclass(frozen=True, slots=True)
+class LikeGrievance:
+    """A worker's missing likes against their best-off peer, by liked person."""
+    worker: int
+    peer: int
+    missing: tuple[MissingLike, ...]
+
+    @property
+    def events(self) -> int:
+        """All the pairings missed."""
+        return sum(missing.events for missing in self.missing)
+
+
+@dataclass(frozen=True, slots=True)
+class Grievances:
+    """
+    A schedule's grievances, each worker's by kind (None, or empty, where they have none), with every worker's facts;
+    each tuple is in input order
+    """
+    facts: tuple[WorkerFacts, ...]
+    load: tuple[LoadGrievance | None, ...]
+    rest: tuple[RestGrievance | None, ...]
+    disliked: tuple[tuple[DislikeEvent, ...], ...]
+    liked: tuple[LikeGrievance | None, ...]
+
+
+def shift_hours(context: AuditContext, shift: int) -> float:
+    """A shift's length in hours."""
+    return hours(context.shifts[shift].time.duration)
+
+
+def worker_facts(context: AuditContext, crews: Sequence[tuple[int, ...]], worker: int) -> WorkerFacts:
+    """
+    One worker's facts
+    :param context: AuditContext
+    :param crews: every shift's workers
+    :param worker: the worker's index
+    :return: WorkerFacts
+    """
+    own = tuple(sorted((shift for shift, crew in enumerate(crews) if worker in crew),
+                       key=lambda shift: (context.shifts[shift].time, shift)))
+    rests = tuple(Rest(earlier, later,
+                       available_between(context.away[worker], context.shifts[earlier].time.end,
+                                         context.shifts[later].time.start),
+                       (shift_hours(context, earlier) + shift_hours(context, later)) / 2)
+                  for earlier, later in zip(own, own[1:]))
+    partners = Counter(other for shift in own for other in set(crews[shift]) if other != worker)
+    liked = sum(len(context.likes[worker] & (set(crews[shift]) - {worker})) for shift in own)
+    return WorkerFacts(own, math.fsum(shift_hours(context, shift) for shift in own),
+                       context.staffed_availability[worker], rests, dict(partners), liked)
+
+
+def load_events(context: AuditContext, facts: Sequence[WorkerFacts], worker: int, peer: int) -> LoadGrievance:
+    """
+    A worker's load events against one peer available at least as long (ADR 0048): the peer's shifts and hours scaled
+    down to the worker's availability; if the worker did more by one measure and no less by the other, each whole
+    extra shift is an event, and an excess in hours counts as many of the worker's own shifts, shortest first, as fit
+    in it; the larger count
+    :param context: AuditContext
+    :param facts: every worker's facts
+    :param worker: the worker's index
+    :param peer: the peer's index
+    :return: the LoadGrievance (with 0 events if there's none)
+    """
+    mine, theirs = facts[worker], facts[peer]
+    scale = mine.availability / theirs.availability
+    peer_shifts, peer_hours = len(theirs.shifts) * scale, theirs.hours * scale
+    extra_shifts, extra_hours = len(mine.shifts) - peer_shifts, mine.hours - peer_hours
+    if extra_shifts < -EPSILON or extra_hours < -EPSILON:
+        return LoadGrievance(worker, peer, 0, peer_shifts, peer_hours)
+    by_hours, counted = 0, 0.0
+    for length in sorted(shift_hours(context, shift) for shift in mine.shifts):
+        counted += length
+        if counted > extra_hours + EPSILON:
+            break
+        by_hours += 1
+    events = max(math.floor(extra_shifts + EPSILON), by_hours)
+    return LoadGrievance(worker, peer, events, peer_shifts, peer_hours)
+
+
+def load_grievance(context: AuditContext, facts: Sequence[WorkerFacts], worker: int) -> LoadGrievance | None:
+    """
+    A worker's load grievance: against the best-off peer among those available at least as long (and for some time),
+    the one giving the most events (the first in input order of equals)
+    :return: the LoadGrievance, or None if the worker has no load event
+    """
+    best: LoadGrievance | None = None
+    own_availability = facts[worker].availability
+    for peer, theirs in enumerate(facts):
+        if peer == worker or theirs.availability <= 0 or theirs.availability + EPSILON < own_availability:
+            continue
+        grievance = load_events(context, facts, worker, peer)
+        if grievance.events and (best is None or grievance.events > best.events):
+            best = grievance
+    return best
+
+
+def rest_events(mine: Sequence[Rest], theirs: Sequence[Rest]) -> tuple[RestEvent, ...]:
+    """
+    A worker's rest events against one peer (ADR 0048): both sides' rests sorted shortest first, per hour of the
+    shifts around them, and compared in the same places, up to the smaller number of rests
+    :param mine: the worker's rests
+    :param theirs: the peer's rests
+    :return: the events, shortest rest first
+    """
+    def shortest_first(rests: Sequence[Rest]) -> list[Rest]:
+        return sorted(rests, key=lambda rest: (rest.per_hour, rest.before))
+
+    return tuple(RestEvent(own, other, (other.per_hour - own.per_hour) * own.shift_hours)
+                 for own, other in zip(shortest_first(mine), shortest_first(theirs))
+                 if own.per_hour < other.per_hour - EPSILON)
+
+
+def rest_grievance(facts: Sequence[WorkerFacts], worker: int) -> RestGrievance | None:
+    """
+    A worker's rest grievance, against the best-off peer (every worker is a peer): the one giving the most events,
+    then the largest shortfalls (the strongest case), then the first in input order
+    :return: the RestGrievance, or None if the worker has no rest event
+    """
+    best: RestGrievance | None = None
+    best_case: tuple[int, list[float]] = (0, [])
+    for peer, theirs in enumerate(facts):
+        if peer == worker:
+            continue
+        events = rest_events(facts[worker].rests, theirs.rests)
+        case = (len(events), sorted((event.shortfall for event in events), reverse=True))
+        if events and case > best_case:
+            best, best_case = RestGrievance(worker, peer, events), case
+    return best
+
+
+def disliked_events(context: AuditContext, crews: Sequence[tuple[int, ...]],
+                    facts: Sequence[WorkerFacts], worker: int) -> tuple[DislikeEvent, ...]:
+    """Each person a worker dislikes in each of their shifts, in time order (ADR 0049)."""
+    return tuple(DislikeEvent(shift, other) for shift in facts[worker].shifts
+                 for other in sorted(set(crews[shift]) & context.dislikes[worker]))
+
+
+def missing_likes(context: AuditContext, crews: Sequence[tuple[int, ...]], facts: Sequence[WorkerFacts],
+                  worker: int, peer: int) -> LikeGrievance:
+    """
+    A worker's missing likes against one peer (ADR 0049), judged by the worker's own likes applied to the peer's
+    shifts: for each liked person, the peer's shifts with them (apart from both), scaled down to the worker's number
+    of shifts if the peer did more, never up, against the worker's own; each whole pairing more is an event
+    :return: the LikeGrievance (with no events if there's none)
+    """
+    own_shifts, peer_shifts = facts[worker].shifts, facts[peer].shifts
+    scale = min(1.0, len(own_shifts) / len(peer_shifts)) if peer_shifts else 0.0
+    missing = []
+    for person in sorted(context.likes[worker] - {worker, peer}):
+        theirs = tuple(shift for shift in peer_shifts if person in crews[shift])
+        own = sum(1 for shift in own_shifts if person in crews[shift])
+        events = math.floor(len(theirs) * scale - own + EPSILON)
+        if events > 0:
+            missing.append(MissingLike(person, events, own, theirs, len(theirs) * scale))
+    return LikeGrievance(worker, peer, tuple(missing))
+
+
+def like_grievance(context: AuditContext, crews: Sequence[tuple[int, ...]], facts: Sequence[WorkerFacts],
+                   worker: int) -> LikeGrievance | None:
+    """
+    A worker's missing-like grievance, against the best-off peer (every worker can be the peer): the one giving the
+    most events, the first in input order of equals
+    :return: the LikeGrievance, or None if the worker likes nobody or misses no pairing
+    """
+    best: LikeGrievance | None = None
+    if not context.likes[worker]:
+        return None
+    for peer in range(len(facts)):
+        if peer == worker:
+            continue
+        grievance = missing_likes(context, crews, facts, worker, peer)
+        if grievance.events and (best is None or grievance.events > best.events):
+            best = grievance
+    return best
+
+
+def find_grievances(context: AuditContext, assignment: Sequence[int]) -> Grievances:
+    """
+    Every worker's grievances (ADR 0048, ADR 0049)
+    :param context: AuditContext
+    :param assignment: a worker index per slot
+    :return: the Grievances
+    """
+    crews = workers_by_shift(context, assignment)
+    workers = range(len(context.schedule_input.workers))
+    facts = tuple(worker_facts(context, crews, worker) for worker in workers)
+    return Grievances(facts=facts,
+                      load=tuple(load_grievance(context, facts, worker) for worker in workers),
+                      rest=tuple(rest_grievance(facts, worker) for worker in workers),
+                      disliked=tuple(disliked_events(context, crews, facts, worker) for worker in workers),
+                      liked=tuple(like_grievance(context, crews, facts, worker) for worker in workers))
 
 
 # --- easy fixes ---
