@@ -13,7 +13,18 @@ point, not final, but they shape how every later output is read, so the method i
 > again, and set from the user's trade-offs
 > ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md); see
 > [the weight re-check](#the-weight-re-check-2026-11-14)). On 48-hour schedules they hold too, for now
-([the 48-hour check](#the-48-hour-check-2026-11-1516)).
+> ([the 48-hour check](#the-48-hour-check-2026-11-1516)). [Reading the audit](#reading-the-audit), for the audit
+> being rebuilt in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), isn't implemented yet: until step 3,
+> `tools/tune.py` records the old audit's severities.
+
+> [!WARNING]
+> **The audit is being rebuilt** (decided 2026-11-19,
+> [ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and
+> [ADR 0049](../decisions/0049-partners-in-the-audit.md)): a list of grievance events per worker, with no severities
+> and nothing added across kinds. Every result on this page was measured with the audit until then (severities, easy
+> fixes found greedily), so its numbers won't be comparable with the new audit's. The defaults chosen with it
+> ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) stand; the finished stages are audited
+> again in Phase 13, step 4, and if that changes how the choice reads, it's scoring work after Phase 13.
 
 > [!WARNING]
 > **The audit changed on 2026-11-13** (load compared with no exchange rate between shifts and hours, shifts counted in
@@ -32,8 +43,9 @@ which stays below 1/2 ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md))
 ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)). The rest factor $\gamma$ was a sixth until it
 became derived from the input ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)).
 
-The yardstick is the audit, **held fixed**: its own thresholds aren't tuned, or the two would just drift towards each
-other. Since branch and bound gives the proven best schedule for each setting, any difference in the result comes
+The yardstick is the audit, **held fixed**, or the two would just drift towards each other. The audit has no
+thresholds or weights of its own ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md)); the one thing held
+fixed is K, how far its fix search reaches, and results audited with different K aren't compared. Since branch and bound gives the proven best schedule for each setting, any difference in the result comes
 from the parameters, not from search luck.
 
 ## What "better" means
@@ -54,11 +66,49 @@ others, so the evidence is weighed in this order.
    the spread of workers' shortest rests, the gaps in hours and shifts between peers (a one-shift gap is fine where it
    can't be helped, two is an outrage), liked and disliked pairings, and whether the second period still has a legal
    schedule.
-3. **The audit**, by the priorities decided on 2026-11-11: severity with an easy fix (unfairness that could easily
-   have been avoided), then concentration (unfairness shouldn't pile up on one or two workers), then total severity,
-   including complaints with no easy fix, as a tie-breaker.
+3. **The audit**, read as below. (Until 2026-11-19, by the priorities decided on 2026-11-11: severity with an easy
+   fix, then concentration, then total severity.)
 
 The measures aren't collapsed into one number; trade-offs between them are a decision, not a calculation.
+
+### Reading the audit
+
+> [!WARNING]
+> **Not yet implemented** (`tools/tune.py`, Phase 13 step 3). Decided with the user on 2026-11-19, as a first
+> version, to revisit once the new audit's results have been read (Phase 13, step 4).
+
+The audit only observes ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md)); every judgement about what
+matters more is made here, when reading it:
+
+1. **Kinds are never added together.** Load, rest, disliked partners and missing likes are read side by side.
+2. **Within a kind, three measures, in this order** (each a mean over the inputs):
+   1. **The events with a harmless fix:** a nearby schedule was better for someone and worse for nobody, the
+      clearest sign the model chose worse than it could have.
+   2. **The most aggrieved worker's events:** most aggrieved first, evenness being one input among the others, not
+      a rule that overrides them ("evenness first" alone prefers levelling down).
+   3. **All events:** not more grievances than necessary.
+3. **Rest is read in hours short.** Its events have sizes, and with no margin, a rest half an hour shorter than a
+   peer's is an event as much as one four hours shorter, so counts say little. So for rest, the three measures are
+   also taken in hours short (adding to the measures of ADR 0048): in all, the most aggrieved worker's, and those
+   with a harmless fix. Hours added within one kind are one unit, not an exchange rate.
+4. **Dominance first.** A setting no better than another in any measure, and worse in at least one, is dominated,
+   and `tools/tune.py report` lists, for each setting, the settings that dominate it. There's no single ranking.
+5. **Between settings neither of which dominates, the user's rules decide**
+   ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md),
+   [ADR 0049](../decisions/0049-partners-in-the-audit.md)):
+   * load first: a 2-2-4 is "virtually never" acceptable, one worker resting at the minimum twice is;
+   * then rest and disliked partners, a dislike worth about one short rest (an average shift's length of rest
+     less), once per worker;
+   * likes last: a like never stands against load, and against at most one rest event of the same worker.
+
+   These rules are per worker, so they're applied by hand, on the inputs where the two settings' schedules differ,
+   with `tools/tune.py compare A B`: each worker's events, per kind, under both settings, side by side, with no
+   ranking.
+6. **Levelling down is checked outside the audit.** The audit measures fairness only, so everyone resting less, but
+   equally, shows nowhere in it; the [measures that don't come from the audit](#whats-recorded) show it (rests at the
+   minimum, their median, the spread of the shortest rests).
+7. **Liked pairings are read as a total, and worker by worker:** the greedy side of partners, a boon, which the
+   audit gives as a fact on each card, not a grievance.
 
 ## What's recorded
 
@@ -69,7 +119,8 @@ the whole of both (the `day2_` columns). A first period that leaves the second n
 2's `no schedule`: a failure, since in real use the next schedule couldn't be made
 ([future work](future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule)).
 
-Besides the audit's measures, each schedule gets measures that don't come from the audit, over the whole schedule
+Besides the audit's measures (for the new audit, [above](#reading-the-audit), with K and the liked-pairings total),
+each schedule gets measures that don't come from the audit, over the whole schedule
 (both periods for day 2): each rest in available time
 ([ADR 0038](../decisions/0038-rests-count-only-available-time.md)), how many are at or below the minimum rest, their
 median, the spread of the workers' shortest rests, the largest gaps in hours and in shifts between fully available
@@ -129,15 +180,15 @@ stopped and resumed, and `python tools/tune.py status` shows how far along it is
 so after a change to the audit, `python tools/tune.py reaudit STAGE` audits a finished stage again without
 searching again.
 
-1. **Baseline** — the defaults, on every input. Each complaint with an easy fix is then diagnosed by breaking the
-   fixing change's penalty difference down by part: a **parameter** question (e.g. likes weighed too low against
+1. **Baseline** — the defaults, on every input. Each grievance with a harmless fix (until Phase 13, each complaint
+   with an easy fix) is then diagnosed by breaking the fixing change's penalty difference down by part: a **parameter** question (e.g. likes weighed too low against
    rest) is for tuning; a **formula** question (e.g. averaging that rewards concentrating good pairings) is a design
    decision, needing its own ADR, since no parameter setting can fix it.
 2. **Sensitivity** — one parameter at a time over a range, the others at their defaults, on the tuning inputs: which
    parameters matter, and over what range.
 3. **Rounds, by hand** — a few candidate settings at a time, chosen from what the earlier stages showed, run on the
-   tuning inputs, read, and adjusted for the next round, until the complaints stop dropping: the aim is fewer
-   complaints, not none. Each round is its own stage, named on the command line:
+   tuning inputs, read, and adjusted for the next round, until the grievances stop dropping: the aim is fewer
+   grievances, not none. Each round is its own stage, named on the command line:
    `python tools/tune.py round NAME --setting neutral_partner=0.25,shift_share=0.5 --setting ...`, where each setting
    names only the parameters it changes from the defaults (`--setting defaults` is the defaults), and
    `--inputs holdout`, `--inputs confirm` or `--inputs multiday` runs it on the held-back inputs, the confirm tier or
@@ -230,7 +281,10 @@ much faster.
   resting at the minimum costs grows with how far the minimum sits below the schedule's targets, so on the loosest
   inputs a 2-2-4 costs less than one worker resting at the minimum twice
   ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).
-* The easy-fix search is greedy, so severity with an easy fix is slightly noisy; many inputs smooth that out.
+* Until Phase 13, the easy-fix search was greedy, so severity with an easy fix was slightly noisy; the new audit's
+  search is complete up to K changes, so "no fix" beyond K is all it can't say.
+* The audit can't see levelling down, or who's better off than whom by how much beyond the events: those are left
+  to the measures that don't come from it, and to reading cards by hand.
 * The parameters were chosen on 16 to 24 hours, so that branch and bound finishes; the longer tiers check that
   results carry over. Since a period of 24 hours or less is itself the day, load within a day can only be studied on
   the 48-hour tier ([the 48-hour check](#the-48-hour-check-2026-11-1516)), which keeps only inputs searched within 2
