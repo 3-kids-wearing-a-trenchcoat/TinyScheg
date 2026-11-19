@@ -10,7 +10,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
 bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19); Phase 13, a reliable audit, started
-(2026-11-19).
+(2026-11-19; step 1, the decisions, done).
 
 ## Phase 1: Walking skeleton
 
@@ -480,7 +480,7 @@ avoided) is decided where the results are read, in tuning, outside the audit, so
 traced either to the audit describing the schedule wrongly or to how it was read. Where a question has no clear
 answer, the audit asserts only what holds under every reasonable answer.
 
-- [ ] **1. Decide** what the audit is, a group of decisions at a time, each discussed with the user (the options,
+- [x] **1. Decide** what the audit is, a group of decisions at a time, each discussed with the user (the options,
       examples, a recommendation). The decisions depend on each other, so they're taken in this order, going back
       where a later one changes an earlier one; decisions found along the way are added in their place:
     - [x] **Foundations** (decided 2026-11-19): a grievance is an **event** the worker can point to (an extra shift,
@@ -606,9 +606,40 @@ answer, the audit asserts only what holds under every reasonable answer.
       adds to greedy (172 of 609 on the example, 44 of 164 on the tuning schedules). Taken up in the output group:
       how a grievance's transfers are shown; K shown with every claim and recorded in the machine output, and
       comparisons between audits made with different K flagged
-    - [ ] **Output and checking:** what a card shows for each grievance, and whether the audit prints any totals; a
-      machine-readable output, and how far `tools/tune.py`'s report and `tools/audit_sample.py`'s comparison with the
-      penalty are adapted to it; independence from `csp/` and `scoring/`; how the audit is validated
+    - [x] **Output and checking** (decided 2026-11-19): each worker's **card** shows their facts (shifts and hours,
+      availability while a post is staffed, their rests' available part in hours, their partners with counts, and
+      their liked pairings, the boon count), then each event: its kind; what it points to (the extra shifts; the
+      rest, with the shifts around it and who was in them, so that a short rest into a shift with a friend can be
+      seen; the shift and the disliked person; the peer's shift for a missing like); the peer it's measured against,
+      with both sides' facts in natural units; its size where it has one (a rest event's in hours: how much longer it
+      would have to be to match the peer's, for shifts this long); and its smallest harmless fix with its size, or else
+      its transfers, each with exactly what it creates and for whom (all of them, one per line, until reading cards
+      shows that's too long), or else "no fix of up to K changes"; an event wholly in the history says so instead,
+      since no change can reach it. K is printed at the top. The only **totals** are a closing table of counts, per
+      worker (in input order: ranking them would take a rule across kinds) and per kind, each with its events, how
+      many have a harmless fix, how many only transfers and how many no fix within K; nothing is added across kinds,
+      and there are no severities. The audit returns its events, facts and fixes as data; the command line prints
+      the cards, or with `--json` the same as JSON (the standard library's). `tools/tune.py` records for each run,
+      per kind, the events, the most aggrieved worker's events (evenness) and the events with a harmless fix (the
+      clearest sign the model chose worse than it could have), with the liked-pairings total and K, in its CSV in
+      place of the severity columns (each schedule is already stored there, so a full audit can always be rerun;
+      the old stages are audited again in step 4). Its report shows each setting's measures side by side, kind by
+      kind, with the settings it's dominated by (no better in any measure and worse in one), and **no single
+      ranking**: any ranking across kinds is a weighing, done in the reading by the rules step 2 writes on the
+      tuning page (never adding kinds, [ADR 0039](decisions/0039-default-weights-from-the-users-trade-offs.md)'s
+      rules for likes, most aggrieved first), not in a tool; rows audited with different K are flagged, never
+      compared silently. `tools/audit_sample.py` gives the rank correlation of the penalty with each kind's events,
+      and as disagreements the samples best by penalty that still have harmless fixes, by kind. The audit stays
+      **independent** of `csp/` and `scoring/` (it imports `model/`, `parsing/`, `timing/` and the schedule checker,
+      with its own legality check for fixes), so the model never grades itself; `tune.py` and `audit_sample.py` use
+      both, comparing them being their job. **Validated** by a hand-made test for each decision, on inputs small
+      enough to check by hand (a 2-2-3 split gives one load event with transfers only; equal rests give none;
+      levelling down is no fix; the right transfers are dropped; the envy test; peers' load scaled down only); the
+      fix search against brute force (every legal schedule within K changes) on small inputs; identical audits on
+      PyPy and CPython; the finished tuning stages audited again (step 4), with every grievance that appears or
+      disappears explained by a decision, the four seeds found to have fixes, and the time with K = 3 on 48-hour
+      schedules measured; and cards read by hand, a sample of them brought to the user covering each kind,
+      transfers, "no fix" and events in the history
 - [ ] **2. Design:** the decisions as an ADR; the [schedule audit](explanation/schedule-audit.md) and
       [tuning](explanation/tuning.md) pages rewritten to match
 - [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), a hand-made test for each decision, and
