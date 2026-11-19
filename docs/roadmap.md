@@ -520,9 +520,26 @@ answer, the audit asserts only what holds under every reasonable answer.
       the whole schedule (within a day the two line up: a back door to an exchange rate), and 19% were where the work
       fell in time, with as much or less overall (as on `multiday_05`, judged not unfair). What's left, concentration
       in time that no short rest shows, goes to the rest group (a rest judged with the shifts around it)
-    - [ ] **Rest:** the whole gap between two shifts, or only its available part (as in the scoring,
-      [ADR 0038](decisions/0038-rests-count-only-available-time.md)); "short" with no margin, and what "typical" is;
-      a rest judged together with the shifts around it
+    - [x] **Rest** (decided 2026-11-19): a rest is only the **available part** of the time between two shifts, as in
+      the scoring ([ADR 0038](decisions/0038-rests-count-only-available-time.md)): unavailability is neither work nor
+      rest (counted as rest, it would make shifts right around an absence free), and the time between periods counts
+      as unavailable for everyone; the legal minimum rest stays on the clock, a rule of what's legal, not something
+      the audit judges. A rest is judged **with the shifts around it**, as rest per hour of the two shifts
+      (the rest policy of [ADR 0036](decisions/0036-rest-targets-from-the-input-convex-per-worker.md), not a value
+      to tune; with shifts of equal length, just the rest): 6 hours between a 12-hour and a 2-hour shift is shorter
+      than 6 hours between two 2-hour shifts. Rests are compared **against the best-off peer, rest by rest**: each
+      worker's rests sorted shortest first and compared with the peer's in the same places, up to the smaller number
+      of rests, each place where the worker's is shorter an event, with how much shorter as a fact on it; no median,
+      line or margin, so the same rests for everyone give no event however long they are (pairing in any other order
+      would give events even then). Every worker is a peer, with no condition on shifts or availability (rests aren't
+      scaled; they're already measured in available time and per hour of work). Rejected: comparing rests only with
+      peers who did at least as many shifts, to keep an extra shift from also showing as shorter rests; it would leave
+      the worker with the most shifts unmeasured (and one rightly doing more, for being available longer, with no
+      grievance of either kind), would turn a badly rested worker's rest events into one load event when given another
+      shift, and is a claim about cause; the two are separate events, which can happen without each other (3 shifts
+      spread out can rest longer than 2 close together). Also rejected: a short rest as a margin below the typical
+      rest (a cliff, a unit from the schedule with rough edges, against a norm rather than a peer); judging rests
+      against the worker's own load (a worker resting 6 hours would have a grievance against one resting 4)
     - [ ] **Partners:** a disliked partner counted per shared shift or per person; what grievance a missing like is,
       and who takes part
     - [ ] **Easy fixes:** moves and swaps, in the new period only, judged by the audited schedule's own norm; harmless
