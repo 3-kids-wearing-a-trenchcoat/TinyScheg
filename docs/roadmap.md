@@ -540,8 +540,38 @@ answer, the audit asserts only what holds under every reasonable answer.
       spread out can rest longer than 2 close together). Also rejected: a short rest as a margin below the typical
       rest (a cliff, a unit from the schedule with rough edges, against a norm rather than a peer); judging rests
       against the worker's own load (a worker resting 6 hours would have a grievance against one resting 4)
-    - [ ] **Partners:** a disliked partner counted per shared shift or per person; what grievance a missing like is,
-      and who takes part
+    - [x] **Partners** (decided 2026-11-19; the like grievance is the least settled decision so far, below): partners
+      are the workers in the other slots of the same shift, as in the scoring. Here workers can be "more greedy than
+      fair": a disliked partner is a grievance whatever anyone else got, since the aim is none. Each **disliked
+      person in a shift** is an event in itself, with no peer (the line is the worker's own list, not the audit's;
+      against the best-off peer it would be the same whenever anyone was spared, and otherwise would excuse a floor
+      everyone shares); not per person (5 shifts with X would look like 1) or per shift (X and Y in one shift are two
+      events, each with its own fix); the size of the crew doesn't dilute it (the scoring's average over the other
+      slots is the model's pricing); each side's own list counts. A **missing like** is only a grievance against a
+      peer, judged by the worker's **own** likes applied to the peer's shifts ("your shifts would have put me with
+      someone I like more often than mine did", the envy-free test), not by each worker's satisfaction with their own
+      list (which compares the luck of two lists: a worker who likes everyone would make everyone else aggrieved);
+      counted per liked person per shift, the partners in the peer's shift being its other workers apart from both;
+      each event one of the peer's shifts the worker can point to. Every worker can be the peer, and a worker who
+      likes nobody has no like grievance; the peer's count is scaled to the worker's number of shifts, down only, and
+      only whole pairings count (comparing a peer with fewer shifts as they are never invents a grievance for a
+      boon, so unlike load they stay peers, and the worker with the most shifts is measured); the best-off peer is the
+      one giving the most events. Levelling down remains (taking a friend from the peer removes the grievance), as
+      with rest. The liked pairings each worker got (the greedy side, a boon) are a **fact** on the card, not a
+      grievance, and tuning reads them as a total and worker by worker.
+      **Less settled:** the user wasn't entirely convinced likes should be compared against peers. The peer-free
+      versions each fail: every shift without anyone they like mostly measures the input (the worker with the
+      rarest friend is always most aggrieved, and only fewer shifts helps); a liked person on duty at the same time
+      at another post never fires with one post and rewards keeping friends apart in time; "never once with X" is
+      silenced by one pairing; a pairing a harmless change could add makes the grievance depend on the fix search,
+      ruled out at the start. The alternative kept for a revisit is **no like grievance at all**, only the boon count:
+      no easy fixes sought for likes, and the reading left to judge who got the friends. The worry behind the doubt,
+      liked pairings used as an excuse to load a worker, is answered outside the audit, which never nets: in the
+      reading (step 2's tuning page), kinds are never added together, and the rules of
+      [ADR 0039](decisions/0039-default-weights-from-the-users-trade-offs.md) apply, likes weighed last, a like
+      standing against at most one rest event of the same worker and never against load. Taken up in the output
+      group: each rest event showing the shifts around it and who was in them, so that a short rest into a shift
+      with a friend can be seen
     - [ ] **Easy fixes:** moves and swaps, in the new period only, judged by the audited schedule's own norm; harmless
       as nobody getting a new or worse grievance; no cap on the chain, each change narrowing the grievance; how
       thorough the search is (what "no easy fix found" is worth); whether changes that move a grievance to someone
