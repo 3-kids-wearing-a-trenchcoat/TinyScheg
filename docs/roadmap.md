@@ -508,9 +508,18 @@ answer, the audit asserts only what holds under every reasonable answer.
       finding grievances: availability defines what a worker owes, roles only limit what they can do ("a role isn't a
       punishment"), and the fix search shows when nothing could be done. Still missed: a worker available longer,
       against one available much less who did proportionally less
-    - [ ] **Load:** shifts and hours, with no exchange rate; the one-shift tolerance; dropping the 24-hour window, after
-      a lab check of what it catches (cramming, which short rests also show; where the window happens to fall; one
-      heavy day of long shifts)
+    - [x] **Load** (decided 2026-11-19): shifts and hours with no exchange rate, each in proportion to availability: a
+      worker did more than a peer only if more by one measure and no less by the other. Against each peer (scaled down
+      to the worker's availability), each whole extra shift is an event, with no tolerance (in a 2-2-3 split, the
+      worker with 3 has one); an excess in hours is counted in the worker's own shifts, shortest first, so that each
+      event is a shift they can point to (dividing it by their shortest shift, as today, could count more events than
+      they have shifts); where both measures show more, the larger count; the best-off peer is the one giving the most
+      events. The 24-hour window is dropped, after a lab check (2026-11-19: 62 stored tuning schedules longer than 24
+      hours, 1,050 per-day complaints, counted per pair): 42% were by workers who also did more over the whole
+      schedule, 8% had a short rest in that day; 31% came from doing more of one measure and less of the other over
+      the whole schedule (within a day the two line up: a back door to an exchange rate), and 19% were where the work
+      fell in time, with as much or less overall (as on `multiday_05`, judged not unfair). What's left, concentration
+      in time that no short rest shows, goes to the rest group (a rest judged with the shifts around it)
     - [ ] **Rest:** the whole gap between two shifts, or only its available part (as in the scoring,
       [ADR 0038](decisions/0038-rests-count-only-available-time.md)); "short" with no margin, and what "typical" is;
       a rest judged together with the shifts around it
