@@ -105,6 +105,8 @@ nav:
       - 0045 A rest look-ahead: decisions/0045-rest-lookahead.md
       - 0046 Whole-slot sets from each worker's domain: decisions/0046-whole-slot-sets-from-each-workers-own-domain.md
       - 0047 Choosing the role-aware bound: decisions/0047-choosing-the-role-aware-bound.md
+      - 0048 An audit that only observes: decisions/0048-an-audit-that-only-observes.md
+      - 0049 Partners in the audit: decisions/0049-partners-in-the-audit.md
 
 markdown_extensions:
   - admonition

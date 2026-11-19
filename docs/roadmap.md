@@ -640,8 +640,12 @@ answer, the audit asserts only what holds under every reasonable answer.
       disappears explained by a decision, the four seeds found to have fixes, and the time with K = 3 on 48-hour
       schedules measured; and cards read by hand, a sample of them brought to the user covering each kind,
       transfers, "no fix" and events in the history
-- [ ] **2. Design:** the decisions as an ADR; the [schedule audit](explanation/schedule-audit.md) and
-      [tuning](explanation/tuning.md) pages rewritten to match
+- [ ] **2. Design:** the decisions as two ADRs, written 2026-11-19:
+      [ADR 0048](decisions/0048-an-audit-that-only-observes.md) for the audit and
+      [ADR 0049](decisions/0049-partners-in-the-audit.md) for partners, apart so that a revisit of the like grievance,
+      the least settled decision, supersedes only that one; the [schedule audit](explanation/schedule-audit.md) and
+      [tuning](explanation/tuning.md) pages rewritten to match, the reading rules the decisions leave open brought to
+      the user first
 - [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), a hand-made test for each decision, and
       `tools/tune.py` reading its output
 - [ ] **4. Validation:** the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
