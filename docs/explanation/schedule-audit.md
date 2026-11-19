@@ -7,9 +7,9 @@ them. It isn't part of TinyScheg's regular operation.
 > [!IMPORTANT]
 > **Partially implemented.** Decided on 2026-11-19
 > ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md)),
-> and being built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The [grievances](#grievances) are
-> in `tools/audit.py` (`find_grievances`) and tested; the [easy fixes](#easy-fixes), [the report](#the-report) and
-> the tools reading it aren't yet. Until they are, `tools/audit.py` and `tools/audit_sample.py` do what's described
+> and being built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The [grievances](#grievances) and
+> the [easy fixes](#easy-fixes) are in `tools/audit.py` (`find_grievances`, `search_fixes`) and tested; [the
+> report](#the-report) and the tools reading it aren't yet. Until they are, `tools/audit.py` and `tools/audit_sample.py` do what's described
 > under [the audit until Phase 13](#the-audit-until-phase-13). See [Auditing a schedule](../how-to/audit-a-schedule.md)
 > for how to run them.
 

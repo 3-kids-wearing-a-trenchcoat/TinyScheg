@@ -36,6 +36,8 @@ SEVERITY_EPSILON = 1e-9                     # severities closer than this are eq
 SHOWN_DECIMALS = 2                          # decimals shown for hours and severities
 EPSILON = 1e-9                              # hours (and fractions of a shift or a pairing) closer than this are equal:
                                             # they're computed as floats
+DEFAULT_MAX_CHANGES = 3                     # how far the fix search reaches by default (ADR 0048): "no fix" means none
+                                            # of up to this many moves and swaps
 
 WHOLE_PERIOD = "overall"                    # the label of the window covering the whole period
 ANY_DAY = f"in any {DAY_LENGTH / dt.timedelta(hours=1):g} hours"  # the label of load complaints over day windows
@@ -50,6 +52,10 @@ SEPARATE_KINDS = (LIKED_PARTNERS,)
 
 SHORT_REST = "short rest"
 DISLIKED_PARTNER = "disliked partner"
+REST = "rest"                               # the kinds of grievance (ADR 0048, ADR 0049): LOAD, REST, DISLIKED_PARTNER,
+MISSING_LIKE = "missing like"               # MISSING_LIKE
+LARGER_REST = "larger rest event"           # what a fix creates when it makes a worker's rest event larger
+NO_PERSON = -1                              # the person of a grievance that isn't about one (load, rest)
 STRAW_KINDS = (SHORT_REST, DISLIKED_PARTNER)  # a day's load isn't a straw: load complaints already measure it
 
 EXIT_SUCCESS = 0
@@ -781,6 +787,320 @@ def find_grievances(context: AuditContext, assignment: Sequence[int]) -> Grievan
                       rest=tuple(rest_grievance(facts, worker) for worker in workers),
                       disliked=tuple(disliked_events(context, crews, facts, worker) for worker in workers),
                       liked=tuple(like_grievance(context, crews, facts, worker) for worker in workers))
+
+
+# --- easy fixes as nearby schedules (ADR 0048) ---
+
+GrievanceKey = tuple[str, int, int]  # (kind, worker, person); the person is NO_PERSON for load and rest
+
+
+@dataclass(frozen=True, slots=True)
+class Standing:
+    """
+    What fixes are judged on, for one schedule: how many events each grievance has, by GrievanceKey; each worker's
+    rest shortfalls, largest first; and each worker's shifts, hours, rests per hour of the shifts around them
+    (shortest first) and shifts shared with each other worker
+    """
+    events: dict[GrievanceKey, int]
+    shortfalls: tuple[tuple[float, ...], ...]
+    shifts: tuple[int, ...]
+    hours: tuple[float, ...]
+    rests: tuple[tuple[float, ...], ...]
+    partners: tuple[dict[int, int], ...]
+
+
+def standing(grievances: Grievances) -> Standing:
+    """The Standing of a schedule, from its Grievances."""
+    events: dict[GrievanceKey, int] = {}
+    for worker, load in enumerate(grievances.load):
+        if load is not None:
+            events[(LOAD, worker, NO_PERSON)] = load.events
+    for worker, rest in enumerate(grievances.rest):
+        if rest is not None:
+            events[(REST, worker, NO_PERSON)] = len(rest.events)
+    for worker, disliked in enumerate(grievances.disliked):
+        for event in disliked:
+            key = (DISLIKED_PARTNER, worker, event.person)
+            events[key] = events.get(key, 0) + 1
+    for worker, liked in enumerate(grievances.liked):
+        for missing in liked.missing if liked is not None else ():
+            events[(MISSING_LIKE, worker, missing.person)] = missing.events
+    return Standing(
+        events=events,
+        shortfalls=tuple(tuple(sorted((event.shortfall for event in rest.events), reverse=True)) if rest else ()
+                         for rest in grievances.rest),
+        shifts=tuple(len(facts.shifts) for facts in grievances.facts),
+        hours=tuple(facts.hours for facts in grievances.facts),
+        rests=tuple(tuple(sorted(rest.per_hour for rest in facts.rests)) for facts in grievances.facts),
+        partners=tuple(facts.partners for facts in grievances.facts))
+
+
+def better_off(key: GrievanceKey, before: Standing, after: Standing) -> bool:
+    """
+    True if the worker of a grievance is better off in its kind's own terms (ADR 0048): worse in none of its facts and
+    better in at least one, so that making the peer worse off (levelling down) is no fix
+    :param key: the grievance
+    :param before: the audited schedule's Standing
+    :param after: the nearby schedule's Standing
+    :return: for load, no more shifts and no more hours, and fewer of one; for rest, the new rests compared with the
+    old as with a peer's (shortest first, up to the smaller number), none shorter and at least one longer; for a
+    disliked partner, a shift fewer with them; for a missing like, a shift more with them
+    """
+    kind, worker, person = key
+    if kind == LOAD:
+        shifts, worked = after.shifts[worker] - before.shifts[worker], after.hours[worker] - before.hours[worker]
+        return shifts <= 0 and worked <= EPSILON and (shifts < 0 or worked < -EPSILON)
+    if kind == REST:
+        places = list(zip(after.rests[worker], before.rests[worker]))
+        return (all(new >= old - EPSILON for new, old in places)
+                and any(new > old + EPSILON for new, old in places))
+    shared_before, shared_after = before.partners[worker].get(person, 0), after.partners[worker].get(person, 0)
+    return shared_after < shared_before if kind == DISLIKED_PARTNER else shared_after > shared_before
+
+
+def created_by(before: Standing, after: Standing) -> tuple[tuple[GrievanceKey, int], ...]:
+    """
+    What a nearby schedule creates, for anyone: each grievance with more events (how many more), and a LARGER_REST
+    for each worker with a rest event larger than the one in its place before, both sorted largest first
+    :return: the created grievances, sorted; empty if the nearby schedule is harmless
+    """
+    created = {key: count - before.events.get(key, 0) for key, count in after.events.items()
+               if count > before.events.get(key, 0)}
+    for worker, (old, new) in enumerate(zip(before.shortfalls, after.shortfalls)):
+        if any(larger > smaller + EPSILON for smaller, larger in zip(old, new)):
+            created[(LARGER_REST, worker, NO_PERSON)] = 1
+    return tuple(sorted(created.items()))
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    """One change, a move (one slot) or a swap (two): the slots, the workers they go to, and those they come from."""
+    slots: tuple[int, ...]
+    workers: tuple[int, ...]
+    previous: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NearbyFix:
+    """
+    A nearby schedule that removes some of a grievance's events with its worker better off: the changes that reach
+    it, how many events it removes, and what it creates (harmless if nothing)
+    """
+    steps: tuple[Step, ...]
+    removes: int
+    creates: tuple[tuple[GrievanceKey, int], ...]
+
+    @property
+    def harmless(self) -> bool:
+        """True if the fix creates nothing for anyone."""
+        return not self.creates
+
+
+@dataclass(frozen=True, slots=True)
+class FixesFound:
+    """A grievance's smallest harmless fix, if one was found, and otherwise the transfers no other one dominates."""
+    harmless: NearbyFix | None
+    transfers: tuple[NearbyFix, ...]
+
+
+def includes(larger: Sequence[tuple[GrievanceKey, int]], smaller: Sequence[tuple[GrievanceKey, int]]) -> bool:
+    """True if one set of created grievances (with counts) includes another."""
+    counts = dict(larger)
+    return all(count <= counts.get(key, 0) for key, count in smaller)
+
+
+def keep_undominated(transfers: list[NearbyFix], transfer: NearbyFix) -> None:
+    """
+    Add a transfer to a grievance's list unless another creates a subset of what it creates with no more changes, and
+    drop those it dominates in turn (a set comparison, not an exchange rate)
+    :param transfers: the list, changed in place
+    :param transfer: NearbyFix
+    """
+    if any(includes(transfer.creates, other.creates) and len(other.steps) <= len(transfer.steps)
+           for other in transfers):
+        return
+    transfers[:] = [other for other in transfers
+                    if not (includes(other.creates, transfer.creates) and len(transfer.steps) <= len(other.steps))]
+    transfers.append(transfer)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchSpace:
+    """
+    What the fix search needs about an input: the slots fixes may change (the new period's), who may take each slot
+    (role and availability), every slot's time and shift, and the minimum rest
+    """
+    changeable: tuple[int, ...]
+    eligible: tuple[tuple[int, ...], ...]
+    times: tuple[DateTimeRange, ...]
+    shift_of: tuple[int, ...]
+    min_rest: dt.timedelta
+
+
+def search_space(context: AuditContext) -> SearchSpace:
+    """The SearchSpace of an input."""
+    workers = context.schedule_input.workers
+    return SearchSpace(
+        changeable=tuple(range(context.fixed_slots, len(context.slots))),
+        eligible=tuple(tuple(index for index, worker in enumerate(workers)
+                             if worker.has_role(slot.role) and worker.is_available(slot.time))
+                       for slot in context.slots),
+        times=tuple(slot.time for slot in context.slots),
+        shift_of=tuple(slot.shift_index for slot in context.slots),
+        min_rest=context.schedule_input.settings.min_rest)
+
+
+def too_close(space: SearchSpace, first: int, second: int) -> bool:
+    """True if one worker can't hold both slots: they overlap, are back to back or are closer than the minimum rest."""
+    one, other = space.times[first], space.times[second]
+    rest = max(other.start - one.end, one.start - other.end)  # negative if they overlap
+    return rest <= dt.timedelta(0) or rest < space.min_rest
+
+
+Conflict = tuple[int, int]  # two slots one worker holds too close together, the lower index first
+
+
+def clashes(space: SearchSpace, own: set[int], slot: int, given_away: int | None = None) -> list[Conflict]:
+    """The slots a worker holds (but the one they give away) that would be too close to a slot they receive."""
+    return [(min(slot, other), max(slot, other)) for other in own
+            if other != given_away and too_close(space, slot, other)]
+
+
+def changes_from(space: SearchSpace, current: Sequence[int], own: Sequence[set[int]],
+                 moving: Sequence[int] | None = None) -> Iterator[tuple[Step, list[Conflict]]]:
+    """
+    Every move and swap from a schedule that gives each slot it changes to a worker with its role and available then,
+    with the conflicts it leaves the workers receiving slots with
+    :param space: SearchSpace
+    :param current: the schedule, a worker per slot
+    :param own: each worker's slots in it
+    :param moving: if given, only the changes that move one of these slots
+    :return: (the Step, its conflicts), moves before swaps, in stable slot and worker order
+    """
+    slots = space.changeable if moving is None else moving
+    for slot in slots:
+        holder = current[slot]
+        for worker in space.eligible[slot]:
+            if worker != holder:
+                yield Step((slot,), (worker,), (holder,)), clashes(space, own[worker], slot)
+    moving_set = set(slots)
+    for first in slots:
+        for second in space.changeable:
+            if second == first or (second in moving_set and second < first):
+                continue  # each pair once
+            one, other = current[first], current[second]
+            if (one == other or space.shift_of[first] == space.shift_of[second]
+                    or other not in space.eligible[first] or one not in space.eligible[second]):
+                continue
+            low, high = (first, second) if first < second else (second, first)
+            yield (Step((low, high), (current[high], current[low]), (current[low], current[high])),
+                   clashes(space, own[other], first, second) + clashes(space, own[one], second, first))
+
+
+def one_change_resolves(conflicts: frozenset[Conflict]) -> bool:
+    """True if a single change, moving at most two slots, could resolve every conflict: two slots cover them all."""
+    slots = sorted({slot for conflict in conflicts for slot in conflict})
+    return any(all(first in conflict or second in conflict for conflict in conflicts)
+               for first, second in itertools.combinations_with_replacement(slots, 2))
+
+
+@dataclass(frozen=True, slots=True)
+class _State:
+    """A schedule the search reached: how it differs from the audited one, the changes that first reached it, and
+    the conflicts it leaves (none if it's legal)."""
+    diff: dict[int, int]
+    steps: tuple[Step, ...]
+    conflicts: frozenset[Conflict]
+
+
+def nearby_schedules(context: AuditContext, assignment: Sequence[int],
+                     max_changes: int) -> Iterator[tuple[tuple[Step, ...], tuple[int, ...]]]:
+    """
+    Every legal schedule within max_changes moves and swaps of a legal schedule, in the new period only, each once,
+    the fewest changes first. Only the nearby schedule must be legal: a change may leave a worker holding two slots too
+    close together if the next change resolves it, so that two workers can trade shifts neither could take alone.
+    Every slot is always given to a worker with its role and available then.
+    :param context: AuditContext
+    :param assignment: the audited schedule, a worker per slot
+    :param max_changes: how many changes at most
+    :return: (the changes that first reached it, the nearby schedule), in breadth-first order
+    """
+    space = search_space(context)
+    workers = len(context.schedule_input.workers)
+    seen: set[frozenset[tuple[int, int]]] = {frozenset()}
+    level = [_State({}, (), frozenset())]
+    for depth in range(1, max_changes + 1):
+        next_level: list[_State] = []
+        for state in level:
+            current = list(assignment)
+            for slot, worker in state.diff.items():
+                current[slot] = worker
+            own: list[set[int]] = [set() for _ in range(workers)]
+            for slot, worker in enumerate(current):
+                own[worker].add(slot)
+            moving = sorted({slot for conflict in state.conflicts for slot in conflict}) if state.conflicts else None
+            for step, new_conflicts in changes_from(space, current, own, moving):
+                conflicts = frozenset(conflict for conflict in state.conflicts
+                                      if conflict[0] not in step.slots and conflict[1] not in step.slots)
+                conflicts |= frozenset(new_conflicts)
+                if conflicts and (state.conflicts or depth == max_changes or not one_change_resolves(conflicts)):
+                    continue  # a conflict must be resolved by the next change, within max_changes
+                diff = dict(state.diff)
+                for slot, worker in zip(step.slots, step.workers):
+                    if worker == assignment[slot]:
+                        diff.pop(slot, None)
+                    else:
+                        diff[slot] = worker
+                key = frozenset(diff.items())
+                if key in seen:
+                    continue
+                seen.add(key)
+                reached = _State(diff, state.steps + (step,), conflicts)
+                if depth < max_changes:
+                    next_level.append(reached)
+                if not conflicts:
+                    nearby = list(current)
+                    for slot, worker in zip(step.slots, step.workers):
+                        nearby[slot] = worker
+                    yield reached.steps, tuple(nearby)
+        level = next_level
+
+
+def search_fixes(context: AuditContext, assignment: Sequence[int], grievances: Grievances,
+                 max_changes: int = DEFAULT_MAX_CHANGES) -> dict[GrievanceKey, FixesFound]:
+    """
+    Search every nearby schedule up to max_changes changes for fixes (ADR 0048), each audited afresh and compared
+    with the audited schedule, worker by worker and kind by kind: for each grievance, the smallest harmless fix, or
+    else the transfers no other one dominates. Stops once every grievance has a harmless fix, as nothing further
+    could be reported.
+    :param context: AuditContext
+    :param assignment: the audited schedule, which must be legal
+    :param grievances: its Grievances
+    :param max_changes: how far the search reaches; 0 turns it off
+    :return: the fixes found for each grievance with events, by GrievanceKey; empty if max_changes is 0
+    """
+    before = standing(grievances)
+    keys = sorted(key for key, count in before.events.items() if count > 0)
+    if max_changes <= 0:
+        return {}
+    harmless: dict[GrievanceKey, NearbyFix] = {}
+    transfers: dict[GrievanceKey, list[NearbyFix]] = {key: [] for key in keys}
+    for steps, nearby in nearby_schedules(context, assignment, max_changes) if keys else ():
+        if len(harmless) == len(keys):
+            break
+        after = standing(find_grievances(context, nearby))
+        creates = created_by(before, after)
+        for key in keys:
+            removed = before.events[key] - after.events.get(key, 0)
+            if key in harmless or removed <= 0 or not better_off(key, before, after):
+                continue
+            fix = NearbyFix(steps, removed, creates)
+            if fix.harmless:
+                harmless[key] = fix
+                transfers[key] = [other for other in transfers[key] if len(other.steps) < len(steps)]
+            else:
+                keep_undominated(transfers[key], fix)
+    return {key: FixesFound(harmless.get(key), tuple(transfers[key])) for key in keys}
 
 
 # --- easy fixes ---

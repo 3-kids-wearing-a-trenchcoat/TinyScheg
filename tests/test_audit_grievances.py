@@ -1,4 +1,4 @@
-"""Tests for the audit's grievances (tools/audit.py, ADR 0048 and ADR 0049), on hand-built schedules, one per decision."""
+"""Tests for the audit's grievances (tools/audit.py, ADR 0048 and ADR 0049), on hand-built schedules."""
 import datetime as dt
 
 import pytest
