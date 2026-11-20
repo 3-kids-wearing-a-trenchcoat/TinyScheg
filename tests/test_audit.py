@@ -329,7 +329,8 @@ def test_command_line(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     if illegal:
         assert "breaks hard constraints" in captured.err
     else:
-        assert captured.out.startswith(f"{schedule_input.workers[0].name}: ") and "concentration:" in captured.out
+        assert captured.out.startswith("fixes searched up to 3 changes\n\n"
+                                       f"{schedule_input.workers[0].name}: ") and "events by kind" in captured.out
 
 
 # --- with a history (ADR 0031) ---

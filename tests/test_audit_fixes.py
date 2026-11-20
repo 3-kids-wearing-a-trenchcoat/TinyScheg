@@ -132,10 +132,29 @@ def test_better_off_in_load_is_no_more_shifts_or_hours_and_fewer_of_one() -> Non
     assert not better_off((LOAD, 0, NO_PERSON), before, standing_of((3, 2), ((), ())))
 
 
-def test_a_larger_rest_event_is_created_even_with_no_more_events() -> None:
+def test_a_larger_rest_event_is_created_with_a_shorter_rest_even_with_no_more_events() -> None:
     before = Standing({}, ((2.0, 1.0),), (3,), (9.0,), ((1.0, 2.0),), ({},))
-    after = Standing({}, ((2.5,),), (3,), (9.0,), ((1.0, 2.0),), ({},))
+    after = Standing({}, ((2.5,),), (3,), (9.0,), ((0.8, 2.0),), ({},))
     assert created_by(before, after) == ((("larger rest event", 0, NO_PERSON), 1),)
+
+
+def test_a_grievance_grown_only_because_a_peer_is_better_off_is_not_created() -> None:
+    # Bob's rests and shifts are as they were; his rest event grew, and he has a new load event, only because the peer
+    # he's measured against now rests longer and works less (ADR 0050)
+    before = Standing({(REST, 1, NO_PERSON): 1}, ((), (1.0,)), (3, 2), (6.0, 4.0), ((3.0, 3.0), (2.0,)), ({}, {}))
+    after = Standing({(REST, 1, NO_PERSON): 2, (LOAD, 1, NO_PERSON): 1}, ((), (2.0, 0.5)), (2, 2), (4.0, 4.0),
+                     ((6.0,), (2.0,)), ({}, {}))
+    assert created_by(before, after) == ()
+
+
+def test_a_shift_given_to_a_worker_who_had_fewer_harms_nobody() -> None:
+    context = make_context([Worker("Anne"), Worker("Bob"), Worker("Cy")],
+                           (Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 1),))),), 24)
+    assignment = (ANNE, BOB, ANNE, BOB, ANNE, CY)  # 3, 2 and 1 shifts, every rest 4 hours, nobody back to back
+    found = fixes_for(context, assignment)[(LOAD, ANNE, NO_PERSON)]
+    # Anne's 00:00 to Cy leaves everyone with 2 shifts: Cy works more but has no new grievance, and Anne's and Bob's
+    # 4-hour rests now fall short of Cy's 16 only because Cy rests longer (ADR 0050), so it's harmless
+    assert found.harmless == NearbyFix((Step((0,), (CY,), (ANNE,)),), 2, ())
 
 
 def fix_of(size: int, *created: GrievanceKey) -> NearbyFix:

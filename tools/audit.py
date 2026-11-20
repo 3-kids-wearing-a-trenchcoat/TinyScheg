@@ -8,12 +8,14 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import itertools
+import json
 import math
 import pathlib
 import statistics
 import sys
 from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
+from typing import Any
 from dataclasses import dataclass, replace
 
 from schedule_checker import hard_constraint_violations
@@ -58,6 +60,8 @@ LARGER_REST = "larger rest event"           # what a fix creates when it makes a
 NO_PERSON = -1                              # the person of a grievance that isn't about one (load, rest)
 STRAW_KINDS = (SHORT_REST, DISLIKED_PARTNER)  # a day's load isn't a straw: load complaints already measure it
 
+JSON_INDENT = 2                             # the indentation of the JSON report
+
 EXIT_SUCCESS = 0
 EXIT_ILLEGAL = 1  # the schedule breaks a hard constraint, so there's nothing to audit
 EXIT_USAGE = 2    # invalid arguments, or the files couldn't be read or don't match
@@ -95,6 +99,7 @@ class AuditContext:
     fixed_slots: int = 0
     staffed_availability: tuple[float, ...] = ()           # per worker: hours available while a post is staffed
     away: tuple[tuple[DateTimeRange, ...], ...] = ()        # per worker: when they could neither work nor rest
+    staffed_total: float = 0.0                              # the hours when at least one post is staffed
 
 
 def hours(length: dt.timedelta) -> float:
@@ -242,7 +247,8 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
         fixed_slots=fixed_slots,
         staffed_availability=tuple(staffed_hours(staffed, periods, index)
                                    for index in range(len(schedule_input.workers))),
-        away=tuple(away_times(periods, index) for index in range(len(schedule_input.workers))))
+        away=tuple(away_times(periods, index) for index in range(len(schedule_input.workers))),
+        staffed_total=math.fsum(hours(time.duration) for time in staffed))
 
 
 def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
@@ -858,10 +864,32 @@ def better_off(key: GrievanceKey, before: Standing, after: Standing) -> bool:
     return shared_after < shared_before if kind == DISLIKED_PARTNER else shared_after > shared_before
 
 
+def worse_off(key: GrievanceKey, before: Standing, after: Standing) -> bool:
+    """
+    True if a worker's own situation in a grievance's kind got worse (ADR 0050), whatever happened to anyone else
+    :param key: the grievance (a LARGER_REST counts as rest)
+    :param before: the audited schedule's Standing
+    :param after: the nearby schedule's Standing
+    :return: for load, more shifts or more hours; for rest, more rests than before, or a rest shorter than the one in
+    its place before (both sorted shortest first, per hour of the shifts around them); for a disliked partner, more
+    shifts with them; for a missing like, fewer shifts with them
+    """
+    kind, worker, person = key
+    if kind == LOAD:
+        return after.shifts[worker] > before.shifts[worker] or after.hours[worker] > before.hours[worker] + EPSILON
+    if kind in (REST, LARGER_REST):
+        old, new = before.rests[worker], after.rests[worker]
+        return len(new) > len(old) or any(shorter < place - EPSILON for shorter, place in zip(new, old))
+    shared_before, shared_after = before.partners[worker].get(person, 0), after.partners[worker].get(person, 0)
+    return shared_after > shared_before if kind == DISLIKED_PARTNER else shared_after < shared_before
+
+
 def created_by(before: Standing, after: Standing) -> tuple[tuple[GrievanceKey, int], ...]:
     """
-    What a nearby schedule creates, for anyone: each grievance with more events (how many more), and a LARGER_REST
-    for each worker with a rest event larger than the one in its place before, both sorted largest first
+    What a nearby schedule creates (ADR 0050): for each worker, each grievance with more events (how many more), and
+    a LARGER_REST if a rest event of theirs is larger than the one in its place before (both sorted largest first),
+    where their own situation in that kind got worse too; a grievance that grows only because someone else is better
+    off (a new best-off peer) isn't created by the change
     :return: the created grievances, sorted; empty if the nearby schedule is harmless
     """
     created = {key: count - before.events.get(key, 0) for key, count in after.events.items()
@@ -869,7 +897,7 @@ def created_by(before: Standing, after: Standing) -> tuple[tuple[GrievanceKey, i
     for worker, (old, new) in enumerate(zip(before.shortfalls, after.shortfalls)):
         if any(larger > smaller + EPSILON for smaller, larger in zip(old, new)):
             created[(LARGER_REST, worker, NO_PERSON)] = 1
-    return tuple(sorted(created.items()))
+    return tuple(sorted((key, count) for key, count in created.items() if worse_off(key, before, after)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1457,14 +1485,315 @@ def describe_summary(context: AuditContext, summary: AuditSummary) -> str:
     ])
 
 
+# --- the report of grievances (ADR 0048, ADR 0049) ---
+
+KIND_ORDER = (LOAD, REST, DISLIKED_PARTNER, MISSING_LIKE)  # the order kinds are listed in, never added together
+HISTORY_MARK = " (in the history)"                          # after an event no change can reach
+
+
+@dataclass(frozen=True, slots=True)
+class GrievanceReport:
+    """
+    A schedule's audit: its grievances, the fixes found for each (empty if the search was off), and how far the
+    search reached (0 if it was off)
+    """
+    grievances: Grievances
+    fixes: dict[GrievanceKey, FixesFound]
+    max_changes: int
+
+
+def report_grievances(context: AuditContext, assignment: Sequence[int],
+                      max_changes: int = DEFAULT_MAX_CHANGES) -> GrievanceReport:
+    """
+    Audit a schedule: every worker's grievances, and the fixes for them within max_changes changes
+    :param context: AuditContext
+    :param assignment: a worker index per slot, which must be legal
+    :param max_changes: how far the fix search reaches; 0 turns it off
+    :return: the GrievanceReport
+    """
+    grievances = find_grievances(context, assignment)
+    return GrievanceReport(grievances, search_fixes(context, assignment, grievances, max_changes), max_changes)
+
+
+def in_history(context: AuditContext, shift: int) -> bool:
+    """True if a shift (by index) is in the history, which no fix may change."""
+    return context.shifts[shift].slots[0].index < context.fixed_slots
+
+
+def plural(count: int | float, word: str, words: str | None = None) -> str:
+    """A count with its noun, e.g. '1 shift', '2 shifts'."""
+    return f"{shown(count)} {word if count == 1 else (words or word + 's')}"
+
+
+def describe_step(context: AuditContext, step: Step) -> str:
+    """A change for the report, e.g. 'give Bob Anne's gate 2025-01-01 04:00–08:00'."""
+    names = [worker.name for worker in context.schedule_input.workers]
+    shifts = [describe_shift(context.shifts[context.slots[slot].shift_index]) for slot in step.slots]
+    if len(step.slots) == 1:
+        return f"give {names[step.workers[0]]} {names[step.previous[0]]}'s {shifts[0]}"
+    return f"swap {names[step.previous[0]]}'s {shifts[0]} with {names[step.previous[1]]}'s {shifts[1]}"
+
+
+def describe_created(context: AuditContext, created: Sequence[tuple[GrievanceKey, int]]) -> str:
+    """What a transfer creates, e.g. 'Bob: 1 extra shift; Cy: 1 more shift with Dana, whom they dislike'."""
+    names = [worker.name for worker in context.schedule_input.workers]
+    parts: dict[int, list[str]] = {}
+    for (kind, worker, person), count in created:
+        if kind == LOAD:
+            what = plural(count, "extra shift")
+        elif kind == REST:
+            what = plural(count, "more rest", "more rests") + " shorter than a peer's"
+        elif kind == LARGER_REST:
+            what = "a rest further short of a peer's"
+        elif kind == DISLIKED_PARTNER:
+            what = f"{plural(count, 'more shift')} with {names[person]}, whom they dislike"
+        else:
+            what = f"{plural(count, 'more missed pairing')} with {names[person]}, whom they like"
+        parts.setdefault(worker, []).append(what)
+    return "; ".join(f"{names[worker]}: {', '.join(whats)}" for worker, whats in parts.items())
+
+
+def describe_fixes(context: AuditContext, found: FixesFound | None, max_changes: int,
+                   wholly_in_history: bool) -> list[str]:
+    """
+    The lines about a grievance's fixes: its smallest harmless fix, else its transfers (fewest changes first), else no
+    fix within max_changes; for a grievance wholly in the history, that no change can reach it; nothing if the search
+    was off
+    """
+    if wholly_in_history:
+        return ["in the history: no change can reach it"]
+    if max_changes <= 0 or found is None:
+        return []
+    if found.harmless is not None:
+        fix = found.harmless
+        return [f"harmless fix ({plural(len(fix.steps), 'change')}, removes {plural(fix.removes, 'event')}): "
+                + "; ".join(describe_step(context, step) for step in fix.steps)]
+    if found.transfers:
+        lines = ["transfers, each removing events but creating others:"]
+        for fix in sorted(found.transfers, key=lambda fix: (len(fix.steps), fix.creates)):
+            lines.append(f"  {plural(len(fix.steps), 'change')}, removes {plural(fix.removes, 'event')}: "
+                         + "; ".join(describe_step(context, step) for step in fix.steps)
+                         + f" -> {describe_created(context, fix.creates)}")
+        return lines
+    return [f"no fix of up to {plural(max_changes, 'change')}"]
+
+
+@dataclass(frozen=True, slots=True)
+class CardEntry:
+    """One grievance on a card: its key, its heading, a line per event, how many events it has and how many of
+    them lie wholly in the history."""
+    key: GrievanceKey
+    heading: str
+    event_lines: tuple[str, ...]
+    events: int
+    in_history: int
+
+
+def describe_rest(context: AuditContext, crews: Sequence[tuple[int, ...]], worker: int, rest: Rest) -> str:
+    """A rest for the report, with the shifts around it and who else was in them."""
+    names = [w.name for w in context.schedule_input.workers]
+
+    def shift_with(shift: int) -> str:
+        others = [names[other] for other in crews[shift] if other != worker]
+        return describe_shift(context.shifts[shift]) + (f" (with {', '.join(others)})" if others else "")
+    return f"{shown(rest.hours)} h, between {shift_with(rest.before)} and {shift_with(rest.after)}"
+
+
+def card_entries(context: AuditContext, crews: Sequence[tuple[int, ...]], grievances: Grievances,
+                 worker: int) -> list[CardEntry]:
+    """A worker's grievances for their card, kind by kind."""
+    names = [w.name for w in context.schedule_input.workers]
+    facts = grievances.facts[worker]
+    entries = []
+    load = grievances.load[worker]
+    if load is not None:
+        scaled = (f", scaled to {names[worker]}'s availability: {shown(load.peer_shifts)}, {shown(load.peer_hours)} h"
+                  if grievances.facts[load.peer].availability > facts.availability + EPSILON else "")
+        peer = grievances.facts[load.peer]
+        entries.append(CardEntry(
+            (LOAD, worker, NO_PERSON),
+            f"load: {plural(load.events, 'extra shift')} ({plural(len(facts.shifts), 'shift')}, "
+            f"{shown(facts.hours)} h; against {names[load.peer]}'s {plural(len(peer.shifts), 'shift')}, "
+            f"{shown(peer.hours)} h{scaled})",
+            (), load.events, 0))
+    rest = grievances.rest[worker]
+    if rest is not None:
+        past = [in_history(context, event.rest.before) and in_history(context, event.rest.after)
+                for event in rest.events]
+        lines = tuple(f"{describe_rest(context, crews, worker, event.rest)}: {shown(event.shortfall)} h short, for "
+                      f"shifts averaging {shown(event.rest.shift_hours)} h, of {names[rest.peer]}'s "
+                      f"{shown(event.peer_rest.hours)} h in its place, between shifts averaging "
+                      f"{shown(event.peer_rest.shift_hours)} h" + (HISTORY_MARK if wholly_past else "")
+                      for event, wholly_past in zip(rest.events, past))
+        entries.append(CardEntry((REST, worker, NO_PERSON),
+                                 f"rest: {plural(len(rest.events), 'rest')} shorter than {names[rest.peer]}'s",
+                                 lines, len(rest.events), sum(past)))
+    for person in sorted({event.person for event in grievances.disliked[worker]}):
+        shifts = [event.shift for event in grievances.disliked[worker] if event.person == person]
+        lines = tuple(describe_shift(context.shifts[shift]) + (HISTORY_MARK if in_history(context, shift) else "")
+                      for shift in shifts)
+        entries.append(CardEntry((DISLIKED_PARTNER, worker, person),
+                                 f"disliked partner: {names[person]}, in {plural(len(shifts), 'shift')}", lines,
+                                 len(shifts), sum(1 for shift in shifts if in_history(context, shift))))
+    liked = grievances.liked[worker]
+    for missing in liked.missing if liked is not None else ():
+        peer = liked.peer
+        scaled = (f", scaled to {names[worker]}'s {plural(len(facts.shifts), 'shift')}: {shown(missing.peer_scaled)}"
+                  if len(grievances.facts[peer].shifts) > len(facts.shifts) else "")
+        entries.append(CardEntry(
+            (MISSING_LIKE, worker, missing.person),
+            f"missing like: {names[missing.person]}, {plural(missing.events, 'pairing')} missed ({names[peer]} had "
+            f"{plural(len(missing.peer_shifts), 'shift')} with them{scaled}; {names[worker]} had {shown(missing.own)})",
+            (f"{names[peer]}'s shifts with {names[missing.person]}: "
+             + ", ".join(describe_shift(context.shifts[shift]) for shift in missing.peer_shifts),),
+            missing.events, 0))
+    return entries
+
+
+def grievance_card(context: AuditContext, crews: Sequence[tuple[int, ...]], report: GrievanceReport,
+                   worker: int) -> str:
+    """
+    One worker's card: their facts, then each grievance with its events and fixes
+    :param context: AuditContext
+    :param crews: every shift's workers
+    :param report: GrievanceReport
+    :param worker: the worker's index
+    :return: the card, as lines of text
+    """
+    names = [w.name for w in context.schedule_input.workers]
+    facts = report.grievances.facts[worker]
+    rests = ", ".join(f"{shown(rest.hours)} h" for rest in facts.rests) or "none"
+    partners = ", ".join(f"{names[other]} ×{count}" for other, count in sorted(facts.partners.items())) or "none"
+    lines = [f"{names[worker]}: {plural(len(facts.shifts), 'shift')}, {shown(facts.hours)} h; available "
+             f"{shown(facts.availability)} h (of {shown(context.staffed_total)} h with a post staffed)",
+             f"  rests: {rests}",
+             f"  partners: {partners}; liked pairings: {facts.liked_pairings}"]
+    entries = card_entries(context, crews, report.grievances, worker)
+    lines.append("  grievances:" if entries else "  grievances: none")
+    for entry in entries:
+        lines.append(f"    - {entry.heading}")
+        lines += [f"        {line}" for line in entry.event_lines]
+        lines += [f"      {line}" for line in describe_fixes(context, report.fixes.get(entry.key), report.max_changes,
+                                                             0 < entry.events == entry.in_history)]
+    return "\n".join(lines)
+
+
+FixCounts = dict[str, int]  # events, harmless, transfers, none, history
+
+
+def tally(context: AuditContext, crews: Sequence[tuple[int, ...]],
+          report: GrievanceReport) -> list[dict[str, FixCounts]]:
+    """
+    Each worker's events by kind: how many, and how many of them belong to a grievance with a harmless fix, with only
+    transfers, or with no fix within the reach, and how many lie wholly in the history (whose fixes don't count)
+    :return: per worker, in input order, the counts per kind
+    """
+    result = []
+    for worker in range(len(context.schedule_input.workers)):
+        counts = {kind: {"events": 0, "harmless": 0, "transfers": 0, "none": 0, "history": 0} for kind in KIND_ORDER}
+        for entry in card_entries(context, crews, report.grievances, worker):
+            cell = counts[entry.key[0]]
+            cell["events"] += entry.events
+            cell["history"] += entry.in_history
+            found = report.fixes.get(entry.key)
+            if report.max_changes > 0 and found is not None:
+                reachable = entry.events - entry.in_history
+                category = "harmless" if found.harmless else "transfers" if found.transfers else "none"
+                cell[category] += reachable
+        result.append(counts)
+    return result
+
+
+def describe_tally(context: AuditContext, counts: list[dict[str, FixCounts]], max_changes: int) -> str:
+    """The closing table: each worker's events by kind, nothing added across kinds."""
+    names = [worker.name for worker in context.schedule_input.workers]
+    searched = max_changes > 0
+
+    def cell(count: FixCounts) -> str:
+        if not count["events"] or not searched:
+            return str(count["events"])
+        return (f"{count['events']} ({count['harmless']}/{count['transfers']}/{count['none']}/"
+                f"{count['history']})")
+    rows = [[name] + [cell(worker_counts[kind]) for kind in KIND_ORDER] for name, worker_counts in zip(names, counts)]
+    header = ["events by kind" + (f" (with a harmless fix / only transfers / no fix of up to "
+                                  f"{plural(max_changes, 'change')} / in the history)" if searched else "")]
+    table = [[""] + list(KIND_ORDER)] + rows
+    widths = [max(len(row[column]) for row in table) for column in range(len(table[0]))]
+    return "\n".join(header + ["  ".join(text.ljust(width) for text, width in zip(row, widths)).rstrip()
+                               for row in table])
+
+
+def report_text(context: AuditContext, assignment: Sequence[int], report: GrievanceReport) -> str:
+    """The report as text: how far the fix search reached, a card per worker, then the closing table."""
+    crews = workers_by_shift(context, assignment)
+    reach = (f"fixes searched up to {plural(report.max_changes, 'change')}" if report.max_changes > 0
+             else "fix search off")
+    parts = [reach] + [grievance_card(context, crews, report, worker)
+                       for worker in range(len(context.schedule_input.workers))]
+    parts.append(describe_tally(context, tally(context, crews, report), report.max_changes))
+    return "\n\n".join(parts)
+
+
+def shift_json(context: AuditContext, shift: int) -> dict[str, Any]:
+    """A shift for the JSON output."""
+    time = context.shifts[shift].time
+    return {"post": context.shifts[shift].post.name, "start": time.start.isoformat(), "end": time.end.isoformat(),
+            "in_history": in_history(context, shift)}
+
+
+def fix_json(context: AuditContext, fix: NearbyFix) -> dict[str, Any]:
+    """A fix for the JSON output."""
+    names = [worker.name for worker in context.schedule_input.workers]
+    return {"changes": [describe_step(context, step) for step in fix.steps], "size": len(fix.steps),
+            "removes": fix.removes,
+            "creates": [{"kind": kind, "worker": names[worker],
+                         "person": names[person] if person != NO_PERSON else None, "count": count}
+                        for (kind, worker, person), count in fix.creates]}
+
+
+def report_json(context: AuditContext, assignment: Sequence[int], report: GrievanceReport) -> dict[str, Any]:
+    """
+    The report as data for tools (ADR 0048): the reach, and per worker their facts and grievances, each with its
+    events and fixes, and the closing counts
+    """
+    names = [worker.name for worker in context.schedule_input.workers]
+    crews = workers_by_shift(context, assignment)
+    counts = tally(context, crews, report)
+    grievances = report.grievances
+    workers = []
+    for worker, name in enumerate(names):
+        facts = grievances.facts[worker]
+        entries = []
+        for entry in card_entries(context, crews, grievances, worker):
+            kind, _, person = entry.key
+            found = report.fixes.get(entry.key)
+            entries.append({"kind": kind, "person": names[person] if person != NO_PERSON else None,
+                            "events": entry.events, "in_history": entry.in_history, "summary": entry.heading,
+                            "event_lines": list(entry.event_lines),
+                            "harmless": fix_json(context, found.harmless) if found and found.harmless else None,
+                            "transfers": [fix_json(context, fix) for fix in found.transfers] if found else []})
+        workers.append({
+            "name": name, "shifts": [shift_json(context, shift) for shift in facts.shifts], "hours": facts.hours,
+            "availability": facts.availability,
+            "rests": [{"hours": rest.hours, "per_hour": rest.per_hour, "before": shift_json(context, rest.before),
+                       "after": shift_json(context, rest.after)} for rest in facts.rests],
+            "partners": {names[other]: count for other, count in sorted(facts.partners.items())},
+            "liked_pairings": facts.liked_pairings, "grievances": entries, "counts": counts[worker]})
+    return {"max_changes": report.max_changes, "fixed_slots": context.fixed_slots,
+            "staffed_hours": context.staffed_total, "workers": workers}
+
+
 # --- command line ---
 
-def audit_schedule(schedule_input: ScheduleInput, schedule_path: pathlib.Path) -> str:
+def audit_schedule(schedule_input: ScheduleInput, schedule_path: pathlib.Path,
+                   max_changes: int = DEFAULT_MAX_CHANGES, as_json: bool = False) -> str:
     """
     Audit a written schedule; with a history, together with it, as one schedule whose history no fix may change
     :param schedule_input: ScheduleInput the schedule was made for
     :param schedule_path: pathlib.Path of the schedule file (CSV, XLSX or ODS)
-    :return: the report: a card per worker, then the group summary
+    :param max_changes: how far the fix search reaches; 0 turns it off
+    :param as_json: True for the report as JSON, for tools
+    :return: the report: how far the fix search reached, a card per worker and the closing table (or the same as JSON)
     :raises ScheduleReadError: if the file doesn't match the input
     :raises ValueError: if the schedule breaks a hard constraint
     """
@@ -1476,14 +1805,26 @@ def audit_schedule(schedule_input: ScheduleInput, schedule_path: pathlib.Path) -
         context, assignment = with_history(schedule_input, read.shifts, read.assignment)
     else:
         context, assignment = build_context(schedule_input, read.shifts, read.slots), read.assignment
-    audit = evaluate(context, assignment)
-    fixes = find_fixes(context, assignment, audit)
-    cards = [card(context, audit, fixes, worker) for worker in range(len(schedule_input.workers))]
-    report = cards + [describe_summary(context, summarize(audit, fixes))]
+    report = report_grievances(context, assignment, max_changes)
+    if as_json:
+        return json.dumps({"history_schedules": len(schedule_input.history),
+                           **report_json(context, assignment, report)}, indent=JSON_INDENT)
+    text = report_text(context, assignment, report)
     if schedule_input.history:
-        report.insert(0, f"together with its history: {len(schedule_input.history)} previous schedule(s), "
-                         f"{context.fixed_slots} slots that no fix may change")
-    return "\n\n".join(report)
+        text = (f"together with its history: {len(schedule_input.history)} previous schedule(s), "
+                f"{context.fixed_slots} slots that no fix may change\n\n" + text)
+    return text
+
+
+def non_negative(text: str) -> int:
+    """A whole number of at least 0, for the command line."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a whole number: {text!r}") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError(f"must be at least 0, got {value}")
+    return value
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1495,9 +1836,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="audit", description="Audit a schedule from each worker's point of view.")
     parser.add_argument("input", help="the YAML input file")
     parser.add_argument("schedule", help="the schedule written for it (CSV, XLSX or ODS)")
+    parser.add_argument("--max-changes", type=non_negative, default=DEFAULT_MAX_CHANGES, metavar="K",
+                        help=f"how many moves and swaps the fix search reaches (default {DEFAULT_MAX_CHANGES}); 0 "
+                             "turns it off. Each change more multiplies the time by about the number of legal changes")
+    parser.add_argument("--json", action="store_true", help="print the report as JSON, for tools")
     arguments = parser.parse_args(argv)
     try:
-        print(audit_schedule(read_input(arguments.input), pathlib.Path(arguments.schedule)))
+        print(audit_schedule(read_input(arguments.input), pathlib.Path(arguments.schedule), arguments.max_changes,
+                             arguments.json))
     except (InputError, ScheduleReadError) as exc:
         print(f"audit: {exc}", file=sys.stderr)
         return EXIT_USAGE

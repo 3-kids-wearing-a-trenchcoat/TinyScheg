@@ -1,7 +1,8 @@
 # 0048. An audit that only observes: each worker's grievances as events, against the best-off peer
 
 **Status:** Accepted (one sentence on how the fix search reaches a nearby schedule corrected on 2026-11-20, in
-place). Partners (disliked and liked workers in a shift) are decided apart, in
+place); amended by [ADR 0050](0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) (which fixes are
+harmless). Partners (disliked and liked workers in a shift) are decided apart, in
 [ADR 0049](0049-partners-in-the-audit.md).
 
 ## Context

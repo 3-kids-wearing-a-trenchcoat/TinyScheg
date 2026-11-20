@@ -7,11 +7,11 @@ them. It isn't part of TinyScheg's regular operation.
 > [!IMPORTANT]
 > **Partially implemented.** Decided on 2026-11-19
 > ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md)),
-> and being built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The [grievances](#grievances) and
-> the [easy fixes](#easy-fixes) are in `tools/audit.py` (`find_grievances`, `search_fixes`) and tested; [the
-> report](#the-report) and the tools reading it aren't yet. Until they are, `tools/audit.py` and `tools/audit_sample.py` do what's described
-> under [the audit until Phase 13](#the-audit-until-phase-13). See [Auditing a schedule](../how-to/audit-a-schedule.md)
-> for how to run them.
+> and being built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The [grievances](#grievances), the
+> [easy fixes](#easy-fixes) and [the report](#the-report) are in `tools/audit.py` and tested, and the command line
+> prints the new report; `tools/tune.py` and `tools/audit_sample.py` don't read it yet, and still use what's described
+> under [the audit until Phase 13](#the-audit-until-phase-13). [Auditing a schedule](../how-to/audit-a-schedule.md)
+> still describes the old report, until Phase 13's step 5.
 
 ## Why a separate audit
 
@@ -180,15 +180,25 @@ own best-off peers, and compared with the audited schedule worker by worker and 
 
    So making the peer worse off is no fix. If A's shortest rest is 6 hours and B's is 8, cutting B's to 6 removes
    A's event, but A gained nothing.
-3. **Harmless or a transfer.** The fix is **harmless** if no worker, the aggrieved one included in other kinds, has
-   more events of any kind, or a rest event larger when sorted by size. Otherwise it's a **transfer**, reported with
-   exactly what it creates and for whom.
+3. **Harmless or a transfer** ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md)).
+   A worker, the aggrieved one included in other kinds, is **harmed** where, in one kind, they have more events (or
+   a rest event larger when sorted by size) **and** their own situation in that kind got worse:
+   * load: more shifts or more hours;
+   * rest: more rests than before, or a rest shorter than the one in its place before;
+   * disliked partner: more shifts with that person;
+   * missing like: fewer shifts with that person.
+
+   A grievance that grows only because someone else is better off (a new best-off peer) isn't harm: after Jeff gives
+   away a shift and becomes the best-rested worker, the others fall further short of him, though nothing in their own
+   schedules changed. The fix is **harmless** if it harms nobody; otherwise it's a **transfer**, reported with exactly
+   what it creates and for whom. In a 3-2-1 split, giving one of the first worker's shifts to the third (2-2-2) harms
+   nobody; giving it to the second (2-3-1) gives them an extra shift.
    * With no tolerance, most load fixes are transfers: the extra shift in a 2-2-3 split can only move.
    * A fix is dropped when another creates a subset of what it creates, with no more changes. A harmless fix creates
      nothing, so it drops every transfer of its size or larger.
 
 **The search is complete up to K changes,** smallest fix first. K is a command-line option, 3 by default.
-* Its only shortcut can't lose a fix: at least one change must touch the grievance's workers.
+* Each nearby schedule is audited once and checked against every grievance, so nothing is skipped.
 * So "no fix" is an exact claim, always stated with its K: "no fix of up to 3 changes". K sets how far the claim
   reaches, not what a grievance is.
 * K = 0 turns the search off, with no claim about fixes either way.
@@ -202,48 +212,74 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
 
 ## The report
 
-* **K** comes first.
+* **How far the fix search reached** comes first: "fixes searched up to 3 changes", or "fix search off" with
+  `--max-changes 0`. With a history, a line about it comes before that.
 * **A card per worker** comes next. It shows their facts:
   * shifts and hours;
-  * availability (while a post is staffed);
-  * their rests;
+  * availability (while a post is staffed), out of the hours when any post is;
+  * their rests, in time order;
   * their partners, with counts;
   * their liked pairings.
 
   Then each grievance:
-  * what it points to;
+  * what it points to: the extra shifts; each rest, with the shifts around it and who else was in them, so that a
+    short rest into a shift with a friend can be seen; each shift with a disliked person; the peer's shifts with a
+    liked person;
   * the peer it's measured against, with both sides' facts in natural units;
   * its size, where it has one;
-  * its smallest harmless fix, or its transfers, or "no fix of up to K changes". An event wholly in the history (a
-    rest between two history shifts, a disliked partner in a history shift) says so instead, since no change can
-    reach it.
+  * its smallest harmless fix (with how many changes it takes and how many events it removes), or else its
+    transfers, fewest changes first, each with what it creates, or else "no fix of up to K changes". A grievance whose
+    events are all wholly in the history (rests between two history shifts, a disliked partner in history shifts)
+    says that no change can reach it instead; an event of that kind among others is marked "(in the history)".
 
-  A rest event shows the shifts around it and who was in them, so that a short rest into a shift with a friend can be
-  seen. For example:
+  For example, from a first legal schedule of the example (seed 150 of the sampler, transfers cut short here):
 
   ```
-  Dana: 5 shifts, 15 h; available 40 h (of 48 h with a post staffed)
-    rests: 4 h, 6 h, 10 h, 12 h
-    partners: Eli ×2, Gil ×1, Ivo ×1; liked pairings: 2
+  Jeff: 3 shifts, 8 h; available 24 h (of 24 h with a post staffed)
+    rests: 7 h, 6 h
+    partners: Jack ×1, Shamhat ×1; liked pairings: 0
     grievances:
-      load: 1 extra shift (5 shifts, 15 h; Finn's 4, 12 h, scaled to Dana's availability: 3.33, 10 h)
-        transfers (1 change): give Gil Dana's Tue 13:00-16:00 -> creates Gil: 1 extra shift
-                              give Hana Dana's Tue 13:00-16:00 -> creates Hana: 1 extra shift
-      rest: 4 h, Tue 16:00-20:00, between Tue 13:00-16:00 (with Eli) and Tue 20:00-23:00 (with Gil);
-            2 h shorter than Finn's shortest rest, for shifts this long
-        fix (2 changes): give Gil Dana's Tue 20:00-23:00; give Dana Gil's Wed 08:00-11:00
-      disliked partner: Wed 14:00-17:00, with Ivo
-        no fix of up to 3 changes
+      - load: 2 extra shifts (3 shifts, 8 h; against Jill's 1 shift, 1 h)
+        transfers, each removing events but creating others:
+          1 change, removes 1 event: give Jill Jeff's front gate 2025-01-01 13:00–16:00 -> Jill: 1 extra shift, 1 more
+            rest shorter than a peer's
+          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00 -> Enkidu: 1
+            extra shift
+      - rest: 1 rest shorter than Shamhat's
+          7 h, between front gate 2025-01-01 03:00–06:00 (with Shamhat) and front gate 2025-01-01 13:00–16:00: 1.57 h
+            short, for shifts averaging 3 h, of Shamhat's 10 h in its place, between shifts averaging 3 h
+        transfers, each removing events but creating others:
+          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 13:00–16:00 -> Enkidu: 1 extra shift, 1
+            more rest shorter than a peer's
+      - disliked partner: Jack, in 1 shift
+          front gate 2025-01-01 22:00–2025-01-02 00:00
+        transfers, each removing events but creating others:
+          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00 -> Enkidu: 1
+            extra shift
   ```
 
-  All transfers are shown, one per line, until reading cards shows that's too long.
-* **A closing table** of counts, per worker and per kind. Each cell gives the events, and how many of them have a
-  harmless fix, how many only transfers, how many no fix within K, and how many lie wholly in the history.
+  All transfers are shown, one per line, until reading cards shows that's too long (on 50 samples of the example,
+  a median of 6 per grievance with only transfers, at most 12; on the tuning schedules, 17, at most 93).
+* **A closing table** of counts, per worker and per kind. Each cell gives the events, then, in brackets, how many of
+  them belong to a grievance with a harmless fix, with only transfers, or with no fix within K, and how many lie
+  wholly in the history. A grievance's events are counted under its fix, which may remove only some of them (its card
+  says how many).
+
+  ```
+  events by kind (with a harmless fix / only transfers / no fix of up to 3 changes / in the history)
+             load         rest         disliked partner  missing like
+  Jack       2 (0/2/0/0)  2 (0/2/0/0)  0                 1 (0/0/1/0)
+  Jeff       2 (0/2/0/0)  1 (0/1/0/0)  1 (0/1/0/0)       0
+  Anne       1 (0/1/0/0)  1 (1/0/0/0)  0                 0
+  ```
+
   * Workers are listed in input order, since ranking them would take a rule across kinds.
   * Nothing is added across kinds.
 
-With `--json`, the audit prints the same content as JSON instead, for tools.
-[`tools/tune.py`](tuning.md) records the following from it, for each run and per kind:
+With `--json`, the audit prints the same content as JSON instead, for tools: the reach (`max_changes`), and for each
+worker their facts, their grievances (each with its events, its harmless fix or transfers, with every change and what
+it creates) and their counts per kind. [`tools/tune.py`](tuning.md) records the following from it, for each run and
+per kind:
 * the events;
 * the most aggrieved worker's events;
 * the events with a harmless fix.
@@ -285,9 +321,10 @@ every rule is a sentence about how workers judge.
 ## The audit until Phase 13
 
 > [!NOTE]
-> **Implemented** in `tools/audit.py` and `tools/audit_sample.py`, and covered by tests, until it's rebuilt in
-> [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The full description is in this page's history
-> (before 2026-11-19), and what's wrong with it in [ADR 0048](../decisions/0048-an-audit-that-only-observes.md).
+> **Implemented** in `tools/audit.py` and covered by tests, and still what `tools/tune.py` and
+> `tools/audit_sample.py` use, until the last part of [Phase 13](../roadmap.md#phase-13-a-reliable-audit)'s step 3
+> (the command line prints the new report already). The full description is in this page's history (before
+> 2026-11-19), and what's wrong with it in [ADR 0048](../decisions/0048-an-audit-that-only-observes.md).
 
 * **Complaints, per pair.** Each complaint was by one worker against one peer (a peer available at least as long),
   past a **tolerance** of one. Its **severity** was how far past the tolerance it went.
