@@ -160,8 +160,12 @@ An **easy fix** is a **nearby schedule** in which the grievance is gone: the aud
   shifts). They're made in the new period only, since the history is what happened. A grievance about the history
   that has a fix is one the new period could have made up for.
 * **The nearby schedule must be legal.** The changes only describe how it differs from the audited one, so their
-  order doesn't matter. The search reaches it one legal change at a time, in every order, and tests check on small
-  inputs that this misses nothing.
+  order doesn't matter, and only the end has to be legal. Every slot is always given to a worker with its role and
+  available then, but a change may leave a worker holding two slots too close together (closer than the minimum
+  rest, or overlapping) if the next change resolves it. That way two workers can trade their shifts when either swap
+  alone would leave one of them with shifts too close together. A conflict that only two later changes could
+  resolve isn't searched. Tests check the search against brute force (every legal schedule within K changes) on
+  small inputs.
 * **The fix's size** is its number of changes, a fact on it.
 
 **Only the nearby schedule is judged,** never each step on the way. It's audited afresh by the same rules, with its

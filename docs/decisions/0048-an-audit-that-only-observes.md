@@ -1,6 +1,7 @@
 # 0048. An audit that only observes: each worker's grievances as events, against the best-off peer
 
-**Status:** Accepted. Partners (disliked and liked workers in a shift) are decided apart, in
+**Status:** Accepted (one sentence on how the fix search reaches a nearby schedule corrected on 2026-11-20, in
+place). Partners (disliked and liked workers in a shift) are decided apart, in
 [ADR 0049](0049-partners-in-the-audit.md).
 
 ## Context
@@ -126,8 +127,17 @@ load is never scaled up, so that pair isn't compared.
    * The changes are moves (a slot given to another worker) and swaps (two workers exchanging slots in different
      shifts).
    * The nearby schedule must be legal.
-   * The changes only describe how it differs, so their order doesn't matter. The search reaches it one legal change
-     at a time, in every order, and tests check on small inputs that this misses nothing.
+   * The changes only describe how it differs, so their order doesn't matter. Every slot is always given to a worker
+     with its role and available then, and a change may leave a worker holding two slots too close together (closer
+     than the minimum rest, or overlapping) if the next change resolves it. Tests check the search against brute
+     force on small inputs.
+
+     *Corrected on 2026-11-20, in step 3:* this said the search reaches the nearby schedule one legal change at a
+     time, in every order, and that tests would check that misses nothing. The brute-force test showed it misses
+     fixes where two workers trade their shifts, since either swap alone leaves one of them with shifts too close
+     together, in every order. Letting a conflict last one change finds them, at about twice the cost (a median of
+     13 seconds on the stored tuning schedules, at most 152 on a 48-hour one, against 7 and 62). A conflict that
+     only two later changes could resolve still isn't searched; brute force found none on the inputs tried.
    * The fix's size, its number of changes, is a fact on it.
 2. **Only the nearby schedule is judged,** never each step on the way.
    * It's audited afresh by the same rules, with its own best-off peers. No line from the audited schedule is held
