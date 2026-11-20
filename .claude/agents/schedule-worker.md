@@ -3,6 +3,7 @@ name: schedule-worker
 description: Plays one worker reading a published shift schedule and writes down what they would complain about. A development tool for checking the schedule audit; use only when asked.
 tools: Read, Write
 model: sonnet
+effort: low
 omitClaudeMd: true
 ---
 
