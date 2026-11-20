@@ -1,6 +1,8 @@
 # 0049. Partners in the audit: a disliked person in a shift is an event in itself; a missing like, by the worker's own likes applied to a peer's shifts
 
-**Status:** Accepted. The like grievance is the least settled of the audit's decisions (below). Part of the audit of
+**Status:** Accepted. Amended by [ADR 0051](0051-the-audit-after-reading-cards-by-hand.md) (a missing like is a shift
+with nobody the worker likes, with no peer; a like for someone who dislikes the worker doesn't count). The like
+grievance is the least settled of the audit's decisions (below). Part of the audit of
 [ADR 0048](0048-an-audit-that-only-observes.md), whose foundations it uses: events, the best-off peer, workers who
 never net.
 

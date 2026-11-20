@@ -108,6 +108,7 @@ nav:
       - 0048 An audit that only observes: decisions/0048-an-audit-that-only-observes.md
       - 0049 Partners in the audit: decisions/0049-partners-in-the-audit.md
       - 0050 A fix harms only where a worker's situation gets worse: decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md
+      - 0051 The audit after reading cards by hand: decisions/0051-the-audit-after-reading-cards-by-hand.md
 
 markdown_extensions:
   - admonition

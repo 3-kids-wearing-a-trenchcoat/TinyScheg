@@ -153,14 +153,21 @@ def test_dominance_compares_only_the_inputs_both_finished_and_never_across_k() -
     assert "WARNING: audited with different K" in "\n".join(tune.describe_audit(mixed, False, "", "first period"))
 
 
+LOAD_EVENT_HOURS = 2.0  # the extra hours of each load event in worker_json
+
+
 def worker_json(*workers: tuple[str, int, float]) -> str:
-    """The by_worker field of workers, each (name, load events with only transfers, rest hours short in 1 event)."""
+    """
+    The by_worker field of workers, each (name, load events with only transfers, each LOAD_EVENT_HOURS extra hours,
+    rest hours short in 1 event)
+    """
     tallies = []
     for name, load, rest_hours in workers:
         counts = {kind: dict.fromkeys(FIX_COUNT_FIELDS, 0) for kind in KIND_ORDER}
         counts[LOAD] |= {"events": load, "transfers": load}
         counts[REST] |= {"events": int(rest_hours > 0), "transfers": int(rest_hours > 0)}
-        tallies.append(WorkerTally(name, counts, rest_hours, 0.0))
+        tallies.append(WorkerTally(name, counts, {LOAD: LOAD_EVENT_HOURS * load, REST: rest_hours},
+                                   {LOAD: 0.0, REST: 0.0}))
     return "[" + ",".join(tune.json.dumps(tune.tally_json(tallied)) for tallied in tallies) + "]"
 
 
@@ -178,10 +185,10 @@ def test_compare_shows_both_tables_on_the_inputs_whose_schedules_differ() -> Non
     block = lines[lines.index("x"):]
     assert "defaults" in block[1] and block[1].index("trial") > block[1].index("defaults")
     anne = next(line for line in block if line.startswith("Anne"))
-    assert "1 (0/1/0/0) 2.5 h" in anne and "1 (0/1/0/0) 4 h" in anne  # every worker's cells, changed or not
+    assert "1 (0/1/0/0) 2.5 h short" in anne and "1 (0/1/0/0) 4 h short" in anne  # every worker's cells
     differences = block.index("differences:")
-    assert block[differences + 1:differences + 4] == ["  Anne rest: 1 (0/1/0/0) 2.5 h → 1 (0/1/0/0) 4 h",
-                                                      "  Jack load: 2 (0/2/0/0) → 1 (0/1/0/0)", ""]
+    assert block[differences + 1:differences + 4] == ["  Anne rest: 1 (0/1/0/0) 2.5 h short → 1 (0/1/0/0) 4 h short",
+                                                      "  Jack load: 2 (0/2/0/0) 4 h more → 1 (0/1/0/0) 2 h more", ""]
     assert "same schedule under both: y" in lines and "finished under only one: z (defaults)" in lines
     with pytest.raises(ValueError, match="no finished runs"):
         tune.compare_settings(rows, "defaults", "nothing")

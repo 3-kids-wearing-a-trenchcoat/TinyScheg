@@ -110,39 +110,38 @@ def test_a_search_of_no_changes_is_off() -> None:
 
 # --- judging a nearby schedule ---
 
-def standing_of(shifts: tuple[int, ...], rests: tuple[tuple[float, ...], ...],
+def standing_of(hours: tuple[float, ...], rests: tuple[tuple[float, ...], ...],
                 events: dict[GrievanceKey, int] | None = None) -> Standing:
-    """A Standing with the given shifts (as many hours) and rests per hour, and nobody's shortfalls or partners."""
-    return Standing(events or {}, tuple(() for _ in shifts), shifts, tuple(float(n) for n in shifts), rests,
-                    tuple({} for _ in shifts))
+    """A Standing with the given hours and rests per hour, and nobody's shortfalls or partners."""
+    return Standing(events or {}, tuple(() for _ in hours), hours, rests, tuple({} for _ in hours))
 
 
 def test_making_the_peer_worse_off_is_no_fix() -> None:
     # A's shortest rest is 6 hours (per hour of shift: 3) and B's 8 (4); cutting B's to 6 removes A's event, but A
     # gained nothing
-    before = standing_of((2, 2), ((3.0,), (4.0,)), {(REST, 0, NO_PERSON): 1})
-    after = standing_of((2, 2), ((3.0,), (3.0,)))
+    before = standing_of((4, 4), ((3.0,), (4.0,)), {(REST, 0, NO_PERSON): 1})
+    after = standing_of((4, 4), ((3.0,), (3.0,)))
     assert not better_off((REST, 0, NO_PERSON), before, after)
-    assert better_off((REST, 0, NO_PERSON), before, standing_of((2, 2), ((3.5,), (4.0,))))
+    assert better_off((REST, 0, NO_PERSON), before, standing_of((4, 4), ((3.5,), (4.0,))))
 
 
-def test_better_off_in_load_is_no_more_shifts_or_hours_and_fewer_of_one() -> None:
-    before = standing_of((3, 2), ((), ()))
-    assert better_off((LOAD, 0, NO_PERSON), before, standing_of((2, 3), ((), ())))
-    assert not better_off((LOAD, 0, NO_PERSON), before, standing_of((3, 2), ((), ())))
+def test_better_off_in_load_is_fewer_hours() -> None:
+    before = standing_of((6, 4), ((), ()))
+    assert better_off((LOAD, 0, NO_PERSON), before, standing_of((4, 6), ((), ())))
+    assert not better_off((LOAD, 0, NO_PERSON), before, standing_of((6, 4), ((), ())))  # fewer shifts alone isn't
 
 
 def test_a_larger_rest_event_is_created_with_a_shorter_rest_even_with_no_more_events() -> None:
-    before = Standing({}, ((2.0, 1.0),), (3,), (9.0,), ((1.0, 2.0),), ({},))
-    after = Standing({}, ((2.5,),), (3,), (9.0,), ((0.8, 2.0),), ({},))
+    before = Standing({}, ((2.0, 1.0),), (9.0,), ((1.0, 2.0),), ({},))
+    after = Standing({}, ((2.5,),), (9.0,), ((0.8, 2.0),), ({},))
     assert created_by(before, after) == ((("larger rest event", 0, NO_PERSON), 1),)
 
 
 def test_a_grievance_grown_only_because_a_peer_is_better_off_is_not_created() -> None:
     # Bob's rests and shifts are as they were; his rest event grew, and he has a new load event, only because the peer
     # he's measured against now rests longer and works less (ADR 0050)
-    before = Standing({(REST, 1, NO_PERSON): 1}, ((), (1.0,)), (3, 2), (6.0, 4.0), ((3.0, 3.0), (2.0,)), ({}, {}))
-    after = Standing({(REST, 1, NO_PERSON): 2, (LOAD, 1, NO_PERSON): 1}, ((), (2.0, 0.5)), (2, 2), (4.0, 4.0),
+    before = Standing({(REST, 1, NO_PERSON): 1}, ((), (1.0,)), (6.0, 4.0), ((3.0, 3.0), (2.0,)), ({}, {}))
+    after = Standing({(REST, 1, NO_PERSON): 2, (LOAD, 1, NO_PERSON): 1}, ((), (2.0, 0.5)), (4.0, 4.0),
                      ((6.0,), (2.0,)), ({}, {}))
     assert created_by(before, after) == ()
 

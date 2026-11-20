@@ -10,7 +10,8 @@ When something is deferred, it goes both into [Later](#later) here and into
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
 bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19); Phase 13, a reliable audit, started
-(2026-11-19; steps 1 to 3, the decisions, the design and the rebuilt audit, done).
+(2026-11-19; steps 1 to 3, the decisions, the design and the rebuilt audit, done; step 4 under way, its cards read by
+hand changing four rules, [ADR 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md)).
 
 ## Phase 1: Walking skeleton
 
@@ -661,7 +662,10 @@ answer, the audit asserts only what holds under every reasonable answer.
 - [ ] **4. Validation:** the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
       appear and disappear explained, and cards read by hand; the sampled schedules that had no easy fix at all
       (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later) and answered in step 1) checked to
-      have fixes with the new search
+      have fixes with the new search. Reading cards by hand with the user (2026-11-20) changed four rules
+      ([ADR 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md): load in hours alone, a rest judged by the
+      shift before it, a missing like as a shift with nobody the worker likes, a dislike cancelling the like it
+      meets), after which the stages are audited again
 - [ ] **5. Docs:** the how-to, the status table, future work
 
 ## Later
@@ -711,14 +715,20 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       changes judged together; step 4 checks the new search finds them
 - [x] Tuning: check the defaults on 48-hour schedules, including load within a day (done in Phase 10: they hold, for
       now)
-- [ ] Scoring: a fairness term for liked pairings, if the new audit's missing likes (ADR 0049), read in tuning, show
+- [ ] Scoring: a fairness term for liked pairings, if the new audit's missing likes (ADR 0049, ADR 0051), read in tuning, show
       their uneven spread matters (it used to say: if counting liked-partner complaints apart turns out wrong; see
       `explanation/future-work.md`)
 - [ ] Scoring: compensation across parts, each worker's rest shortfall and pairings (and perhaps workload) through one
       convex function, so that a liked shift makes up for a short straw (deferred until the weight re-check, now
       done)
 - [ ] Scoring: workload in hours only (shift share 0), once the rest part keeps short shifts apart in tight schedules
-      too (deferred 2026-11-14)
+      too (deferred 2026-11-14); since ADR 0051 (2026-11-20) the audit measures load in hours alone, so tuning can
+      compare shift shares on the audit's own terms
+- [ ] Scoring: the rest target judged by the shift before a rest, as the audit does since ADR 0051 (2026-11-20),
+      instead of the mean of the two shifts around it (ADR 0036), if tuning shows the difference matters
+- [ ] Input: symmetric preferences, one relation per pair of workers (liked, disliked or neither), leaving it to
+      whoever writes the input to decide how to read one-sided feelings; floated by the user while reading cards
+      (2026-11-20). The audit meanwhile lets a dislike cancel the like it meets (ADR 0051)
 - [ ] A schedule that leaves the next period a worse schedule than another first period would (found 2026-11-14;
       one that leaves it no legal schedule is warned about since Phase 10, ADR 0042)
 - [x] Tuning: start the second period a whole number of days after the first, so that it covers the same hours of

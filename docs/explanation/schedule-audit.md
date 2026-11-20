@@ -7,7 +7,8 @@ them. It isn't part of TinyScheg's regular operation.
 > [!NOTE]
 > **Implemented** in `tools/audit.py` and tested, as decided on 2026-11-19
 > ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md))
-> and amended on 2026-11-20 ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md));
+> and amended on 2026-11-20 ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md),
+> and [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) after reading cards by hand);
 > `tools/tune.py` ([reading the audit](tuning.md#reading-the-audit)) and `tools/audit_sample.py` ([sampling](#sampling))
 > read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4.
 > [Auditing a schedule](../how-to/audit-a-schedule.md) still describes the old report, until Phase 13's step 5.
@@ -48,13 +49,14 @@ read.
 
 The audit models workers who are **sensitive to being treated unfairly**:
 
-* **Each grievance is an event the worker can point to:** an extra shift, a rest shorter than someone else's, a shift
-  with someone they dislike. There's no tolerance. In a 2-2-3 split, the worker with 3 has a grievance, though
+* **Each grievance is an event the worker can point to:** a shift's worth of extra hours, a rest shorter than someone
+  else's, a shift with someone they dislike. There's no tolerance. In a 2-2-3 split, the worker with 3 has a grievance, though
   someone had to do the third shift; whether it could have gone elsewhere is a fact the [easy fixes](#easy-fixes)
   report.
 * **Worse off only, and the strongest case they can.** Each worker points to every way they were worse off than a
   peer, never to a way they were better off. Each measures themselves against the peer who makes their case best:
-  the **best-off peer**, the one giving the most events.
+  the **best-off peer**, the one giving the most events. Disliked partners and missing likes need no peer: they're
+  about the worker's own shifts.
 * **No netting.** A boon (a shift with a friend) is never set against a straw (a short rest), by the workers or by the
   audit.
 * **Lines are drawn from the schedule itself.** No line is set by hand, so if everyone does the same work and rests
@@ -78,23 +80,24 @@ nothing to do costs nothing, so it doesn't lower what a worker owes.
 ### Load
 
 Load is judged **in proportion to availability**, the project's workload policy
-([ADR 0013](../decisions/0013-availability-weighted-workload.md)). It's measured in **shifts** and in **hours**,
-with no exchange rate between the two.
+([ADR 0013](../decisions/0013-availability-weighted-workload.md)). It's measured **in hours alone**
+([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)): two 2-hour shifts against one 4-hour shift
+are as much load.
 
 * **Peers.** A worker is compared only with peers available at least as long, and for some time at all.
-* **Scaled down, never up.** The peer's shifts and hours are scaled to the worker's availability. A peer available
-  48 hours who did 4 shifts counts, for a worker available 40 hours, as 3⅓. Scaling up a barely available peer's load
-  would turn a fraction of a shift into whole grievances.
-* **More only by one measure and no less by the other.** More shifts but fewer hours than the scaled peer, or the
-  reverse, isn't more load.
-* **Each whole extra shift is an event.** Fractions don't count, so 5 shifts against 3⅓ is 1 event.
-* **An excess in hours is counted in the worker's own shifts, shortest first.** It's as many events as the shortest
-  shifts that fit in it. 5 hours more, with shifts of 3 hours, is 1 event, so each event is a shift the worker can
-  point to.
-* **Where both measures show more, the larger count** is taken. The best-off peer is the one giving the most events.
+* **Scaled down, never up.** The peer's hours are scaled to the worker's availability. A peer available 48 hours who
+  worked 12 counts, for a worker available 40 hours, as 10. Scaling up a barely available peer's load would turn a
+  fraction of a shift into whole grievances.
+* **The extra hours are counted in the worker's own shifts, shortest first.** It's as many events as the shortest
+  shifts that fit in them, so each event is a shift the worker can point to. 5 hours more, with shifts of 3 hours, is
+  1 event; with shifts of one length, each whole extra shift is an event. Fewer extra hours than the worker's shortest
+  shift are no event.
+* **The extra hours are the grievance's size,** a fact on it.
+* **The best-off peer** is the one giving the most events, then the most extra hours, then the first in input
+  order.
 
 There's no separate comparison within a day. Work concentrated in time shows as [rest](#rest) events, since a rest is
-judged with the shifts around it.
+judged by the shift before it.
 
 **Still missed:** a worker available longer, against one available much less who did proportionally less. A peer's
 load is never scaled up, so that pair isn't compared.
@@ -107,18 +110,20 @@ load is never scaled up, so that pair isn't compared.
     unavailable for everyone.
   * The legal minimum rest stays on the clock: it's a rule of what's legal, not something the audit judges.
   * The rests before a worker's first shift and after their last aren't judged.
-* **A rest is judged with the shifts around it,** as rest per hour of the two shifts: the rest divided by
-  $(|s| + |s'|) / 2$, the shape of the scoring's rest target
-  ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). With shifts of equal length, it's
-  just the rest. 6 hours between a 12-hour and a 2-hour shift is shorter than 6 hours between two 2-hour shifts.
+* **A rest is judged by the shift just done,** as rest per hour of the shift before it
+  ([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)): a rest after a shift twice as long has to
+  be twice as long to be as good. With shifts of equal length, it's just the rest. 6 hours after a 12-hour shift is
+  shorter than 6 hours after a 2-hour one, and 10 hours after a 2-hour shift is longer than 8 hours after a 2-hour
+  one, whatever shift follows. (The scoring's rest target uses the mean of the two shifts around a rest,
+  [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md).)
 * **Compared rest by rest, against the best-off peer.**
   * Each worker's rests are sorted shortest first and compared with the peer's in the same places, up to the smaller
     number of rests.
   * Each place where the worker's rest is shorter is an event.
-  * How much shorter is a fact on it, in hours: how much longer it would have to be to match the peer's, for shifts
-    this long.
+  * How much shorter is a fact on it, in hours: how much longer it would have to be to match the peer's, after a
+    shift this long.
 * **Every worker is a peer.** Rests aren't scaled, since they're already measured in available time and per hour of
-  work.
+  the shift before them.
 
 The same rests for everyone give no event, however long they are. Pairing the rests in any other order than shortest
 with shortest would give events even then.
@@ -135,21 +140,22 @@ person in a shift is an event in itself,** with no peer, since the aim is no dis
 
 ### Missing likes
 
-A missing like is a grievance only against a peer. It's judged by the worker's **own** likes applied to the peer's
-shifts: "your shifts would have put me with someone I like more often than mine did".
+**Each of a worker's shifts with partners, none of whom they like, is an event,** with no peer
+([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)). Workers complain about not being with
+someone they like, not about someone they like being with someone else.
 
-* **Counting.** For each person the worker likes, count the peer's shifts with that person in them (apart from the
-  worker and the peer), and the worker's own shifts with them.
-* **Scaling.** If the peer did more shifts, their count is scaled down to the worker's number of shifts, never up.
-* **Events.** Each whole pairing more is an event, one of the peer's shifts the worker can point to.
-* **Peers.** Every worker can be the peer, and the best-off peer is the one giving the most events. A worker who
-  likes nobody has no such grievance.
+* **A shift worked alone isn't an event:** there's nobody the worker could have been with.
+* **A dislike cancels the like it meets.** If B dislikes A, A's like for B doesn't count, neither for A's missing
+  likes nor for A's liked pairings, since pairing them costs more than it gains
+  ([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)). B's disliked-partner events stay.
+* A worker who likes nobody (once such likes are left out) has no missing likes.
 
-Each worker's **liked pairings** (their boon) are a fact on their card, not a grievance. Tuning reads them as a
-total, and worker by worker.
+The worker whose friends are rarely on duty has the most events, whatever the schedule. That's expected: tuning
+compares settings on the same inputs, where what an input forces is the same on both sides, and the events with a
+harmless fix pick out the ones that could have been avoided.
 
-This is the **least settled** of the audit's decisions. The alternative kept for a revisit is no like grievance at
-all, only the boon count ([ADR 0049](../decisions/0049-partners-in-the-audit.md)).
+Each worker's **liked pairings** (their boon: each liked person in each of their shifts) are a fact on their card,
+not a grievance. Tuning reads them as a total, and worker by worker.
 
 ## Easy fixes
 
@@ -172,26 +178,26 @@ own best-off peers, and compared with the audited schedule worker by worker and 
 
 1. **The grievance is gone.** The worker has fewer events of that kind (with that person, for partners).
 2. **The worker is better off** in that kind's own terms: worse in none of its facts, and better in at least one.
-   * Load: no more shifts and no more hours, and fewer of one.
+   * Load: fewer hours.
    * Rest: the new rests, compared with the old as with a peer's, none shorter and at least one longer.
    * Disliked partner: one shift fewer with that person.
-   * Missing like: one more with them.
+   * Missing likes: fewer shifts with nobody they like.
 
    So making the peer worse off is no fix. If A's shortest rest is 6 hours and B's is 8, cutting B's to 6 removes
    A's event, but A gained nothing.
 3. **Harmless or a transfer** ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md)).
    A worker, the aggrieved one included in other kinds, is **harmed** where, in one kind, they have more events (or
    a rest event larger when sorted by size) **and** their own situation in that kind got worse:
-   * load: more shifts or more hours;
+   * load: more hours;
    * rest: more rests than before, or a rest shorter than the one in its place before;
    * disliked partner: more shifts with that person;
-   * missing like: fewer shifts with that person.
+   * missing likes: more shifts with nobody they like.
 
    A grievance that grows only because someone else is better off (a new best-off peer) isn't harm: after Jeff gives
    away a shift and becomes the best-rested worker, the others fall further short of him, though nothing in their own
    schedules changed. The fix is **harmless** if it harms nobody; otherwise it's a **transfer**, reported with exactly
    what it creates and for whom. In a 3-2-1 split, giving one of the first worker's shifts to the third (2-2-2) harms
-   nobody; giving it to the second (2-3-1) gives them an extra shift.
+   nobody; giving it to the second (2-3-1) gives them a load event.
    * With no tolerance, most load fixes are transfers: the extra shift in a 2-2-3 split can only move.
    * A fix is dropped when another creates a subset of what it creates, with no more changes. A harmless fix creates
      nothing, so it drops every transfer of its size or larger.
@@ -221,15 +227,15 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
   * their liked pairings.
 
   Then each grievance:
-  * what it points to: the extra shifts; each rest, with the shifts around it and who else was in them, so that a
-    short rest into a shift with a friend can be seen; each shift with a disliked person; the peer's shifts with a
-    liked person;
-  * the peer it's measured against, with both sides' facts in natural units;
-  * its size, where it has one;
+  * what it points to: the extra hours; each rest, with the shifts around it and who else was in them, so that a
+    short rest into a shift with a friend can be seen; each shift with a disliked person; each shift with nobody they
+    like, with who was in it;
+  * the peer it's measured against (for load and rest), with both sides' facts in natural units;
+  * its size, where it has one: the extra hours, each rest's hours short;
   * its smallest harmless fix (with how many changes it takes and how many events it removes), or else its
     transfers, fewest changes first, each with what it creates, or else "no fix of up to K changes". A grievance whose
-    events are all wholly in the history (rests between two history shifts, a disliked partner in history shifts)
-    says that no change can reach it instead; an event of that kind among others is marked "(in the history)".
+    events are all wholly in the history (rests between two history shifts, history shifts with a disliked person or
+    with nobody they like) says that no change can reach it instead; an event of that kind among others is marked "(in the history)".
 
   For example, from a first legal schedule of the example (seed 150 of the sampler, transfers cut short here):
 
@@ -238,27 +244,25 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
     rests: 7 h, 6 h
     partners: Jack ×1, Shamhat ×1; liked pairings: 0
     grievances:
-      - load: 2 extra shifts (3 shifts, 8 h; against Jill's 1 shift, 1 h)
-        transfers, each removing events but creating others:
-          1 change, removes 1 event: give Jill Jeff's front gate 2025-01-01 13:00–16:00 -> Jill: 1 extra shift, 1 more
-            rest shorter than a peer's
-          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00 -> Enkidu: 1
-            extra shift
+      - load: 7 h more than Jill, as much as 2 shifts of Jeff's (8 h in 3 shifts; Jill 1 h in 1 shift)
+        harmless fix (2 changes, removes 1 event): give Ninsun Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00;
+          swap Jill's front gate 2025-01-01 06:00–07:00 with Siduri's front gate 2025-01-01 07:00–10:00
       - rest: 1 rest shorter than Shamhat's
-          7 h, between front gate 2025-01-01 03:00–06:00 (with Shamhat) and front gate 2025-01-01 13:00–16:00: 1.57 h
-            short, for shifts averaging 3 h, of Shamhat's 10 h in its place, between shifts averaging 3 h
+          6 h, between front gate 2025-01-01 13:00–16:00 and front gate 2025-01-01 22:00–2025-01-02 00:00 (with
+            Jack): 4 h short, after a 3 h shift (2 h per hour of it), of Shamhat's 10 h in its place, after a 3 h
+            shift (3.33 h per hour of it)
         transfers, each removing events but creating others:
-          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 13:00–16:00 -> Enkidu: 1 extra shift, 1
-            more rest shorter than a peer's
+          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 13:00–16:00 -> Enkidu: 1 more load
+            event, 1 more rest shorter than a peer's
       - disliked partner: Jack, in 1 shift
           front gate 2025-01-01 22:00–2025-01-02 00:00
-        transfers, each removing events but creating others:
-          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00 -> Enkidu: 1
-            extra shift
+        harmless fix (2 changes, removes 1 event): give Ninsun Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00;
+          swap Jill's front gate 2025-01-01 06:00–07:00 with Siduri's front gate 2025-01-01 07:00–10:00
   ```
 
-  All transfers are shown, one per line, until reading cards shows that's too long (on 50 samples of the example,
-  a median of 6 per grievance with only transfers, at most 12; on the tuning schedules, 17, at most 93).
+  All transfers are shown, one per line (on 50 samples of the example, a median of 6 per grievance with only
+  transfers, at most 12; on the tuning schedules, 17, at most 93). Reading cards by hand (2026-11-20), the user kept
+  them all rather than choose which to leave out: the grievances matter more, and come first.
 * **A closing table** of counts, per worker and per kind. Each cell gives the events, then, in brackets, how many of
   them belong to a grievance with a harmless fix, with only transfers, or with no fix within K, and how many lie
   wholly in the history. A grievance's events are counted under its fix, which may remove only some of them (its card
@@ -267,9 +271,9 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
   ```
   events by kind (with a harmless fix / only transfers / no fix of up to 3 changes / in the history)
              load         rest         disliked partner  missing like
-  Jack       2 (0/2/0/0)  2 (0/2/0/0)  0                 1 (0/0/1/0)
-  Jeff       2 (0/2/0/0)  1 (0/1/0/0)  1 (0/1/0/0)       0
-  Anne       1 (0/1/0/0)  1 (1/0/0/0)  0                 0
+  Jack       2 (2/0/0/0)  1 (0/1/0/0)  0                 2 (2/0/0/0)
+  Jill       0            0            0                 1 (1/0/0/0)
+  Jeff       2 (2/0/0/0)  1 (0/1/0/0)  1 (1/0/0/0)       0
   ```
 
   * Workers are listed in input order, since ranking them would take a rule across kinds.
@@ -281,7 +285,8 @@ it creates) and their counts per kind. [`tools/tune.py`](tuning.md) records the 
 per kind:
 * the events;
 * the most aggrieved worker's events;
-* the events with a harmless fix.
+* the events with a harmless fix;
+* for load and rest, the same three in hours: extra hours, hours short.
 
 It also records the liked-pairings total and K.
 
@@ -306,7 +311,7 @@ best penalty first, with each kind's events and how many have a harmless fix, an
 added together):
 
 * the **rank correlation** (Spearman) between the internal penalty and the number of events, and between the
-  penalty and the events with a harmless fix; for rest, in hours short too;
+  penalty and the events with a harmless fix; for load and rest, in hours too (extra hours, hours short);
 * **disagreements**: the schedules among the best quarter by internal penalty that still have events of that kind
   with a harmless fix, up to three, the best by penalty first. A harmless fix in the penalty's favourite schedule is a
   direct sign the penalty missed something.

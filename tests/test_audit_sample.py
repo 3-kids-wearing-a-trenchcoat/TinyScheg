@@ -39,7 +39,8 @@ def sample(seed: int, penalty: float, harmless: dict[str, int] | None = None) ->
     for kind in KIND_ORDER:
         count = (harmless or {}).get(kind, 0)
         measures[kind] = {"harmless": count, "most": count, "events": count}
-    measures[REST] |= {"hours_harmless": 0.0, "hours_most": 0.0, "hours": 0.0}
+    for kind in (LOAD, REST):
+        measures[kind] |= {"hours_harmless": 0.0, "hours_most": 0.0, "hours": 0.0}
     return Sample(seed, (seed,), Penalty(penalty, 0, 0, 0), measures)
 
 
@@ -58,7 +59,8 @@ def test_the_report_correlates_the_penalty_with_each_kind_never_adding_kinds() -
     text = report(samples)
     assert text.startswith("each kind's events (with a harmless fix); fixes searched up to 3 changes\nseed   0:")
     assert "  load: 1 / 1" in text and "  disliked partner: n/a (constant) / n/a (constant)" in text
-    assert "  rest: 0.87 / 0.87; in hours short: n/a (constant) / n/a (constant)" in text
+    assert "  rest: 0.87 / 0.87; in h short: n/a (constant) / n/a (constant)" in text
+    assert "  load: 1 / 1; in h more: n/a (constant) / n/a (constant)" in text
 
 
 def test_command_line(capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path) -> None:

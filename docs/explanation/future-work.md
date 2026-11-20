@@ -610,7 +610,8 @@ close to another forced shift).
 > **Not yet implemented.** The alternative not taken, 2026-11-11, when the audit
 > [counted liked-partner complaints apart](schedule-audit.md#liked-partner-complaints-are-counted-apart); revisit if
 > the new audit's [missing likes](schedule-audit.md#missing-likes)
-> ([ADR 0049](../decisions/0049-partners-in-the-audit.md)), read in tuning, show the uneven spread matters.
+> ([ADR 0049](../decisions/0049-partners-in-the-audit.md), [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)),
+> read in tuning, show the uneven spread matters.
 
 The likes penalty rewards the total of liked pairing, not how evenly it's spread, so the best schedule can leave one
 worker never sharing a shift with anyone they like while a pair of friends share several. The audit used to count
@@ -665,11 +666,41 @@ another two 4-hour shifts (8 hours) with one rest of 16: hours alone see the 2 e
 three more, shorter shifts with shorter rests. At $\sigma = 0.5$, every fully available worker had 3 or 4 shifts. So
 $\sigma$ stays at 0.5 until the rest part keeps short shifts apart in tight schedules too; then it could go to 0.
 
+Since [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) (2026-11-20), the audit measures load
+in hours alone: reading cards by hand, the user didn't count two 2-hour shifts as more load than one 4-hour shift. So
+tuning can now compare shift shares on the audit's own terms.
+
 Counting shifts also works the other way round, with a [dangling shift](#dangling-shifts) (`sweep_06`,
 2026-11-14). One worker has a 6-hour shift and a 1-hour shift left over at the end of the period, 7 hours against a
 peer's 4, where an even share is 5. Moving the 1-hour shift to the peer evens the hours, but at $\sigma = 0.5$ it
 counts as 1.8 hours, and as a whole extra shift for the peer, so the model keeps it where it is, at every weight
 tried; at $\sigma = 0$ it moves it. All 12 of that input's complaints with an easy fix are this one move.
+
+## A rest target judged by the shift before it
+
+> [!WARNING]
+> **Not yet implemented.** Deferred on 2026-11-20.
+
+The scoring's rest target is in proportion to the mean length of the two shifts around a rest
+([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). Since
+[ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md), the audit judges a rest by the shift before it
+alone: the user expects the rest after a shift twice as long to be twice as long, and doesn't count a rest as short
+for the shift that follows it. So the model aims at something slightly different from what the audit checks. If
+tuning shows it matters, the target could follow the shift before a rest, which needs an ADR, its lower bounds
+checked again and tuning.
+
+## Symmetric preferences
+
+> [!WARNING]
+> **Not yet implemented.** Floated by the user on 2026-11-20.
+
+Each worker lists whom they like and dislike, so feelings can be one-sided: on one card read by hand, Gray liked
+Casey, who disliked Gray. The scoring rates each side of a pair from its own lists, a dislike outweighing a like
+([ADR 0023](../decisions/0023-dislikes-outweigh-likes.md)), and the audit lets a dislike cancel the like it meets
+([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)). Symmetric preferences would give each pair
+of workers one relation (liked, disliked or neither), leaving it to whoever writes the input to decide how to read
+one-sided feelings. That changes the input format, the scoring of partners (and its constants, such as
+`neutral_partner`), every benchmark input and the tuning.
 
 ## Tuning on longer schedules
 

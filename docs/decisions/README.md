@@ -69,9 +69,10 @@ ADR that supersedes the old one.
 | [0045](0045-rest-lookahead.md) | A rest look-ahead in the lower bound | Accepted |
 | [0046](0046-whole-slot-sets-from-each-workers-own-domain.md) | The whole-slot bound's sets from each worker's own domain | Accepted, amended by [0047](0047-choosing-the-role-aware-bound.md) |
 | [0047](0047-choosing-the-role-aware-bound.md) | Choosing the role-aware bound: on, off, or automatically from the input | Accepted |
-| [0048](0048-an-audit-that-only-observes.md) | An audit that only observes: each worker's grievances as events, against the best-off peer | Accepted, amended by [0050](0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) |
-| [0049](0049-partners-in-the-audit.md) | Partners in the audit: a disliked person in a shift is an event in itself; a missing like, by the worker's own likes applied to a peer's shifts | Accepted |
+| [0048](0048-an-audit-that-only-observes.md) | An audit that only observes: each worker's grievances as events, against the best-off peer | Accepted, amended by [0050](0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) and [0051](0051-the-audit-after-reading-cards-by-hand.md) |
+| [0049](0049-partners-in-the-audit.md) | Partners in the audit: a disliked person in a shift is an event in itself; a missing like, by the worker's own likes applied to a peer's shifts | Accepted, amended by [0051](0051-the-audit-after-reading-cards-by-hand.md) |
 | [0050](0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) | A fix harms a worker only where their own situation gets worse | Accepted |
+| [0051](0051-the-audit-after-reading-cards-by-hand.md) | The audit after reading cards by hand: load in hours, rest by the shift just done, a missing like in the worker's own shifts, a dislike cancels the like it meets | Accepted |
 
 ## Template
 

@@ -21,7 +21,8 @@ point, not final, but they shape how every later output is read, so the method i
 > **The audit was rebuilt** in Phase 13 (decided 2026-11-19,
 > [ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and
 > [ADR 0049](../decisions/0049-partners-in-the-audit.md), amended by
-> [ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md)): a list of grievance
+> [ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) and
+> [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)): a list of grievance
 > events per worker, with no severities and nothing added across kinds. Every result on this page was measured with
 > the audit until then (severities, easy fixes found greedily), so its numbers aren't comparable with the new
 > audit's. The defaults chosen with it
@@ -89,10 +90,12 @@ matters more is made here, when reading it:
    2. **The most aggrieved worker's events:** most aggrieved first, evenness being one input among the others, not
       a rule that overrides them ("evenness first" alone prefers levelling down).
    3. **All events:** not more grievances than necessary.
-3. **Rest is read in hours short.** Its events have sizes, and with no margin, a rest half an hour shorter than a
-   peer's is an event as much as one four hours shorter, so counts say little. So for rest, the three measures are
-   also taken in hours short (adding to the measures of ADR 0048): in all, the most aggrieved worker's, and those
-   with a harmless fix. Hours added within one kind are one unit, not an exchange rate.
+3. **Rest is read in hours short, load in extra hours.** Rest events have sizes, and with no margin, a rest half an
+   hour shorter than a peer's is an event as much as one four hours shorter, so counts say little. Load is measured
+   in hours ([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)), its events counted in the
+   worker's own shifts. So for both, the three measures are also taken in hours (adding to the measures of
+   ADR 0048): in all, the most aggrieved worker's, and those with a harmless fix. Hours added within one kind are one
+   unit, not an exchange rate.
 4. **Dominance first.** A setting no better than another in any measure, and worse in at least one, is dominated,
    and `tools/tune.py report` lists, for each setting, the settings that dominate it, each pair compared on the
    inputs both finished, for the first period alone and over both periods. There's no single ranking: settings are
@@ -107,7 +110,8 @@ matters more is made here, when reading it:
 
    These rules are per worker, so they're applied by hand, on the inputs where the two settings' schedules differ,
    with `tools/tune.py compare STAGE A B`: for each such input, both settings' closing tables side by side (every
-   worker's events per kind, as in [the audit's report](schedule-audit.md#the-report), and for rest the hours short),
+   worker's events per kind, as in [the audit's report](schedule-audit.md#the-report), and for load and rest the
+   hours: extra hours, hours short),
    then the cells that differ, one per line, as a reading aid; then the inputs where both gave the same schedule.
    `--cards INPUT` prints both full audit reports of one input instead, when the tables raise a question the
    counts can't answer.
@@ -126,7 +130,7 @@ the whole of both (the `day2_` columns). A first period that leaves the second n
 2's `no schedule`: a failure, since in real use the next schedule couldn't be made
 ([future work](future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule)).
 
-Besides the audit's measures ([above](#reading-the-audit): each kind's three, for rest in hours short too, with K
+Besides the audit's measures ([above](#reading-the-audit): each kind's three, for load and rest in hours too, with K
 and each worker's row of the closing table, for `compare`), each schedule gets measures that don't come from the
 audit, over the whole schedule
 (both periods for day 2): each rest in available time

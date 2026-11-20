@@ -2,7 +2,8 @@
 
 **Status:** Accepted (one sentence on how the fix search reaches a nearby schedule corrected on 2026-11-20, in
 place); amended by [ADR 0050](0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) (which fixes are
-harmless). Partners (disliked and liked workers in a shift) are decided apart, in
+harmless) and [ADR 0051](0051-the-audit-after-reading-cards-by-hand.md) (load is measured in hours alone; a rest is
+judged by the shift before it). Partners (disliked and liked workers in a shift) are decided apart, in
 [ADR 0049](0049-partners-in-the-audit.md).
 
 ## Context

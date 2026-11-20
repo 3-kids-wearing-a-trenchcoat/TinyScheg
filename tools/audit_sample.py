@@ -14,8 +14,8 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from audit import (DEFAULT_MAX_CHANGES, KIND_ORDER, REST, audit_measures, build_context, non_negative, plural,
-                   shown)
+from audit import (DEFAULT_MAX_CHANGES, HOURS_KINDS, HOURS_UNITS, KIND_ORDER, audit_measures, build_context,
+                   non_negative, plural, shown)
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.csp.search import find_first_schedule
 from tinyscheg.model.schedule_input import ScheduleInput
@@ -121,11 +121,14 @@ def disagreements(samples: Sequence[Sample]) -> dict[str, list[Sample]]:
 
 
 def describe_sample(sample: Sample) -> str:
-    """One line per sample: its seed and penalty, and each kind's events (with a harmless fix), for rest hours short."""
+    """
+    One line per sample: its seed and penalty, and each kind's events (with a harmless fix), for load and rest in hours
+    too (extra hours, hours short)
+    """
     kinds = []
     for kind in KIND_ORDER:
         measures = sample.measures[kind]
-        hours = f", {shown(measures['hours'])} h short" if kind == REST and measures["hours"] else ""
+        hours = f", {shown(measures['hours'])} {HOURS_UNITS[kind]}" if kind in HOURS_KINDS and measures["hours"] else ""
         kinds.append(f"{kind} {shown(measures['events'])} ({shown(measures['harmless'])}){hours}")
     return f"seed {sample.seed:>3}: penalty {shown(sample.penalty.total):>5}  " + "  ".join(kinds)
 
@@ -139,7 +142,7 @@ def describe_correlation(penalties: Sequence[float], samples: Sequence[Sample], 
 def report(samples: Sequence[Sample], max_changes: int = DEFAULT_MAX_CHANGES) -> str:
     """
     The sampling report: every sample by penalty, the rank correlation of the penalty with each kind's events (all,
-    and with a harmless fix; for rest in hours short too), and each kind's disagreements
+    and with a harmless fix; for load and rest in hours too), and each kind's disagreements
     :param samples: the samples
     :param max_changes: how far the audit's fix search reached
     :return: the report, as text
@@ -154,8 +157,8 @@ def report(samples: Sequence[Sample], max_changes: int = DEFAULT_MAX_CHANGES) ->
     for kind in KIND_ORDER:
         line = (f"  {kind}: {describe_correlation(penalties, samples, kind, 'events')} / "
                 f"{describe_correlation(penalties, samples, kind, 'harmless')}")
-        if kind == REST:
-            line += (f"; in hours short: {describe_correlation(penalties, samples, kind, 'hours')} / "
+        if kind in HOURS_KINDS:
+            line += (f"; in {HOURS_UNITS[kind]}: {describe_correlation(penalties, samples, kind, 'hours')} / "
                      f"{describe_correlation(penalties, samples, kind, 'hours_harmless')}")
         lines.append(line)
     lines.append(f"disagreements (the best {shown(BEST_SHARE * 100)}% by penalty, still with a harmless fix), by kind:")

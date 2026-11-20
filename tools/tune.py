@@ -45,8 +45,8 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from audit import (DEFAULT_MAX_CHANGES, FIX_COUNT_FIELDS, KIND_MEASURES, KIND_ORDER, MISSING_LIKE, REST,
-                   REST_HOURS_MEASURES, AuditContext, WorkerTally, aligned, audit_measures, build_context, plural,
+from audit import (DEFAULT_MAX_CHANGES, FIX_COUNT_FIELDS, HOURS_KINDS, HOURS_MEASURES, HOURS_UNITS, KIND_MEASURES,
+                   KIND_ORDER, MISSING_LIKE, AuditContext, WorkerTally, aligned, audit_measures, build_context, plural,
                    report_grievances, report_text, shown, tally_cell, with_history)
 from tinyscheg.csp.problem import Problem, build_problem
 from tinyscheg.csp.next_period import next_period_input
@@ -91,8 +91,8 @@ RULE_CHECKS = ("outrage_outweighs_pairings", "outrage_outweighs_twice_at_minimum
 
 DOMINANCE_EPSILON = 1e-9  # sums of a measure closer than this are equal (hours short are added as floats)
 MEASURE_HEADINGS = {"harmless": "with a harmless fix", "most": "most aggrieved", "events": "events",
-                    "hours_harmless": "h short, harmless fix", "hours_most": "h short, most aggrieved",
-                    "hours": "h short"}  # the report's column headings of the audit's measures
+                    "hours_harmless": "{unit}, harmless fix", "hours_most": "{unit}, most aggrieved",
+                    "hours": "{unit}"}  # the report's column headings of the audit's measures, {unit} from HOURS_UNITS
 COLUMN_GAP = 2  # spaces between a table's columns, as audit.aligned leaves them
 
 
@@ -101,11 +101,20 @@ def kind_field(kind: str, measure: str) -> str:
     return f"{kind.replace(' ', '_')}_{measure}"
 
 
+def kind_measure_names(kind: str) -> tuple[str, ...]:
+    """The measures recorded for one kind: KIND_MEASURES, and for load and rest HOURS_MEASURES too."""
+    return KIND_MEASURES + (HOURS_MEASURES if kind in HOURS_KINDS else ())
+
+
+def measure_heading(kind: str, measure: str) -> str:
+    """A measure's column heading in the report, e.g. 'h more, most aggrieved' for load."""
+    return MEASURE_HEADINGS[measure].format(unit=HOURS_UNITS.get(kind, ""))
+
+
 # the audit's measures, per kind (docs/explanation/tuning.md#reading-the-audit): the events with a harmless fix, the
-# most aggrieved worker's events and all events, and for rest the same in hours short; K, how far the fix search
-# reached; and each worker's row of the closing table, as JSON, for tune.py compare
-KIND_FIELDS = tuple(kind_field(kind, measure) for kind in KIND_ORDER
-                    for measure in KIND_MEASURES + (REST_HOURS_MEASURES if kind == REST else ()))
+# most aggrieved worker's events and all events, and for load and rest the same in hours (extra hours, hours short);
+# K, how far the fix search reached; and each worker's row of the closing table, as JSON, for tune.py compare
+KIND_FIELDS = tuple(kind_field(kind, measure) for kind in KIND_ORDER for measure in kind_measure_names(kind))
 AUDIT_FIELDS = ("max_changes", *KIND_FIELDS, "by_worker")
 # measures that don't come from the audit (rests in available time, ADR 0038; peers are the fully available workers)
 MEASURE_FIELDS = ("rests", "rests_at_minimum", "rest_median", "shortest_rest_spread", "peer_hours_gap",
@@ -403,16 +412,20 @@ def audit_fields(schedule_input: ScheduleInput, problem: Problem, assignment: tu
 
 
 def tally_json(tallied: WorkerTally) -> dict[str, Any]:
-    """A worker's row of the closing table, for the results file: their counts per kind, in FIX_COUNT_FIELDS order."""
+    """
+    A worker's row of the closing table, for the results file: their counts per kind, in FIX_COUNT_FIELDS order, and
+    their hours per kind of HOURS_KINDS (in all, and with a harmless fix)
+    """
     return {"name": tallied.name, **{kind: [tallied.counts[kind][field] for field in FIX_COUNT_FIELDS]
                                      for kind in KIND_ORDER},
-            "rest_hours": round(tallied.rest_hours, 4), "rest_hours_harmless": round(tallied.rest_hours_harmless, 4)}
+            "hours": {kind: round(tallied.hours[kind], 4) for kind in HOURS_KINDS},
+            "hours_harmless": {kind: round(tallied.hours_harmless[kind], 4) for kind in HOURS_KINDS}}
 
 
 def tallies_from_json(text: str) -> list[WorkerTally]:
     """Every worker's row of the closing table, read back from a results row's by_worker field."""
     return [WorkerTally(entry["name"], {kind: dict(zip(FIX_COUNT_FIELDS, entry[kind])) for kind in KIND_ORDER},
-                        entry["rest_hours"], entry["rest_hours_harmless"]) for entry in json.loads(text)]
+                        entry["hours"], entry["hours_harmless"]) for entry in json.loads(text)]
 
 
 def reaudit_row(row: dict[str, str]) -> dict[str, str]:
@@ -799,9 +812,10 @@ def _first_period_rows(rows: list[dict[str, str]], first: str, second: str,
 
 
 def compare_cell(tallied: WorkerTally, kind: str, searched: bool) -> str:
-    """A worker's cell of one kind, as in the audit's closing table; for rest, with the hours short too."""
+    """A worker's cell of one kind, as in the audit's closing table; for load and rest, with the hours too."""
     cell = tally_cell(tallied.counts[kind], searched)
-    return f"{cell} {shown(tallied.rest_hours)} h" if kind == REST and tallied.rest_hours else cell
+    hours = tallied.hours.get(kind, 0.0)
+    return f"{cell} {shown(hours)} {HOURS_UNITS[kind]}" if hours else cell
 
 
 def compare_input(name: str, first: str, second: str, first_row: dict[str, str],
@@ -992,9 +1006,9 @@ def describe_audit(rows: list[dict[str, str]], include_holdout: bool, prefix: st
     def label(summary: dict[str, Any]) -> str:
         return summary["setting"] + (f" [K={','.join(map(str, summary['k']))}]" if mixed else "")
     for kind in KIND_ORDER:
-        measures = KIND_MEASURES + (REST_HOURS_MEASURES if kind == REST else ())
+        measures = kind_measure_names(kind)
         liked = kind == MISSING_LIKE  # liked pairings, a boon, read beside missing likes
-        table = [["setting", "inputs", *(MEASURE_HEADINGS[measure] for measure in measures)]
+        table = [["setting", "inputs", *(measure_heading(kind, measure) for measure in measures)]
                  + (["liked pairings"] if liked else [])]
         table += [[label(summary), str(summary["inputs"]),
                    *(f"{summary[kind_field(kind, measure)]:.2f}" for measure in measures)]

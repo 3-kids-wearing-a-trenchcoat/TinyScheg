@@ -104,17 +104,20 @@ def test_a_worker_who_was_away_longer_is_not_a_peer() -> None:
 
 
 def test_the_measures_per_kind_follow_the_closing_table() -> None:
-    # Anne: 6 shifts over both periods against Cy's 2, and two rests 8 hours short of Bob's, one of them in the
-    # history; a harmless fix for each grievance. Bob: 2 extra shifts with a harmless fix, and a rest 8 hours short of
-    # Cy's in the history. Events wholly in the history are counted, but never as having a harmless fix
+    # Anne: 24 hours over both periods against Cy's 8 (4 of her 4-hour shifts), and two rests 8 hours short of Bob's,
+    # one of them in the history; a harmless fix for each grievance. Bob: 8 hours more than Cy (2 shifts) with a
+    # harmless fix, and a rest 8 hours short of Cy's in the history. Events wholly in the history are counted, but
+    # never as having a harmless fix
     schedule_input = history_input()
     shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
     context, assignment = with_history(schedule_input, shifts, (0, 1, 0, 2, 0, 1))
     tallies = worker_tallies(context, assignment, report_grievances(context, assignment))
     assert [tallied.name for tallied in tallies] == ["Anne", "Bob", "Cy"]
-    assert [(tallied.rest_hours, tallied.rest_hours_harmless) for tallied in tallies] == [(16, 8), (8, 0), (0, 0)]
+    assert [(tallied.hours[REST], tallied.hours_harmless[REST]) for tallied in tallies] == [(16, 8), (8, 0), (0, 0)]
+    assert [(tallied.hours[LOAD], tallied.hours_harmless[LOAD]) for tallied in tallies] == [(16, 16), (8, 8), (0, 0)]
     measures = kind_measures(tallies)
-    assert measures[LOAD] == {"harmless": 6, "most": 4, "events": 6}
+    assert measures[LOAD] == {"harmless": 6, "most": 4, "events": 6, "hours_harmless": 24, "hours_most": 16,
+                              "hours": 24}
     assert measures[REST] == {"harmless": 1, "most": 2, "events": 3, "hours_harmless": 8, "hours_most": 16,
                               "hours": 24}
     assert measures[DISLIKED_PARTNER] == measures[MISSING_LIKE] == {"harmless": 0, "most": 0, "events": 0}

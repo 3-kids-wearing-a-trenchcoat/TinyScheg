@@ -1,10 +1,10 @@
-"""Tests for the audit's grievances (tools/audit.py, ADR 0048 and ADR 0049), on hand-built schedules."""
+"""Tests for the audit's grievances (tools/audit.py, ADR 0048, ADR 0049 and ADR 0051), on hand-built schedules."""
 import datetime as dt
 
 import pytest
 
-from audit import (AuditContext, LikeGrievance, LoadGrievance, MissingLike, Rest, WorkerFacts, away_times,
-                   build_context, find_grievances, rest_events, rest_grievance, with_history)
+from audit import (AuditContext, LikeGrievance, LoadGrievance, Rest, WorkerFacts, away_times, build_context,
+                   find_grievances, rest_events, rest_grievance, with_history)
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import PreviousSchedule, ScheduleInput, Settings
 from tinyscheg.model.shift_generation import all_slots, generate_shifts
@@ -36,7 +36,7 @@ def names(*workers: str) -> list[Worker]:
 
 
 def facts_with_rests(*rests: tuple[float, float]) -> WorkerFacts:
-    """A worker's facts with only rests, each (available hours, mean length of the shifts around it)."""
+    """A worker's facts with only rests, each (available hours, length of the shift before it)."""
     return WorkerFacts((), 0.0, 0.0, tuple(Rest(index, index + 1, hours, length)
                                            for index, (hours, length) in enumerate(rests)), {}, 0)
 
@@ -69,25 +69,25 @@ def test_a_worker_who_joined_is_available_only_from_then() -> None:
     assert context.staffed_availability == (48, 48, 24)
 
 
-# --- load: whole extra shifts against the best-off peer, scaled down to the worker's availability ---
+# --- load: extra hours against the best-off peer, scaled down to the worker's availability, in the worker's shifts ---
 
 def test_load_has_no_tolerance_the_extra_shift_of_a_2_2_3_split_is_an_event() -> None:
     context = context_for(names("Anne", "Bob", "Cy"), 28)  # 7 shifts of 4 hours
     load = find_grievances(context, (0, 1, 2, 0, 1, 2, 2)).load
-    assert load == (None, None, LoadGrievance(2, 0, 1, 2.0, 8.0))
+    assert load == (None, None, LoadGrievance(2, 0, 1, 4.0, 2.0, 8.0))
 
 
 def test_load_is_against_the_best_off_peer_not_once_per_peer() -> None:
     context = context_for(names("Anne", "Bob", "Cy", "Dana"), 28)
     load = find_grievances(context, (0, 0, 0, 0, 1, 1, 2)).load  # 4, 2, 1 and 0 shifts
-    assert load[0] == LoadGrievance(0, 3, 4, 0.0, 0.0)  # against Dana's none, not 2 + 3 + 4 against each
+    assert load[0] == LoadGrievance(0, 3, 4, 16.0, 0.0, 0.0)  # against Dana's none, not 2 + 3 + 4 against each
 
 
 def test_a_peers_load_is_scaled_down_to_the_workers_availability_never_up() -> None:
     workers = [Worker("Anne"), Worker("Bob", unavailable=(DateTimeRange(at(0), at(12)),))]  # 24 and 12 hours
     context = context_for(workers, 24)  # shifts from 0, 4, ... 20
-    # Anne's 3 shifts count as 1.5 against Bob's 3: one whole extra shift; Bob, available less, is no peer of Anne's
-    assert find_grievances(context, (0, 0, 0, 1, 1, 1)).load == (None, LoadGrievance(1, 0, 1, 1.5, 6.0))
+    # Anne's 12 hours count as 6 against Bob's 12: one of his shifts; Bob, available less, is no peer of Anne's
+    assert find_grievances(context, (0, 0, 0, 1, 1, 1)).load == (None, LoadGrievance(1, 0, 1, 6.0, 1.5, 6.0))
     # Anne's 4 shifts count as 2 against Bob's 2: none, and none for Anne, whatever her 4 against his 2
     assert find_grievances(context, (0, 0, 0, 0, 1, 1)).load == (None, None)
 
@@ -106,12 +106,22 @@ def assign(context: AuditContext, owners: dict[tuple[str, int], int], default: i
                  for slot in context.slots)
 
 
-def test_load_is_more_only_by_one_measure_and_no_less_by_the_other() -> None:
-    context = mixed_lengths(12)  # Cy the gate 0-4, Bob the desk 0-12, Anne the gate 4-8 and 8-12
-    load = find_grievances(context, assign(context, {("gate", 0): 2, ("desk", 0): 1}, 0)).load
-    # Anne's 2 shifts (8 hours) against Bob's 1 (12 hours): more shifts, fewer hours, neither did more; Bob's 8 hours
-    # more than Cy, in as many shifts, fit none of his own shifts: no event; Anne against Cy, one shift more
-    assert load == (LoadGrievance(0, 2, 1, 1.0, 4.0), None, None)
+def two_lengths(period_hours: int, workers: list[Worker], short: int = 2) -> AuditContext:
+    """A gate post of `short`-hour shifts and a desk post of 4-hour shifts."""
+    posts = (Post("gate", ShiftRules(dt.timedelta(hours=short), (("any", 1),))),
+             Post("desk", ShiftRules(dt.timedelta(hours=4), (("any", 1),))))
+    return context_for(workers, period_hours, posts=posts)
+
+
+def test_load_is_hours_alone_whatever_the_number_of_shifts() -> None:
+    # Anne's two 2-hour gate shifts against Bob's one 4-hour desk shift: as many hours, so no event either way
+    context = two_lengths(4, names("Anne", "Bob"))
+    assert find_grievances(context, assign(context, {("desk", 0): 1}, 0)).load == (None, None)
+    # Bob's 5 hours in 2 shifts (the desk 0-4, the gate 5-6) against Anne's 3 in 3 (the gates 0-1, 2-3, 4-5): 2 hours
+    # more fit his 1-hour shift, though he did fewer shifts (Cy does the rest)
+    context = two_lengths(8, names("Anne", "Bob", "Cy"), short=1)
+    owners = {("gate", 0): 0, ("gate", 2): 0, ("gate", 4): 0, ("desk", 0): 1, ("gate", 5): 1}
+    assert find_grievances(context, assign(context, owners, 2)).load[1] == LoadGrievance(1, 0, 1, 2.0, 3.0, 3.0)
 
 
 def test_an_hours_excess_counts_the_workers_own_shifts_shortest_first() -> None:
@@ -119,22 +129,41 @@ def test_an_hours_excess_counts_the_workers_own_shifts_shortest_first() -> None:
     # Anne the desk 0-12 and the gate 12-16 (16 hours), Bob the gates 0-4 and 4-8 (8 hours), in as many shifts:
     # 8 hours more fit Anne's 4-hour shift, not also her 12-hour one, so 1 event (8 / 4 would have said 2)
     assignment = assign(context, {("desk", 0): 0, ("gate", 12): 0, ("gate", 0): 1, ("gate", 4): 1}, 2)
-    assert find_grievances(context, assignment).load[0] == LoadGrievance(0, 1, 1, 2.0, 8.0)
+    assert find_grievances(context, assignment).load[0] == LoadGrievance(0, 1, 1, 8.0, 2.0, 8.0)
 
 
-# --- rest: the available part, per hour of the shifts around it, rest by rest against the best-off peer ---
+def test_the_load_peer_gives_the_most_events_then_the_most_extra_hours() -> None:
+    # Anne's 6 hours (the gate 0-2, the desk 4-8) are 1 event against Bob's 4 (the desk 0-4), Cy's 2 (the gate 2-4)
+    # and Dana's 4 (the gates 4-6 and 6-8): the strongest case is Cy's, 4 hours more, though Bob comes first
+    context = two_lengths(8, names("Anne", "Bob", "Cy", "Dana"))
+    owners = {("gate", 0): 0, ("desk", 4): 0, ("desk", 0): 1, ("gate", 2): 2}
+    assert find_grievances(context, assign(context, owners, 3)).load[0] == LoadGrievance(0, 2, 1, 4.0, 1.0, 2.0)
 
-def test_a_rest_is_only_its_available_part_per_hour_of_the_shifts_around_it() -> None:
+
+# --- rest: the available part, per hour of the shift before it, rest by rest against the best-off peer ---
+
+def test_a_rest_is_only_its_available_part_per_hour_of_the_shift_before_it() -> None:
     workers = [Worker("Anne", unavailable=(DateTimeRange(at(4), at(6)),)), Worker("Bob")]
     context = context_for(workers, 12, length=2)  # shifts from 0, 2, ... 10
     facts = find_grievances(context, (0, 1, 1, 1, 0, 1)).facts  # Anne 0-2 and 8-10, away 4-6
     assert facts[0].rests == (Rest(0, 4, 4.0, 2.0),) and facts[0].rests[0].per_hour == 2
 
 
-def test_a_rest_between_longer_shifts_is_shorter() -> None:
-    # 6 hours between a 12-hour and a 2-hour shift (mean 7) against 6 hours between two 2-hour shifts: 15 hours short
-    events = rest_events((Rest(0, 1, 6.0, 7.0),), (Rest(0, 1, 6.0, 2.0),))
-    assert [event.shortfall for event in events] == [pytest.approx(15)]
+def test_a_rest_after_a_longer_shift_is_shorter() -> None:
+    # 6 hours after a 12-hour shift against 6 hours after a 2-hour one (3 per hour of it): 30 hours short of 36
+    events = rest_events((Rest(0, 1, 6.0, 12.0),), (Rest(0, 1, 6.0, 2.0),))
+    assert [event.shortfall for event in events] == [pytest.approx(30)]
+
+
+def test_a_rest_is_judged_by_the_shift_before_it_not_the_one_after() -> None:
+    # Anne's 10 hours between the gate 0-2 and the desk 12-16 are 5 per hour of the shift before them: no shorter than
+    # 8 hours after a 2-hour shift (4), though the shifts around them average 3 hours; the other way, 2 hours short
+    context = two_lengths(16, names("Anne", "Bob"))
+    facts = find_grievances(context, assign(context, {("gate", 0): 0, ("desk", 12): 0}, 1)).facts
+    rest, = facts[0].rests
+    assert (rest.hours, rest.shift_hours, rest.per_hour) == (10, 2, 5)
+    assert rest_events(facts[0].rests, facts_with_rests((8, 2)).rests) == ()
+    assert [event.shortfall for event in rest_events(facts_with_rests((8, 2)).rests, facts[0].rests)] == [2]
 
 
 def test_the_same_rests_for_everyone_give_no_event_whatever_their_order_in_time() -> None:
@@ -177,22 +206,28 @@ def like_context(**likes: set[str]) -> AuditContext:
 ANNE, BOB, CY, XENA = range(4)
 
 
-def test_a_missing_like_is_judged_by_the_workers_own_likes_on_the_peers_shifts() -> None:
+def test_a_missing_like_is_a_shift_with_partners_none_of_whom_the_worker_likes() -> None:
     context = like_context(Anne={"Xena"}, Cy={"Anne", "Bob", "Xena"})
-    # Bob shares 2 shifts with Xena, Cy 1, Anne none; each has 3 shifts
-    crews = ((BOB, XENA), (BOB, XENA), (ANNE, CY), (ANNE, CY), (ANNE, BOB), (XENA, CY))
+    crews = ((BOB, XENA), (BOB, XENA), (ANNE, CY), (ANNE, XENA), (ANNE, BOB), (XENA, CY))
     grievances = find_grievances(context, tuple(worker for crew in crews for worker in crew))
-    assert grievances.liked[ANNE] == LikeGrievance(ANNE, BOB, (MissingLike(XENA, 2, 0, (0, 1), 2.0),))
-    # Cy likes everyone and is with someone liked in every shift, which makes nobody else aggrieved: Bob likes nobody
-    assert grievances.liked[BOB] is None and grievances.liked[XENA] is None
-    assert [facts.liked_pairings for facts in grievances.facts] == [0, 0, 3, 0]
+    # Anne is with Xena in 1 of her 3 shifts: the other 2 are events, whoever else had Xena, and with no peer
+    assert grievances.liked[ANNE] == LikeGrievance(ANNE, (2, 4))
+    # Cy likes everyone, so is with someone liked in every shift; Bob and Xena like nobody
+    assert grievances.liked[BOB] is None and grievances.liked[CY] is None and grievances.liked[XENA] is None
+    assert [facts.liked_pairings for facts in grievances.facts] == [1, 0, 2, 0]
 
 
-def test_a_peers_pairings_are_scaled_down_to_the_workers_shifts_never_up() -> None:
-    context = like_context(Anne={"Xena"})
-    crews = ((BOB, XENA), (BOB, XENA), (BOB, XENA), (BOB, XENA), (ANNE, CY), (ANNE, CY))
-    liked = find_grievances(context, tuple(worker for crew in crews for worker in crew)).liked
-    assert liked[ANNE] == LikeGrievance(ANNE, BOB, (MissingLike(XENA, 2, 0, (0, 1, 2, 3), 2.0),))  # 4 x 2/4
-    crews = ((BOB, XENA), (ANNE, CY), (ANNE, CY), (ANNE, CY), (ANNE, CY), (CY, XENA))
-    liked = find_grievances(context, tuple(worker for crew in crews for worker in crew)).liked
-    assert liked[ANNE] == LikeGrievance(ANNE, BOB, (MissingLike(XENA, 1, 0, (0,), 1.0),))  # Bob's 1, as it is
+def test_a_shift_worked_alone_is_no_missing_like() -> None:
+    context = context_for([Worker("Anne", likes=frozenset({"Bob"})), Worker("Bob")], 8)  # two shifts of one worker
+    assert find_grievances(context, (0, 1)).liked == (None, None)
+
+
+def test_a_like_for_someone_who_dislikes_the_worker_doesnt_count() -> None:
+    workers = [Worker("Anne", likes=frozenset({"Bob", "Cy"})), Worker("Bob", dislikes=frozenset({"Anne"})),
+               Worker("Cy")]
+    context = context_for(workers, 8, crew=2)  # two shifts of 2
+    assert context.likes == (frozenset({2}), frozenset(), frozenset())
+    grievances = find_grievances(context, (0, 1, 0, 2))  # Anne with Bob, then with Cy
+    # with Bob, whom she likes but who dislikes her, Anne is with nobody she likes; Bob's dislike stays an event
+    assert grievances.liked[0] == LikeGrievance(0, (0,)) and grievances.facts[0].liked_pairings == 1
+    assert [(event.shift, event.person) for event in grievances.disliked[1]] == [(0, 0)]
