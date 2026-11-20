@@ -1,12 +1,11 @@
 """Tests for tools/audit_sample.py."""
-import dataclasses
 import pathlib
 
 import pytest
 
-from audit import AuditSummary
-from audit_sample import (EXIT_NO_SCHEDULE, EXIT_SUCCESS, Sample, disagreements, main, ranks, shuffled_schedule,
-                          spearman, take_samples)
+from audit import DISLIKED_PARTNER, KIND_ORDER, LOAD, MISSING_LIKE, REST
+from audit_sample import (EXIT_NO_SCHEDULE, EXIT_SUCCESS, Sample, disagreements, main, ranks, report,
+                          shuffled_schedule, spearman, take_samples)
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
 from tinyscheg.parsing.input_reader import read_input
@@ -34,15 +33,32 @@ def test_shuffled_schedules_are_legal_in_the_original_worker_order() -> None:
         assert hard_constraint_violations(schedule_input, slots, assignment) == []
 
 
-def test_disagreements_are_the_best_by_penalty_with_the_most_severity_with_an_easy_fix() -> None:
-    def sample(seed: int, penalty: float, easy_fix_severity: float) -> Sample:
-        summary = AuditSummary(0, 0, easy_fix_severity, 0.0, 0, 0.0, ())
-        return Sample(seed, (seed,), Penalty(penalty, 0, 0, 0), summary)
-    samples = [sample(0, 1.0, 0.0), sample(1, 2.0, 5.0), sample(2, 3.0, 9.0), sample(3, 4.0, 9.0)]
-    # the best quarter of four is one sample, seed 0, with nothing that has an easy fix
-    assert disagreements(samples) == []
-    samples[0] = dataclasses.replace(samples[0], summary=AuditSummary(0, 0, 2.0, 0.0, 0, 0.0, ()))
-    assert [found.seed for found in disagreements(samples)] == [0]
+def sample(seed: int, penalty: float, harmless: dict[str, int] | None = None) -> Sample:
+    """A sample whose only events are those with a harmless fix given, by kind."""
+    measures: dict[str, dict[str, float]] = {}
+    for kind in KIND_ORDER:
+        count = (harmless or {}).get(kind, 0)
+        measures[kind] = {"harmless": count, "most": count, "events": count}
+    measures[REST] |= {"hours_harmless": 0.0, "hours_most": 0.0, "hours": 0.0}
+    return Sample(seed, (seed,), Penalty(penalty, 0, 0, 0), measures)
+
+
+def test_disagreements_are_the_best_by_penalty_still_with_a_harmless_fix_kind_by_kind() -> None:
+    samples = [sample(seed, float(seed), {LOAD: 1}) for seed in range(8)]
+    # the best quarter of eight is seeds 0 and 1, both with a load event that has a harmless fix
+    assert {kind: [found.seed for found in found_samples] for kind, found_samples in disagreements(samples).items()} \
+        == {LOAD: [0, 1], REST: [], DISLIKED_PARTNER: [], MISSING_LIKE: []}
+    samples[0] = sample(0, 0.0, {MISSING_LIKE: 2})
+    assert [found.seed for found in disagreements(samples)[MISSING_LIKE]] == [0]
+    assert [found.seed for found in disagreements(samples)[LOAD]] == [1]
+
+
+def test_the_report_correlates_the_penalty_with_each_kind_never_adding_kinds() -> None:
+    samples = [sample(0, 1.0, {LOAD: 0}), sample(1, 2.0, {LOAD: 1}), sample(2, 3.0, {LOAD: 2, REST: 1})]
+    text = report(samples)
+    assert text.startswith("each kind's events (with a harmless fix); fixes searched up to 3 changes\nseed   0:")
+    assert "  load: 1 / 1" in text and "  disliked partner: n/a (constant) / n/a (constant)" in text
+    assert "  rest: 0.87 / 0.87; in hours short: n/a (constant) / n/a (constant)" in text
 
 
 def test_command_line(capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path) -> None:

@@ -10,7 +10,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
 bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19); Phase 13, a reliable audit, started
-(2026-11-19; steps 1 and 2, the decisions and the design, done).
+(2026-11-19; steps 1 to 3, the decisions, the design and the rebuilt audit, done).
 
 ## Phase 1: Walking skeleton
 
@@ -649,12 +649,15 @@ answer, the audit asserts only what holds under every reasonable answer.
       the most aggrieved worker's, then all; rest read in hours short too; dominance, with no single ranking; between
       settings neither of which dominates, the user's rules applied by hand, worker by worker; the earlier results
       kept as history, measured with the old audit, and ADR 0039's defaults standing
-- [ ] **3. The audit rebuilt** (`tools/audit.py`, `tools/audit_sample.py`), in four parts, each with its tests: the
-      grievances (done 2026-11-19), the fix search (done 2026-11-19, checked against brute force; what a fix harms
-      amended by ADR 0050, 2026-11-20), the report (done 2026-11-20), and the tools reading it; the old audit's code stays beside the new until the last, so every tool keeps working; a hand-made test for each decision, and
-      `tools/tune.py` reading its output: the measures per kind (for rest also in hours short), dominance, and
-      `tools/tune.py compare` for reading two settings worker by worker
-      ([reading the audit](explanation/tuning.md#reading-the-audit))
+- [x] **3. The audit rebuilt** (done 2026-11-20; `tools/audit.py`, `tools/audit_sample.py`), in four parts, each with
+      its tests: the grievances (2026-11-19), the fix search (2026-11-19, checked against brute force; what a fix
+      harms amended by ADR 0050, 2026-11-20), the report (2026-11-20), and the tools reading it (2026-11-20), after
+      which the old audit's code was removed; a hand-made test for each decision, and `tools/tune.py` reading its
+      output: the measures per kind (for rest also in hours short) with K and each worker's row of the closing table,
+      dominance on the inputs both settings finished, results with different K flagged, `tools/tune.py compare` for
+      reading two settings worker by worker (both closing tables side by side, then the cells that differ, and
+      `--cards` for both full reports of one input), and `reaudit` keeping every earlier file as history
+      ([reading the audit](explanation/tuning.md#reading-the-audit)); `tools/audit_sample.py` per kind
 - [ ] **4. Validation:** the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
       appear and disappear explained, and cards read by hand; the sampled schedules that had no easy fix at all
       (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later) and answered in step 1) checked to

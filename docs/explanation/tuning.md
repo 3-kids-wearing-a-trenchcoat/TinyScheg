@@ -13,16 +13,18 @@ point, not final, but they shape how every later output is read, so the method i
 > again, and set from the user's trade-offs
 > ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md); see
 > [the weight re-check](#the-weight-re-check-2026-11-14)). On 48-hour schedules they hold too, for now
-> ([the 48-hour check](#the-48-hour-check-2026-11-1516)). [Reading the audit](#reading-the-audit), for the audit
-> being rebuilt in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), isn't implemented yet: until step 3,
-> `tools/tune.py` records the old audit's severities.
+> ([the 48-hour check](#the-48-hour-check-2026-11-1516)). [Reading the audit](#reading-the-audit) rebuilt in
+> [Phase 13](../roadmap.md#phase-13-a-reliable-audit) is implemented: `tools/tune.py` records and reports the new
+> audit's measures; the finished stages are audited again in Phase 13's step 4.
 
 > [!WARNING]
-> **The audit is being rebuilt** (decided 2026-11-19,
+> **The audit was rebuilt** in Phase 13 (decided 2026-11-19,
 > [ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and
-> [ADR 0049](../decisions/0049-partners-in-the-audit.md)): a list of grievance events per worker, with no severities
-> and nothing added across kinds. Every result on this page was measured with the audit until then (severities, easy
-> fixes found greedily), so its numbers won't be comparable with the new audit's. The defaults chosen with it
+> [ADR 0049](../decisions/0049-partners-in-the-audit.md), amended by
+> [ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md)): a list of grievance
+> events per worker, with no severities and nothing added across kinds. Every result on this page was measured with
+> the audit until then (severities, easy fixes found greedily), so its numbers aren't comparable with the new
+> audit's. The defaults chosen with it
 > ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) stand; the finished stages are audited
 > again in Phase 13, step 4, and if that changes how the choice reads, it's scoring work after Phase 13.
 
@@ -73,8 +75,8 @@ The measures aren't collapsed into one number; trade-offs between them are a dec
 
 ### Reading the audit
 
-> [!WARNING]
-> **Not yet implemented** (`tools/tune.py`, Phase 13 step 3). Decided with the user on 2026-11-19, as a first
+> [!NOTE]
+> **Implemented** in `tools/tune.py` (Phase 13, step 3) and tested. Decided with the user on 2026-11-19, as a first
 > version, to revisit once the new audit's results have been read (Phase 13, step 4).
 
 The audit only observes ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md)); every judgement about what
@@ -92,7 +94,9 @@ matters more is made here, when reading it:
    also taken in hours short (adding to the measures of ADR 0048): in all, the most aggrieved worker's, and those
    with a harmless fix. Hours added within one kind are one unit, not an exchange rate.
 4. **Dominance first.** A setting no better than another in any measure, and worse in at least one, is dominated,
-   and `tools/tune.py report` lists, for each setting, the settings that dominate it. There's no single ranking.
+   and `tools/tune.py report` lists, for each setting, the settings that dominate it, each pair compared on the
+   inputs both finished, for the first period alone and over both periods. There's no single ranking: settings are
+   listed in the stage's order.
 5. **Between settings neither of which dominates, the user's rules decide**
    ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md),
    [ADR 0049](../decisions/0049-partners-in-the-audit.md)):
@@ -102,8 +106,11 @@ matters more is made here, when reading it:
    * likes last: a like never stands against load, and against at most one rest event of the same worker.
 
    These rules are per worker, so they're applied by hand, on the inputs where the two settings' schedules differ,
-   with `tools/tune.py compare A B`: each worker's events, per kind, under both settings, side by side, with no
-   ranking.
+   with `tools/tune.py compare STAGE A B`: for each such input, both settings' closing tables side by side (every
+   worker's events per kind, as in [the audit's report](schedule-audit.md#the-report), and for rest the hours short),
+   then the cells that differ, one per line, as a reading aid; then the inputs where both gave the same schedule.
+   `--cards INPUT` prints both full audit reports of one input instead, when the tables raise a question the
+   counts can't answer.
 6. **Levelling down is checked outside the audit.** The audit measures fairness only, so everyone resting less, but
    equally, shows nowhere in it; the [measures that don't come from the audit](#whats-recorded) show it (rests at the
    minimum, their median, the spread of the shortest rests).
@@ -119,8 +126,9 @@ the whole of both (the `day2_` columns). A first period that leaves the second n
 2's `no schedule`: a failure, since in real use the next schedule couldn't be made
 ([future work](future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule)).
 
-Besides the audit's measures (for the new audit, [above](#reading-the-audit), with K and the liked-pairings total),
-each schedule gets measures that don't come from the audit, over the whole schedule
+Besides the audit's measures ([above](#reading-the-audit): each kind's three, for rest in hours short too, with K
+and each worker's row of the closing table, for `compare`), each schedule gets measures that don't come from the
+audit, over the whole schedule
 (both periods for day 2): each rest in available time
 ([ADR 0038](../decisions/0038-rests-count-only-available-time.md)), how many are at or below the minimum rest, their
 median, the spread of the workers' shortest rests, the largest gaps in hours and in shifts between fully available
@@ -178,7 +186,8 @@ parallel. A search taking more than 10 minutes is stopped and recorded as timed 
 a stage. Each run's result is appended to `tools/benchmarks/results/<stage>.csv` as it finishes, so a stage can be
 stopped and resumed, and `python tools/tune.py status` shows how far along it is. Each row keeps its best schedule,
 so after a change to the audit, `python tools/tune.py reaudit STAGE` audits a finished stage again without
-searching again.
+searching again, keeping the old file as `STAGE.csv.<time>.bak`, named by the time of the re-audit, so that earlier
+results stay as history.
 
 1. **Baseline** — the defaults, on every input. Each grievance with a harmless fix (until Phase 13, each complaint
    with an easy fix) is then diagnosed by breaking the fixing change's penalty difference down by part: a **parameter** question (e.g. likes weighed too low against
@@ -282,7 +291,8 @@ much faster.
   inputs a 2-2-4 costs less than one worker resting at the minimum twice
   ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).
 * Until Phase 13, the easy-fix search was greedy, so severity with an easy fix was slightly noisy; the new audit's
-  search is complete up to K changes, so "no fix" beyond K is all it can't say.
+  search is complete up to K changes, so "no fix" beyond K is all it can't say. Results audited with different K
+  are flagged in the report and never compared.
 * The audit can't see levelling down, or who's better off than whom by how much beyond the events: those are left
   to the measures that don't come from it, and to reading cards by hand.
 * The parameters were chosen on 16 to 24 hours, so that branch and bound finishes; the longer tiers check that

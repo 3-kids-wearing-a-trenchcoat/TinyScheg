@@ -6,9 +6,15 @@ checked against the user's rules too. A development tool.
 Usage:
   PYTHONPATH=src python tools/tune.py run STAGE [--jobs N]   run a stage (resumable: finished runs are kept)
   PYTHONPATH=src python tools/tune.py status                 progress and results so far
-  PYTHONPATH=src python tools/tune.py report STAGE           each setting's results, best first
+  PYTHONPATH=src python tools/tune.py report STAGE           each setting's results, kind by kind, with the settings
+                                                             that dominate it (no single ranking)
+  PYTHONPATH=src python tools/tune.py compare STAGE A B [--cards INPUT]
+                                                             two settings side by side, worker by worker, on the
+                                                             inputs where their schedules differ; with --cards, both
+                                                             full audit reports of one input
   PYTHONPATH=src python tools/tune.py reaudit STAGE          re-audit a finished stage's schedules, after the audit
-                                                             changed (no new search; the old file is kept as .bak)
+                                                             changed (no new search; the old file is kept, named by
+                                                             the time of the re-audit)
   PYTHONPATH=src python tools/tune.py round NAME --setting PARAM=VALUE,... [--setting ...] [--inputs GROUP]
                                                  [--processes N]
                                                              run a tuning round: the settings given ("defaults" for
@@ -23,6 +29,7 @@ from __future__ import annotations
 import argparse
 import csv
 import dataclasses
+import itertools
 import json
 import math
 import multiprocessing
@@ -38,7 +45,9 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from audit import build_context, evaluate, find_fixes, summarize, with_history
+from audit import (DEFAULT_MAX_CHANGES, FIX_COUNT_FIELDS, KIND_MEASURES, KIND_ORDER, MISSING_LIKE, REST,
+                   REST_HOURS_MEASURES, AuditContext, WorkerTally, aligned, audit_measures, build_context, plural,
+                   report_grievances, report_text, shown, tally_cell, with_history)
 from tinyscheg.csp.problem import Problem, build_problem
 from tinyscheg.csp.next_period import next_period_input
 from tinyscheg.csp.parallel import find_best_schedule_in_parallel
@@ -80,8 +89,24 @@ LIKE_PER_SHORT_REST_FACTOR = 1.25
 RULE_CHECKS = ("outrage_outweighs_pairings", "outrage_outweighs_twice_at_minimum",
                "second_short_rest_outweighs_pairing", "like_about_one_short_rest")  # unit_tradeoffs' checks, in order
 
-AUDIT_FIELDS = ("complaints", "easy_fixes", "easy_fix_severity", "no_fix_severity", "aggrieved", "concentration",
-                "separate_complaints", "separate_severity")
+DOMINANCE_EPSILON = 1e-9  # sums of a measure closer than this are equal (hours short are added as floats)
+MEASURE_HEADINGS = {"harmless": "with a harmless fix", "most": "most aggrieved", "events": "events",
+                    "hours_harmless": "h short, harmless fix", "hours_most": "h short, most aggrieved",
+                    "hours": "h short"}  # the report's column headings of the audit's measures
+COLUMN_GAP = 2  # spaces between a table's columns, as audit.aligned leaves them
+
+
+def kind_field(kind: str, measure: str) -> str:
+    """The results column of one kind's measure, e.g. 'disliked_partner_most'."""
+    return f"{kind.replace(' ', '_')}_{measure}"
+
+
+# the audit's measures, per kind (docs/explanation/tuning.md#reading-the-audit): the events with a harmless fix, the
+# most aggrieved worker's events and all events, and for rest the same in hours short; K, how far the fix search
+# reached; and each worker's row of the closing table, as JSON, for tune.py compare
+KIND_FIELDS = tuple(kind_field(kind, measure) for kind in KIND_ORDER
+                    for measure in KIND_MEASURES + (REST_HOURS_MEASURES if kind == REST else ()))
+AUDIT_FIELDS = ("max_changes", *KIND_FIELDS, "by_worker")
 # measures that don't come from the audit (rests in available time, ADR 0038; peers are the fully available workers)
 MEASURE_FIELDS = ("rests", "rests_at_minimum", "rest_median", "shortest_rest_spread", "peer_hours_gap",
                   "peer_shifts_gap", "liked_pairings", "disliked_pairings")
@@ -346,29 +371,56 @@ def measure_fields(problem: Problem, constants: ScoringConstants, assignment: tu
             "liked_pairings": liked, "disliked_pairings": disliked}
 
 
+def audit_context(schedule_input: ScheduleInput, problem: Problem,
+                  assignment: tuple[int, ...]) -> tuple[AuditContext, tuple[int, ...]]:
+    """
+    The audit's context and assignment of a schedule: with a history, the whole schedule, the history included (ADR
+    0031)
+    :param schedule_input: ScheduleInput
+    :param problem: its Problem, for the shifts and slots (with a history, the whole schedule's)
+    :param assignment: a worker index per slot (with a history, of the whole schedule)
+    :return: (the AuditContext, the assignment it audits)
+    """
+    if schedule_input.history:
+        return with_history(schedule_input, problem.new_shifts, assignment)
+    return build_context(schedule_input, problem.shifts, problem.slots), assignment
+
+
 def audit_fields(schedule_input: ScheduleInput, problem: Problem, assignment: tuple[int, ...]) -> dict[str, Any]:
     """
-    Audit a schedule
+    Audit a schedule, with the fix search reaching the audit's default K
     :param schedule_input: ScheduleInput
     :param problem: its Problem, for the shifts and slots (with a history, the whole schedule's)
     :param assignment: a worker index per slot (with a history, of the whole schedule)
     :return: the audit's fields of a results row
     """
-    if schedule_input.history:  # the whole schedule, the history included (ADR 0031)
-        context, assignment = with_history(schedule_input, problem.new_shifts, assignment)
-    else:
-        context = build_context(schedule_input, problem.shifts, problem.slots)
-    audit = evaluate(context, assignment)
-    summary = summarize(audit, find_fixes(context, assignment, audit))
-    return {"complaints": summary.complaints, "easy_fixes": summary.easy_fixes,
-            "easy_fix_severity": round(summary.easy_fix_severity, 4),
-            "no_fix_severity": round(summary.no_fix_severity, 4), "aggrieved": summary.aggrieved,
-            "concentration": round(summary.concentration, 4), "separate_complaints": summary.separate_complaints,
-            "separate_severity": round(summary.separate_severity, 4)}
+    context, assignment = audit_context(schedule_input, problem, assignment)
+    tallies, measures = audit_measures(context, assignment, DEFAULT_MAX_CHANGES)
+    return {"max_changes": DEFAULT_MAX_CHANGES,
+            **{kind_field(kind, measure): round(value, 4)
+               for kind, values in measures.items() for measure, value in values.items()},
+            "by_worker": json.dumps([tally_json(tallied) for tallied in tallies], separators=(",", ":"))}
+
+
+def tally_json(tallied: WorkerTally) -> dict[str, Any]:
+    """A worker's row of the closing table, for the results file: their counts per kind, in FIX_COUNT_FIELDS order."""
+    return {"name": tallied.name, **{kind: [tallied.counts[kind][field] for field in FIX_COUNT_FIELDS]
+                                     for kind in KIND_ORDER},
+            "rest_hours": round(tallied.rest_hours, 4), "rest_hours_harmless": round(tallied.rest_hours_harmless, 4)}
+
+
+def tallies_from_json(text: str) -> list[WorkerTally]:
+    """Every worker's row of the closing table, read back from a results row's by_worker field."""
+    return [WorkerTally(entry["name"], {kind: dict(zip(FIX_COUNT_FIELDS, entry[kind])) for kind in KIND_ORDER},
+                        entry["rest_hours"], entry["rest_hours_harmless"]) for entry in json.loads(text)]
 
 
 def reaudit_row(row: dict[str, str]) -> dict[str, str]:
-    """A results row with its audit fields redone from its stored schedule; rows without one are kept as they are."""
+    """
+    A results row with its audit fields redone from its stored schedules, and only the current columns (an older
+    audit's are dropped); rows without a schedule keep everything else as it was
+    """
+    row = {field: row.get(field, "") for field in RESULT_FIELDS}
     if row["status"] != "done":
         return row
     schedule_input = read_input(Benchmark(row["input"], row["tier"], row["holdout"] == "True").path)
@@ -400,6 +452,11 @@ def _run_job(job: tuple[str, Setting, Benchmark]) -> dict[str, Any]:
 def results_path(stage: str) -> pathlib.Path:
     """The results file of a stage."""
     return RESULTS / f"{stage}.csv"
+
+
+def backup_path(stage: str) -> pathlib.Path:
+    """Where a stage's results are kept before a re-audit replaces them: named by the time, so none is overwritten."""
+    return RESULTS / f"{stage}.csv.{time.strftime('%Y-%m-%dT%H%M%S')}.bak"
 
 
 def status_path(stage: str) -> pathlib.Path:
@@ -478,7 +535,7 @@ def _finished_runs(todo: Sequence[tuple[str, Setting, Benchmark]], jobs: int,
 
 def reaudit_stage(stage: str, jobs: int) -> None:
     """
-    Re-audit a finished stage's stored schedules in place (after the audit changed), keeping the old file as .bak
+    Re-audit a finished stage's stored schedules in place (after the audit changed), keeping the old file (backup_path)
     :raise ValueError: if the stage has no results, or is still running
     """
     rows = read_results(stage)
@@ -489,7 +546,7 @@ def reaudit_stage(stage: str, jobs: int) -> None:
         raise ValueError(f"{stage} is still running (or was stopped); finish it first")
     with multiprocessing.Pool(jobs) as pool:
         reaudited = pool.map(reaudit_row, rows)
-    shutil.copyfile(results_path(stage), results_path(stage).with_suffix(".csv.bak"))
+    shutil.copyfile(results_path(stage), backup_path(stage))
     temporary = results_path(stage).with_suffix(".csv.new")
     with open(temporary, "w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, RESULT_FIELDS)
@@ -510,43 +567,93 @@ def _write_status(stage: str, status: dict[str, Any], started: float) -> None:
 
 # --- reports ---
 
-def setting_summaries(rows: list[dict[str, str]], include_holdout: bool = False) -> list[dict[str, Any]]:
+def _done_by_setting(rows: list[dict[str, str]], include_holdout: bool,
+                     prefix: str = "") -> dict[str, list[dict[str, str]]]:
     """
-    Each setting's results over the inputs it finished, ranked by the tuning priorities: severity with an easy fix,
-    then concentration, then total severity (all means over the inputs; lower is better). The severity of the
-    complaints the audit counts apart (liked partners) is shown, but not ranked on.
+    The rows of each setting whose search finished (with prefix DAY2, whose second period did), held-back inputs left
+    out unless asked for
+    :return: by setting name, in the order the settings first appear
     """
     by_setting: dict[str, list[dict[str, str]]] = {}
     for row in rows:
-        if row["status"] == "done" and (include_holdout or row["holdout"] != "True"):
+        if row.get(f"{prefix}status") == "done" and (include_holdout or row["holdout"] != "True"):
             by_setting.setdefault(row["setting"], []).append(row)
+    return by_setting
+
+
+def kind_summaries(rows: list[dict[str, str]], include_holdout: bool = False,
+                   prefix: str = "") -> list[dict[str, Any]]:
+    """
+    Each setting's audit measures, kind by kind (KIND_FIELDS), as means over the inputs it finished; the K values its
+    audits used; its mean liked pairings, a boon read beside missing likes; and its mean search time. In the stage's
+    order: there's no ranking (docs/explanation/tuning.md#reading-the-audit).
+    :param rows: a stage's results
+    :param include_holdout: True to include the held-back inputs
+    :param prefix: "" for the first period alone, DAY2 for both periods together
+    :return: a summary per setting
+    """
     summaries = []
-    for setting, done in by_setting.items():
-        def mean(field: str) -> float:
-            return statistics.fmean(float(row[field]) for row in done)
-        summaries.append({"setting": setting, "inputs": len(done), "easy_fix_severity": mean("easy_fix_severity"),
-                          "concentration": mean("concentration"),
-                          "total_severity": mean("easy_fix_severity") + mean("no_fix_severity"),
-                          "complaints": mean("complaints"), "separate_severity": mean("separate_severity"),
-                          "seconds": mean("seconds")})
-    return sorted(summaries, key=lambda s: (round(s["easy_fix_severity"], 6), round(s["concentration"], 6),
-                                            s["total_severity"]))
+    for setting, done in _done_by_setting(rows, include_holdout, prefix).items():
+        summaries.append({"setting": setting, "inputs": len(done),
+                          "k": sorted({int(row[f"{prefix}max_changes"]) for row in done}),
+                          **{field: statistics.fmean(float(row[prefix + field]) for row in done)
+                             for field in KIND_FIELDS},
+                          "liked_pairings": statistics.fmean(int(row[f"{prefix}liked_pairings"]) for row in done),
+                          "seconds": statistics.fmean(float(row[f"{prefix}seconds"]) for row in done)})
+    return summaries
+
+
+def dominates(better: Sequence[dict[str, str]], worse: Sequence[dict[str, str]], prefix: str = "") -> bool:
+    """
+    True if one setting's results dominate another's, on the same inputs: no worse in any of the audit's measures
+    (KIND_FIELDS, lower is better) and better in at least one. A comparison, not a weighing: no measure is traded
+    against another.
+    :param better: the first setting's rows, one per input
+    :param worse: the other's, on the same inputs
+    :param prefix: "" for the first period alone, DAY2 for both periods together
+    """
+    strictly = False
+    for field in KIND_FIELDS:
+        first = math.fsum(float(row[prefix + field]) for row in better)
+        second = math.fsum(float(row[prefix + field]) for row in worse)
+        if first > second + DOMINANCE_EPSILON:
+            return False
+        strictly = strictly or first < second - DOMINANCE_EPSILON
+    return strictly
+
+
+def dominated_by(rows: list[dict[str, str]], include_holdout: bool = False, prefix: str = "") -> dict[str, list[str]]:
+    """
+    For each setting, the settings that dominate it, each pair compared on the inputs both finished. Results audited
+    with different K are never compared: a setting audited with more than one K is compared with none.
+    :param rows: a stage's results
+    :param include_holdout: True to include the held-back inputs
+    :param prefix: "" for the first period alone, DAY2 for both periods together
+    :return: by setting name, in the stage's order, the names of the settings dominating it, in the same order
+    """
+    by_setting = _done_by_setting(rows, include_holdout, prefix)
+    by_input = {setting: {row["input"]: row for row in done} for setting, done in by_setting.items()}
+    k_values = {setting: {row[f"{prefix}max_changes"] for row in done} for setting, done in by_setting.items()}
+    result: dict[str, list[str]] = {setting: [] for setting in by_setting}
+    for setting, other in itertools.permutations(by_setting, 2):
+        if len(k_values[setting]) != 1 or k_values[setting] != k_values[other]:
+            continue
+        common = [name for name in by_input[setting] if name in by_input[other]]
+        if common and dominates([by_input[other][name] for name in common],
+                                [by_input[setting][name] for name in common], prefix):
+            result[setting].append(other)
+    return result
 
 
 def measure_summaries(rows: list[dict[str, str]], include_holdout: bool = False) -> dict[str, dict[str, Any]]:
     """
-    Each setting's measures that don't come from the audit, alone and over both periods (day 2), and day 2's audit
-    measures: shares and means over the inputs it finished, the largest shift gap between peers (the user tolerates a
-    gap of one shift where it can't be helped; two is an outrage), and how many first periods left the second no legal
-    schedule
+    Each setting's measures that don't come from the audit, alone and over both periods (day 2): shares and means over
+    the inputs it finished, the largest shift gap between peers (the user tolerates a gap of one shift where it can't
+    be helped; two is an outrage), and how many first periods left the second no legal schedule
     :return: by setting name
     """
-    by_setting: dict[str, list[dict[str, str]]] = {}
-    for row in rows:
-        if row["status"] == "done" and (include_holdout or row["holdout"] != "True"):
-            by_setting.setdefault(row["setting"], []).append(row)
     summaries = {}
-    for setting, done in by_setting.items():
+    for setting, done in _done_by_setting(rows, include_holdout).items():
         second = [row for row in done if row.get(f"{DAY2}status") == "done"]
         summary: dict[str, Any] = {"inputs": len(done), "day2_inputs": len(second),
                                    "day2_no_schedule": sum(1 for row in done
@@ -564,10 +671,6 @@ def measure_summaries(rows: list[dict[str, str]], include_holdout: bool = False)
                 f"{prefix}shifts_gap_max": max(int(row[f"{prefix}peer_shifts_gap"]) for row in group),
                 f"{prefix}disliked": statistics.fmean(int(row[f"{prefix}disliked_pairings"]) for row in group),
                 f"{prefix}liked": statistics.fmean(int(row[f"{prefix}liked_pairings"]) for row in group)}
-        if second:
-            summary |= {"day2_easy_fix_severity": statistics.fmean(float(row[f"{DAY2}easy_fix_severity"])
-                                                                   for row in second),
-                        "day2_concentration": statistics.fmean(float(row[f"{DAY2}concentration"]) for row in second)}
         summaries[setting] = summary
     return summaries
 
@@ -673,6 +776,133 @@ def describe_status(stage: str) -> Iterator[str]:
         yield f"  last: {status['last']}"
 
 
+# --- comparing two settings, worker by worker ---
+
+def _first_period_rows(rows: list[dict[str, str]], first: str, second: str,
+                       include_holdout: bool) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """
+    Two settings' finished rows, by input, in the stage's order
+    :raise ValueError: if either has no finished run, or their rows were audited with different K (only results with
+    the same K are compared)
+    """
+    found = []
+    for setting in (first, second):
+        by_input = {row["input"]: row for row in _done_by_setting(rows, include_holdout).get(setting, [])}
+        if not by_input:
+            raise ValueError(f"{setting!r} has no finished runs in this stage")
+        found.append(by_input)
+    k_values = sorted({row["max_changes"] for by_input in found for row in by_input.values()})
+    if len(k_values) > 1:
+        raise ValueError(f"{first!r} and {second!r} were audited with different K ({', '.join(k_values)}); re-audit "
+                         f"the stage first (tune.py reaudit)")
+    return found[0], found[1]
+
+
+def compare_cell(tallied: WorkerTally, kind: str, searched: bool) -> str:
+    """A worker's cell of one kind, as in the audit's closing table; for rest, with the hours short too."""
+    cell = tally_cell(tallied.counts[kind], searched)
+    return f"{cell} {shown(tallied.rest_hours)} h" if kind == REST and tallied.rest_hours else cell
+
+
+def compare_input(name: str, first: str, second: str, first_row: dict[str, str],
+                  second_row: dict[str, str]) -> list[str]:
+    """
+    One input's part of a comparison: both settings' closing tables side by side, every worker in input order, then
+    each worker's cell that differs, before and after, as a reading aid (the tables are the whole of it)
+    :param name: the input's name
+    :param first: the first setting's name
+    :param second: the second's
+    :param first_row: the first setting's results row on the input
+    :param second_row: the second's
+    :return: the lines
+    """
+    searched = int(first_row["max_changes"]) > 0
+    table = [["", *KIND_ORDER, "|", *KIND_ORDER]]
+    differences = []
+    for before, after in zip(tallies_from_json(first_row["by_worker"]), tallies_from_json(second_row["by_worker"])):
+        cells = [compare_cell(before, kind, searched) for kind in KIND_ORDER]
+        others = [compare_cell(after, kind, searched) for kind in KIND_ORDER]
+        table.append([before.name, *cells, "|", *others])
+        differences += [f"{before.name} {kind}: {old} → {new}"
+                        for kind, old, new in zip(KIND_ORDER, cells, others) if old != new]
+    widths = [max(len(row[column]) for row in table) for column in range(len(table[0]))]
+    names_line = " " * (widths[0] + COLUMN_GAP) + first
+    right_half = sum(widths[:len(KIND_ORDER) + 2]) + COLUMN_GAP * (len(KIND_ORDER) + 2)  # where the second half starts
+    names_line += " " * max(COLUMN_GAP, right_half - len(names_line)) + second
+    if not differences:
+        return [name, names_line, *aligned(table),
+                "differences: none in the counts (the schedules differ, but every worker's cells are equal)"]
+    return [name, names_line, *aligned(table), "differences:", *(f"  {difference}" for difference in differences)]
+
+
+def compare_settings(rows: list[dict[str, str]], first: str, second: str, include_holdout: bool = False) -> str:
+    """
+    Two settings of a stage, for reading by hand (docs/explanation/tuning.md#reading-the-audit): on each input where
+    their first-period schedules differ, both closing tables side by side and the cells that differ; then the inputs
+    where both gave the same schedule (so the same audit), and those only one of them finished
+    :param rows: the stage's results
+    :param first: a setting's name
+    :param second: another's
+    :param include_holdout: True to include the held-back inputs
+    :return: the comparison, as text
+    :raise ValueError: see _first_period_rows
+    """
+    left, right = _first_period_rows(rows, first, second, include_holdout)
+    common = [name for name in left if name in right]
+    same = [name for name in common if left[name]["assignment"] == right[name]["assignment"]]
+    differing = [name for name in common if name not in same]
+    max_changes = int(next(iter(left.values()))["max_changes"])
+    reach = f"fixes searched up to {plural(max_changes, 'change')}" if max_changes > 0 else "fix search off"
+    lines = [f"{first} | {second}: {len(differing)} of {len(common)} inputs give different first-period schedules; "
+             f"{reach}; each cell is a worker's events, as in the audit's closing table "
+             f"(with a harmless fix / only transfers / no fix / in the history), and for rest the hours short"]
+    for name in differing:
+        lines += ["", *compare_input(name, first, second, left[name], right[name])]
+    lines += ["", "same schedule under both: " + (", ".join(same) or "none")]
+    only = ([f"{name} ({first})" for name in left if name not in right]
+            + [f"{name} ({second})" for name in right if name not in left])
+    if only:
+        lines.append("finished under only one: " + ", ".join(only))
+    return "\n".join(lines)
+
+
+def audit_report(row: dict[str, str]) -> str:
+    """The full audit report of a results row's first-period schedule, audited again with the K it was audited with."""
+    schedule_input = read_input(Benchmark(row["input"], row["tier"], row["holdout"] == "True").path)
+    assignment = tuple(int(worker) for worker in row["assignment"].split())
+    context, assignment = audit_context(schedule_input, build_problem(schedule_input), assignment)
+    return report_text(context, assignment, report_grievances(context, assignment, int(row["max_changes"])))
+
+
+def compare_cards(rows: list[dict[str, str]], first: str, second: str, input_name: str) -> str:
+    """
+    Both settings' full audit reports of one input's first period (its cards, with every event and fix), audited
+    again from the stored schedules
+    :param rows: the stage's results
+    :param first: a setting's name
+    :param second: another's
+    :param input_name: the input's name (held-back inputs included)
+    :return: both reports, as text
+    :raise ValueError: if either setting didn't finish the input, or see _first_period_rows
+    """
+    left, right = _first_period_rows(rows, first, second, include_holdout=True)
+    parts = []
+    for setting, by_input in ((first, left), (second, right)):
+        if input_name not in by_input:
+            raise ValueError(f"{setting!r} has no finished run on {input_name!r}")
+        parts.append(f"=== {setting}, on {input_name} (first period) ===\n\n{audit_report(by_input[input_name])}")
+    return "\n\n".join(parts)
+
+
+def current_columns(rows: list[dict[str, str]], stage: str) -> None:
+    """
+    :raise ValueError: if a stage's results were recorded with an older audit's columns
+    """
+    if rows and not set(AUDIT_FIELDS) <= rows[0].keys():
+        raise ValueError(f"{stage}'s results have an older audit's columns; re-audit them first (tune.py reaudit "
+                         f"{stage})")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the tuning tool from the command line."""
     parser = argparse.ArgumentParser(prog="tune", description="Tune the scoring parameters against the audit.")
@@ -681,9 +911,18 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("stage", choices=["baseline", "sensitivity"])
     run.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel runs (default {DEFAULT_JOBS})")
     commands.add_parser("status", help="progress of every stage")
-    report = commands.add_parser("report", help="each setting's results, best first")
+    report = commands.add_parser("report", help="each setting's results, kind by kind, with the settings that "
+                                                "dominate it")
     report.add_argument("stage", help="a fixed stage or a round's name")
     report.add_argument("--holdout", action="store_true", help="include the held-back inputs")
+    compare = commands.add_parser("compare", help="two settings side by side, worker by worker, on the inputs where "
+                                                  "their schedules differ")
+    compare.add_argument("stage", help="a fixed stage or a round's name")
+    compare.add_argument("first", help="a setting's name, as the report shows it")
+    compare.add_argument("second", help="another setting's name")
+    compare.add_argument("--holdout", action="store_true", help="include the held-back inputs")
+    compare.add_argument("--cards", metavar="INPUT",
+                         help="print both settings' full audit reports of this input instead")
     reaudit = commands.add_parser("reaudit", help="re-audit a finished stage's schedules, after the audit changed")
     reaudit.add_argument("stage", help="a fixed stage or a round's name")
     reaudit.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help=f"parallel audits (default {DEFAULT_JOBS})")
@@ -698,71 +937,115 @@ def main(argv: list[str] | None = None) -> int:
     tuning_round.add_argument("--processes", type=int, default=1,
                               help="run one run at a time, each search in this many processes (for long inputs)")
     arguments = parser.parse_args(argv)
-    if arguments.command == "run":
-        try:
+    try:
+        if arguments.command == "run":
             run_stage(arguments.stage, arguments.jobs)
-        except ValueError as exc:
-            print(f"tune: {exc}", file=sys.stderr)
-            return 1
-    elif arguments.command == "round":
-        try:
+        elif arguments.command == "round":
             if arguments.processes < 1:
                 raise ValueError("the number of processes must be at least 1")
             run_round(arguments.name, arguments.setting, arguments.inputs, arguments.jobs, arguments.processes)
-        except ValueError as exc:
-            print(f"tune: {exc}", file=sys.stderr)
-            return 1
-    elif arguments.command == "reaudit":
-        try:
+        elif arguments.command == "reaudit":
             reaudit_stage(arguments.stage, arguments.jobs)
-        except ValueError as exc:
-            print(f"tune: {exc}", file=sys.stderr)
-            return 1
-    elif arguments.command == "status":
-        for stage in stages():
-            print("\n".join(describe_status(stage)))
-    else:
-        if not read_results(arguments.stage):
-            print(f"tune: {arguments.stage} has no results", file=sys.stderr)
-            return 1
-        print_report(read_results(arguments.stage), arguments.holdout)
+        elif arguments.command == "status":
+            for stage in stages():
+                print("\n".join(describe_status(stage)))
+        else:
+            rows = read_results(arguments.stage)
+            if not rows:
+                raise ValueError(f"{arguments.stage} has no results")
+            current_columns(rows, arguments.stage)
+            if arguments.command == "report":
+                print_report(rows, arguments.holdout)
+            elif arguments.cards:
+                print(compare_cards(rows, arguments.first, arguments.second, arguments.cards))
+            else:
+                print(compare_settings(rows, arguments.first, arguments.second, arguments.holdout))
+    except ValueError as exc:
+        print(f"tune: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
-def print_report(rows: list[dict[str, str]], include_holdout: bool) -> None:
-    """Print a stage's report: the audit's measures, the others alone and over two periods, and the trade-offs."""
-    summaries = setting_summaries(rows, include_holdout)
-    print("The audit, first period alone (ranked by the tuning priorities):")
-    print(f"{'setting':<34} {'inputs':>6} {'easy-fix sev.':>13} {'concentration':>13} {'total sev.':>10} "
-          f"{'liked-p. sev.':>13} {'seconds':>8}")
+def describe_audit(rows: list[dict[str, str]], include_holdout: bool, prefix: str, title: str) -> list[str]:
+    """
+    The audit's part of a stage's report: each kind's measures, setting by setting (in the stage's order, no
+    ranking), then the settings dominating each; results audited with different K are flagged and never compared
+    :param rows: the stage's results
+    :param include_holdout: True to include the held-back inputs
+    :param prefix: "" for the first period alone, DAY2 for both periods together
+    :param title: which of the two, for the headings
+    :return: the lines
+    """
+    lines = [f"The audit, {title}: each kind's measures, means over the inputs each setting finished (lower is "
+             f"better; kinds are never added together)"]
+    summaries = kind_summaries(rows, include_holdout, prefix)
+    if not summaries:
+        return lines + ["no run finished"]
+    k_values = sorted({k for summary in summaries for k in summary["k"]})
+    mixed = len(k_values) > 1
+    if mixed:
+        lines.append(f"WARNING: audited with different K ({', '.join(map(str, k_values))}), which are never compared: "
+                     f"re-audit the stage (tune.py reaudit)")
+    else:
+        lines.append(f"fixes searched up to {plural(k_values[0], 'change')}" if k_values[0] > 0 else "fix search off")
+
+    def label(summary: dict[str, Any]) -> str:
+        return summary["setting"] + (f" [K={','.join(map(str, summary['k']))}]" if mixed else "")
+    for kind in KIND_ORDER:
+        measures = KIND_MEASURES + (REST_HOURS_MEASURES if kind == REST else ())
+        liked = kind == MISSING_LIKE  # liked pairings, a boon, read beside missing likes
+        table = [["setting", "inputs", *(MEASURE_HEADINGS[measure] for measure in measures)]
+                 + (["liked pairings"] if liked else [])]
+        table += [[label(summary), str(summary["inputs"]),
+                   *(f"{summary[kind_field(kind, measure)]:.2f}" for measure in measures)]
+                  + ([f"{summary['liked_pairings']:.2f}"] if liked else []) for summary in summaries]
+        lines += ["", f"{kind}:", *aligned(table)]
+    dominance = dominated_by(rows, include_holdout, prefix)
+    lines += ["", f"dominance, {title}: on the inputs both settings finished, every measure of every kind"]
+    table = []
     for summary in summaries:
-        print(f"{summary['setting']:<34} {summary['inputs']:>6} {summary['easy_fix_severity']:>13.2f} "
-              f"{summary['concentration']:>13.2f} {summary['total_severity']:>10.2f} "
-              f"{summary['separate_severity']:>13.2f} {summary['seconds']:>8.1f}")
+        if len(summary["k"]) > 1:
+            verdict = "not compared: audited with more than one K"
+        elif dominance[summary["setting"]]:
+            verdict = "dominated by " + ", ".join(dominance[summary["setting"]])
+        else:
+            verdict = "not dominated"
+        table.append([label(summary), f"search {summary['seconds']:.1f} s", verdict])
+    return lines + aligned(table)
+
+
+def print_report(rows: list[dict[str, str]], include_holdout: bool) -> None:
+    """
+    Print a stage's report: the audit's measures kind by kind with dominance, alone and over two periods; the other
+    measures, alone and over two periods; and the trade-offs
+    """
+    for prefix, title in (("", "first period alone"), (DAY2, "both periods together (day 2)")):
+        print("\n".join(describe_audit(rows, include_holdout, prefix, title)), end="\n\n")
+    order = list(_done_by_setting(rows, include_holdout))
     measures = measure_summaries(rows, include_holdout)
     for prefix, title in (("", "first period alone"), (DAY2, "both periods together (day 2)")):
-        print(f"\nOther measures, {title}: rests at the minimum, shortest-rest spread, peer hours gap, largest peer "
+        print(f"Other measures, {title}: rests at the minimum, shortest-rest spread, peer hours gap, largest peer "
               f"shift gap, liked and disliked pairings per input")
-        for summary in summaries:
-            m = measures[summary["setting"]]
+        for setting in order:
+            m = measures[setting]
             if f"{prefix}at_minimum" not in m:
-                print(f"{summary['setting']:<34} no second period finished")
+                print(f"{setting:<34} no second period finished")
                 continue
             extra = (f"  day 2: {m['day2_inputs']} done, {m['day2_no_schedule']} with no legal schedule, "
-                     f"{m['day2_timed_out']} timed out; easy-fix sev. {m['day2_easy_fix_severity']:.2f}, "
-                     f"concentration {m['day2_concentration']:.2f}") if prefix else ""
-            print(f"{summary['setting']:<34} {m[f'{prefix}at_minimum']:>6.0%} {m[f'{prefix}spread']:>6.1f} "
+                     f"{m['day2_timed_out']} timed out") if prefix else ""
+            print(f"{setting:<34} {m[f'{prefix}at_minimum']:>6.0%} {m[f'{prefix}spread']:>6.1f} "
                   f"{m[f'{prefix}hours_gap']:>6.1f} {m[f'{prefix}shifts_gap_max']:>4} {m[f'{prefix}liked']:>6.1f} "
                   f"{m[f'{prefix}disliked']:>6.1f}{extra}")
-    print(f"\nUnit trade-offs on the example, weighted: like, dislike, first and second short rest, at the minimum "
+        print()
+    print(f"Unit trade-offs on the example, weighted: like, dislike, first and second short rest, at the minimum "
           f"twice, extra shift, outrage; like per short rest, dislike per like, outrage per twice at the minimum; "
           f"rules (outrage > {OUTRAGE_PAIRINGS} pairings, outrage > twice at the minimum, second short rest > a "
           f"pairing, a like about one short rest)")
     settings = {row["setting"]: _row_setting(row) for row in rows}
-    for summary in summaries:
-        t = unit_tradeoffs(settings[summary["setting"]])
+    for setting in order:
+        t = unit_tradeoffs(settings[setting])
         rules = " ".join("ok" if t[check] else "FAIL" for check in RULE_CHECKS)
-        print(f"{summary['setting']:<34} {t['like']:.3f} {t['dislike']:.3f} {t['first_short_rest']:.3f} "
+        print(f"{setting:<34} {t['like']:.3f} {t['dislike']:.3f} {t['first_short_rest']:.3f} "
               f"{t['second_short_rest']:.3f} {t['twice_at_minimum']:.3f} {t['extra_shift']:.3f} {t['outrage']:.3f}   "
               f"{t['like_per_short_rest']:.2f} {t['dislike_per_like']:.2f} {t['outrage_per_twice_at_minimum']:.2f}   "
               f"{rules}")

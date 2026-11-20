@@ -1,7 +1,8 @@
 """
 The schedule audit (docs/explanation/schedule-audit.md): a finished schedule judged the way its workers would, each
-compared with the others. A development tool, independent of tinyscheg.csp and tinyscheg.scoring.
-Usage: PYTHONPATH=src python tools/audit.py INPUT SCHEDULE
+compared with the others, as a list of grievance events per worker and the easy fixes for them (ADR 0048, ADR 0049,
+ADR 0050). A development tool, independent of tinyscheg.csp and tinyscheg.scoring.
+Usage: PYTHONPATH=src python tools/audit.py INPUT SCHEDULE [--max-changes K] [--json]
 """
 from __future__ import annotations
 
@@ -11,7 +12,6 @@ import itertools
 import json
 import math
 import pathlib
-import statistics
 import sys
 from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
@@ -28,37 +28,18 @@ from tinyscheg.parsing.schedule_reader import ScheduleReadError, read_schedule
 from tinyscheg.parsing.validation import InputError
 from tinyscheg.timing.datetime_range import DateTimeRange
 
-TOLERANCE = 1                               # a gap of one (shift, short straw, ...) is tolerated; more is a complaint
-DAY_LENGTH = dt.timedelta(hours=24)         # load is also compared over every stretch this long within the period
-                                            # ("during the day"), wherever it starts: midnight means nothing special
-SHORT_REST_MARGIN = dt.timedelta(hours=2)   # a rest shorter than the schedule's typical rest by more than this is a
-                                            # short straw: each schedule is judged by the norms it sets itself
-MAX_CHANGES = 3                             # an easy fix is a chain of at most this many moves and swaps
-SEVERITY_EPSILON = 1e-9                     # severities closer than this are equal (hours are divided as floats)
-SHOWN_DECIMALS = 2                          # decimals shown for hours and severities
+SHOWN_DECIMALS = 2                          # decimals shown for hours and fractions in the report
 EPSILON = 1e-9                              # hours (and fractions of a shift or a pairing) closer than this are equal:
                                             # they're computed as floats
 DEFAULT_MAX_CHANGES = 3                     # how far the fix search reaches by default (ADR 0048): "no fix" means none
                                             # of up to this many moves and swaps
 
-WHOLE_PERIOD = "overall"                    # the label of the window covering the whole period
-ANY_DAY = f"in any {DAY_LENGTH / dt.timedelta(hours=1):g} hours"  # the label of load complaints over day windows
-
-LOAD = "load"
-SHORT_STRAWS = "short straws"
-LIKED_PARTNERS = "liked partners"
-# complaints listed on the cards and reported apart, but left out of the summary's main measures (decided 2026-11-11;
-# see docs/explanation/schedule-audit.md#liked-partner-complaints-are-counted-apart): the likes penalty can't weigh
-# how evenly liked pairings are spread, and it isn't clear workers hold that against a schedule
-SEPARATE_KINDS = (LIKED_PARTNERS,)
-
-SHORT_REST = "short rest"
+LOAD = "load"                               # the kinds of grievance (ADR 0048, ADR 0049): LOAD, REST, DISLIKED_PARTNER,
+REST = "rest"                               # MISSING_LIKE
 DISLIKED_PARTNER = "disliked partner"
-REST = "rest"                               # the kinds of grievance (ADR 0048, ADR 0049): LOAD, REST, DISLIKED_PARTNER,
-MISSING_LIKE = "missing like"               # MISSING_LIKE
+MISSING_LIKE = "missing like"
 LARGER_REST = "larger rest event"           # what a fix creates when it makes a worker's rest event larger
 NO_PERSON = -1                              # the person of a grievance that isn't about one (load, rest)
-STRAW_KINDS = (SHORT_REST, DISLIKED_PARTNER)  # a day's load isn't a straw: load complaints already measure it
 
 JSON_INDENT = 2                             # the indentation of the JSON report
 
@@ -67,39 +48,24 @@ EXIT_ILLEGAL = 1  # the schedule breaks a hard constraint, so there's nothing to
 EXIT_USAGE = 2    # invalid arguments, or the files couldn't be read or don't match
 
 
-# --- the fixed part: windows and availability ---
-
-@dataclass(frozen=True, slots=True)
-class Window:
-    """A stretch of time load is compared over: a day window (DAY_LENGTH long), or the whole period."""
-    label: str
-    time: DateTimeRange
-
+# --- the fixed part: availability and time away ---
 
 @dataclass(frozen=True, slots=True)
 class AuditContext:
     """
-    Everything about an input that doesn't depend on the assignment, computed once.
-    windows are the day windows, then the whole period; shift_windows[s] the labels of the windows shift s overlaps,
-    and shift_overlap[s] how many of its hours fall in each of them, in the same order. availability[w][label] is
-    worker w's available hours in that window; occupied holds the labels of the windows any shift overlaps. With a
-    history, the shifts and slots are the whole schedule's, the history's first: fixed_slots is how many slots it has,
-    which no easy fix may change.
+    Everything about an input that doesn't depend on the assignment, computed once. With a history, the shifts and
+    slots are the whole schedule's, the history's first: fixed_slots is how many slots it has, which no easy fix may
+    change.
     """
     schedule_input: ScheduleInput
     shifts: tuple[Shift, ...]
     slots: tuple[Slot, ...]
-    windows: tuple[Window, ...]
-    shift_windows: tuple[tuple[str, ...], ...]
-    shift_overlap: tuple[tuple[float, ...], ...]
-    availability: tuple[dict[str, float], ...]
-    occupied: frozenset[str]
     likes: tuple[frozenset[int], ...]
     dislikes: tuple[frozenset[int], ...]
+    staffed_availability: tuple[float, ...]          # per worker: hours available while a post is staffed
+    away: tuple[tuple[DateTimeRange, ...], ...]       # per worker: when they could neither work nor rest
+    staffed_total: float                              # the hours when at least one post is staffed
     fixed_slots: int = 0
-    staffed_availability: tuple[float, ...] = ()           # per worker: hours available while a post is staffed
-    away: tuple[tuple[DateTimeRange, ...], ...] = ()        # per worker: when they could neither work nor rest
-    staffed_total: float = 0.0                              # the hours when at least one post is staffed
 
 
 def hours(length: dt.timedelta) -> float:
@@ -170,24 +136,6 @@ def available_between(away: Sequence[DateTimeRange], start: dt.datetime, end: dt
     return hours(left)
 
 
-def day_windows(period: DateTimeRange, shifts: Sequence[Shift]) -> list[Window]:
-    """
-    The day windows: stretches of DAY_LENGTH within the period, one starting at each shift's start, one ending at each
-    shift's end, and one at each end of the period, so that whatever shifts overlap some stretch of DAY_LENGTH also
-    overlap one of them. None if the period is no longer than DAY_LENGTH, since the whole period then already compares
-    the day.
-    :param period: DateTimeRange
-    :param shifts: the shifts
-    :return: the windows in time order, each labelled with its start
-    """
-    if period.duration <= DAY_LENGTH:
-        return []
-    starts = ({shift.time.start for shift in shifts} | {shift.time.end - DAY_LENGTH for shift in shifts}
-              | {period.start, period.end - DAY_LENGTH})
-    return [Window(f"{start:%Y-%m-%d %H:%M}", DateTimeRange(start, start + DAY_LENGTH)) for start in sorted(starts)
-            if period.start <= start and start + DAY_LENGTH <= period.end]
-
-
 def available_hours(unavailable: Sequence[DateTimeRange], window: DateTimeRange, period: DateTimeRange) -> float:
     """
     A worker's available time in a window
@@ -218,7 +166,8 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
     :param shifts: the shifts in stable order
     :param slots: the slots in stable order
     :param periods: with a history, every period of the whole schedule in time order, each with each worker as they
-    were in that period's input (None if they weren't in it), for availability; empty for the input's period alone
+    were in that period's input (None if they weren't in it), for availability and time away; empty for the
+    input's period alone
     :param fixed_slots: with a history, how many of the slots (the first ones) are the history's
     :param staffed: when at least one post is staffed; empty for the times of the shifts given
     :return: the AuditContext
@@ -226,29 +175,16 @@ def build_context(schedule_input: ScheduleInput, shifts: Sequence[Shift], slots:
     if not periods:
         periods = [(schedule_input.settings.period, schedule_input.workers)]
     staffed = merged(staffed or (shift.time for shift in shifts))
-    period = DateTimeRange(periods[0][0].start, periods[-1][0].end)
-    windows = tuple(day_windows(period, shifts)) + (Window(WHOLE_PERIOD, period),)
-    overlapping = [[(window.label, hours(inside.duration)) for window in windows
-                    if (inside := window.time.intersection(shift.time)) is not None
-                    and inside.duration > dt.timedelta(0)]
-                   for shift in shifts]
-    shift_windows = tuple(tuple(label for label, _ in pairs) for pairs in overlapping)
-    shift_overlap = tuple(tuple(overlap for _, overlap in pairs) for pairs in overlapping)
     index_of = {worker.name: index for index, worker in enumerate(schedule_input.workers)}
     return AuditContext(
-        schedule_input=schedule_input, shifts=tuple(shifts), slots=tuple(slots), windows=windows,
-        shift_windows=shift_windows, shift_overlap=shift_overlap,
-        availability=tuple({window.label: sum(available_hours(then[index].unavailable, window.time, part)
-                                              for part, then in periods if then[index] is not None)
-                            for window in windows} for index in range(len(schedule_input.workers))),
-        occupied=frozenset(label for labels in shift_windows for label in labels),
+        schedule_input=schedule_input, shifts=tuple(shifts), slots=tuple(slots),
         likes=tuple(frozenset(index_of[name] for name in worker.likes) for worker in schedule_input.workers),
         dislikes=tuple(frozenset(index_of[name] for name in worker.dislikes) for worker in schedule_input.workers),
-        fixed_slots=fixed_slots,
         staffed_availability=tuple(staffed_hours(staffed, periods, index)
                                    for index in range(len(schedule_input.workers))),
         away=tuple(away_times(periods, index) for index in range(len(schedule_input.workers))),
-        staffed_total=math.fsum(hours(time.duration) for time in staffed))
+        staffed_total=math.fsum(hours(time.duration) for time in staffed),
+        fixed_slots=fixed_slots)
 
 
 def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
@@ -292,226 +228,9 @@ def with_history(schedule_input: ScheduleInput, shifts: Sequence[Shift],
     return build_context(schedule_input, whole, all_slots(whole), periods, fixed_slots, staffed), whole_assignment
 
 
-# --- each worker's statistics ---
-
-@dataclass(frozen=True, slots=True)
-class WorkerStats:
-    """
-    One worker's side of a schedule. shift_count, shift_hours (the hours inside the window) and shortest_held (the
-    length of the worker's shortest shift overlapping it) are per window label; rests are in hours, in time order;
-    partners counts the shifts shared with each other worker; straws counts each kind of short straw.
-    """
-    shifts: tuple[int, ...]
-    shift_count: dict[str, int]
-    shift_hours: dict[str, float]
-    shortest_held: dict[str, float]
-    rests: tuple[float, ...]
-    partners: dict[int, int]
-    liked_shared: int
-    disliked_shared: int
-    straws: dict[str, int]
-
-    @property
-    def total_straws(self) -> int:
-        """All the worker's short straws."""
-        return sum(self.straws.values())
-
-
 def workers_by_shift(context: AuditContext, assignment: Sequence[int]) -> list[tuple[int, ...]]:
     """Each shift's workers, in slot order."""
     return [tuple(assignment[slot.index] for slot in shift.slots) for shift in context.shifts]
-
-
-def worker_stats(context: AuditContext, assignment: Sequence[int],
-                 short_rest: float | None = None) -> tuple[tuple[WorkerStats, ...], float]:
-    """
-    Every worker's statistics
-    :param context: AuditContext
-    :param assignment: a worker index per slot
-    :param short_rest: a rest shorter than this many hours is a short straw; None for the schedule's own norm, its
-    typical rest less SHORT_REST_MARGIN
-    :return: (a WorkerStats per worker, in input order; the short-rest threshold used)
-    """
-    crews = workers_by_shift(context, assignment)
-    workers = range(len(context.schedule_input.workers))
-    own = [tuple(index for index, crew in enumerate(crews) if worker in crew) for worker in workers]  # time order
-    rests = [_rests(context, shifts) for shifts in own]
-    if short_rest is None:
-        short_rest = typical_rest(rests) - hours(SHORT_REST_MARGIN)
-    stats = tuple(_one_worker(context, crews, worker, own[worker], rests[worker], short_rest) for worker in workers)
-    return stats, short_rest
-
-
-def _rests(context: AuditContext, own: tuple[int, ...]) -> tuple[float, ...]:
-    """The rests, in hours, between a worker's shifts (given by index)."""
-    times = sorted(context.shifts[index].time for index in own)
-    return tuple(hours(later.start - earlier.end) for earlier, later in zip(times, times[1:]))
-
-
-def typical_rest(rests: Sequence[Sequence[float]]) -> float:
-    """
-    The schedule's typical rest, the norm short rests are measured against: the median of every worker's rests
-    :param rests: each worker's rests, in hours
-    :return: the median rest in hours; infinity if nobody has a rest, so that no rest is short
-    """
-    every_rest = [rest for worker_rests in rests for rest in worker_rests]
-    return statistics.median(every_rest) if every_rest else float("inf")
-
-
-def _one_worker(context: AuditContext, crews: list[tuple[int, ...]], worker: int, own: tuple[int, ...],
-                rests: tuple[float, ...], short_rest: float) -> WorkerStats:
-    """
-    The statistics of one worker
-    :param context: AuditContext
-    :param crews: every shift's workers
-    :param worker: the worker's index
-    :param own: the worker's shifts, by index, in time order
-    :param rests: the worker's rests, in hours
-    :param short_rest: a rest shorter than this many hours is a short straw
-    :return: WorkerStats
-    """
-    count: Counter[str] = Counter()
-    worked: Counter[str] = Counter()
-    shortest: dict[str, float] = {}
-    for index in own:  # a shift counts in every window it overlaps, with the hours that fall in it
-        length = hours(context.shifts[index].time.duration)
-        for label, overlap in zip(context.shift_windows[index], context.shift_overlap[index]):
-            count[label] += 1
-            worked[label] += overlap
-            shortest[label] = min(shortest.get(label, length), length)
-    partners: Counter[int] = Counter(other for index in own for other in set(crews[index]) if other != worker)
-    liked = sum(1 for index in own if context.likes[worker] & set(crews[index]))
-    disliked = sum(1 for index in own if context.dislikes[worker] & set(crews[index]))
-    straws = {SHORT_REST: sum(1 for rest in rests if rest < short_rest), DISLIKED_PARTNER: disliked}
-    return WorkerStats(own, dict(count), dict(worked), shortest, rests, dict(partners), liked, disliked, straws)
-
-
-# --- complaints ---
-
-@dataclass(frozen=True, slots=True)
-class Complaint:
-    """A complaint by one worker against another about one measure over one window; gap is how far apart they are."""
-    kind: str
-    worker: int
-    against: int
-    window: str
-    gap: float
-
-    @property
-    def severity(self) -> float:
-        """How far the gap goes past the tolerance."""
-        return self.gap - TOLERANCE
-
-    @property
-    def key(self) -> tuple[str, int, int, str]:
-        """What identifies the complaint, whatever its severity."""
-        return self.kind, self.worker, self.against, self.window
-
-
-@dataclass(frozen=True, slots=True)
-class Audit:
-    """
-    A schedule's audit: every worker's statistics and every complaint, most severe first, and the short-rest
-    threshold the straws were counted with
-    """
-    stats: tuple[WorkerStats, ...]
-    complaints: tuple[Complaint, ...]
-    short_rest: float = float("inf")
-
-
-def is_peer(context: AuditContext, worker: int, other: int, label: str) -> bool:
-    """True if the other worker was available at least as long as the worker in the window, and for some time."""
-    other_hours = context.availability[other][label]
-    return other != worker and other_hours > 0 and other_hours >= context.availability[worker][label]
-
-
-def evaluate(context: AuditContext, assignment: Sequence[int], short_rest: float | None = None) -> Audit:
-    """
-    Audit a schedule
-    :param context: AuditContext
-    :param assignment: a worker index per slot
-    :param short_rest: the short-rest threshold in hours, to judge a changed schedule by the norm of the schedule it
-    was changed from; None for the schedule's own norm
-    :return: the Audit
-    """
-    stats, short_rest = worker_stats(context, assignment, short_rest)
-    complaints = _load_complaints(context, stats) + _straw_complaints(context, stats) + _liked_complaints(context,
-                                                                                                         stats)
-    return Audit(stats, tuple(sorted(complaints, key=lambda c: (-c.severity, c.worker, c.kind, c.window, c.against))),
-                 short_rest)
-
-
-def _pairs(context: AuditContext, label: str) -> Iterator[tuple[int, int]]:
-    """Every (worker, peer) pair for a window."""
-    for worker, other in itertools.permutations(range(len(context.schedule_input.workers)), 2):
-        if is_peer(context, worker, other, label):
-            yield worker, other
-
-
-def load_gap(context: AuditContext, stats: tuple[WorkerStats, ...], worker: int, other: int, label: str) -> float:
-    """
-    How far a worker's load exceeds another's in a window, if it does by one measure and is no less by the other (no
-    exchange rate between shifts and hours is assumed, so more shifts but fewer hours isn't more load): the gap in
-    shifts, or in hours over the worker's own shortest shift in the window, whichever is larger. Moving a shift of h
-    hours from the worker to the other turns a gap of g hours into g - 2h, narrower only if h < g: so, as a gap of one
-    shift, a gap in hours no larger than the worker's shortest shift can't be narrowed by moving one of their shifts.
-    :return: the gap; 0 if the other worker did more by either measure
-    """
-    mine, theirs = stats[worker], stats[other]
-    shifts = mine.shift_count.get(label, 0) - theirs.shift_count.get(label, 0)
-    worked = mine.shift_hours.get(label, 0.0) - theirs.shift_hours.get(label, 0.0)
-    if shifts < 0 or worked < -SEVERITY_EPSILON:
-        return 0.0
-    hours_gap = worked / mine.shortest_held[label] if worked > SEVERITY_EPSILON else 0.0  # more hours: they have shifts
-    return max(shifts, hours_gap)
-
-
-def worst_day(context: AuditContext, stats: tuple[WorkerStats, ...], worker: int, other: int) -> tuple[str, float]:
-    """
-    The day window in which a worker's load most exceeds another's, among those in which the other is a peer
-    :return: (the window's label, the gap); ("", 0.0) if there's no such window
-    """
-    worst = ("", 0.0)
-    for window in context.windows[:-1]:
-        if window.label in context.occupied and is_peer(context, worker, other, window.label):
-            gap = load_gap(context, stats, worker, other, window.label)
-            if gap > worst[1] + SEVERITY_EPSILON:
-                worst = (window.label, gap)
-    return worst
-
-
-def _load_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> list[Complaint]:
-    """
-    Load complaints, over the whole period, and in any day: one per pair of workers, over the day window where the
-    gap is widest, so that overlapping windows don't count the same extra load several times
-    """
-    result = []
-    if WHOLE_PERIOD in context.occupied:
-        for worker, other in _pairs(context, WHOLE_PERIOD):
-            gap = load_gap(context, stats, worker, other, WHOLE_PERIOD)
-            if gap > TOLERANCE + SEVERITY_EPSILON:
-                result.append(Complaint(LOAD, worker, other, WHOLE_PERIOD, gap))
-    if len(context.windows) > 1:
-        for worker, other in itertools.permutations(range(len(context.schedule_input.workers)), 2):
-            gap = worst_day(context, stats, worker, other)[1]
-            if gap > TOLERANCE + SEVERITY_EPSILON:
-                result.append(Complaint(LOAD, worker, other, ANY_DAY, gap))
-    return result
-
-
-def _straw_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> list[Complaint]:
-    """Short-straw complaints, over the whole period."""
-    return [Complaint(SHORT_STRAWS, worker, other, WHOLE_PERIOD, gap)
-            for worker, other in _pairs(context, WHOLE_PERIOD)
-            if (gap := stats[worker].total_straws - stats[other].total_straws) > TOLERANCE]
-
-
-def _liked_complaints(context: AuditContext, stats: tuple[WorkerStats, ...]) -> list[Complaint]:
-    """Complaints about getting liked partners less often, between workers who like anyone, over the whole period."""
-    return [Complaint(LIKED_PARTNERS, worker, other, WHOLE_PERIOD, gap)
-            for worker, other in _pairs(context, WHOLE_PERIOD)
-            if context.likes[worker] and context.likes[other]
-            and (gap := stats[other].liked_shared - stats[worker].liked_shared) > TOLERANCE]
 
 
 # --- grievances (ADR 0048, ADR 0049): each worker's events, against the best-off peer ---
@@ -1131,16 +850,7 @@ def search_fixes(context: AuditContext, assignment: Sequence[int], grievances: G
     return {key: FixesFound(harmless.get(key), tuple(transfers[key])) for key in keys}
 
 
-# --- easy fixes ---
-
-@dataclass(frozen=True, slots=True)
-class Change:
-    """A simple change to a schedule (a move or a swap), described for the report; changed_slots are the slots it
-    gives to a different worker."""
-    description: str
-    assignment: tuple[int, ...]
-    changed_slots: tuple[int, ...]
-
+# --- the report (ADR 0048, ADR 0049) ---
 
 def describe_shift(shift: Shift) -> str:
     """A shift for the report, e.g. 'front gate 2025-01-01 04:00–08:00'."""
@@ -1149,343 +859,10 @@ def describe_shift(shift: Shift) -> str:
     return f"{shift.post.name} {start:%Y-%m-%d %H:%M}–{end_text}"
 
 
-def candidate_changes(context: AuditContext, assignment: tuple[int, ...]) -> Iterator[Change]:
-    """
-    Every move (one slot to another worker), then every swap (two workers exchanging slots in different shifts), in
-    stable slot and worker order; legal or not
-    """
-    names = [worker.name for worker in context.schedule_input.workers]
-    changeable = context.slots[context.fixed_slots:]  # the history is what happened: no fix can change it
-    for slot in changeable:
-        for worker in range(len(names)):
-            if worker != assignment[slot.index]:
-                changed = list(assignment)
-                changed[slot.index] = worker
-                yield Change(f"giving {names[worker]} {describe_shift(context.shifts[slot.shift_index])} instead of "
-                             f"{names[assignment[slot.index]]}", tuple(changed), (slot.index,))
-    for first, second in itertools.combinations(changeable, 2):
-        a, b = assignment[first.index], assignment[second.index]
-        if a != b and first.shift_index != second.shift_index:
-            changed = list(assignment)
-            changed[first.index], changed[second.index] = b, a
-            yield Change(f"swapping {names[a]}'s {describe_shift(context.shifts[first.shift_index])} with "
-                         f"{names[b]}'s {describe_shift(context.shifts[second.shift_index])}", tuple(changed),
-                         (first.index, second.index))
-
-
-def slots_by_worker(assignment: Sequence[int], worker_count: int) -> list[list[int]]:
-    """Each worker's slots, in stable order."""
-    result: list[list[int]] = [[] for _ in range(worker_count)]
-    for slot_index, worker in enumerate(assignment):
-        result[worker].append(slot_index)
-    return result
-
-
-def is_legal_change(context: AuditContext, own_slots: list[list[int]], change: Change) -> bool:
-    """
-    Check a change to a legal schedule for legality, looking only at what it changes: every other worker's shifts
-    are as they were, and were legal. Agrees with the full hard-constraint checker (tested), much faster.
-    :param context: AuditContext
-    :param own_slots: each worker's slots before the change, as slots_by_worker gives them
-    :param change: Change
-    :return: True if the changed schedule is legal
-    """
-    workers = context.schedule_input.workers
-    receivers = set()
-    for slot_index in change.changed_slots:
-        slot, worker = context.slots[slot_index], change.assignment[slot_index]
-        if not workers[worker].has_role(slot.role) or not workers[worker].is_available(slot.time):
-            return False
-        receivers.add(worker)
-    # giving shifts away can't shorten a rest, so only the workers receiving a slot need their rests checked;
-    # a negative rest is an overlap, which includes two slots of the same shift
-    min_rest = context.schedule_input.settings.min_rest
-    for worker in receivers:
-        slot_indexes = [index for index in own_slots[worker] if change.assignment[index] == worker]
-        slot_indexes += [index for index in change.changed_slots if change.assignment[index] == worker]
-        times = sorted(context.slots[index].time for index in slot_indexes)
-        if any(rest <= dt.timedelta(0) or rest < min_rest  # back to back is never legal, even with min_rest 0
-               for rest in (later.start - earlier.end for earlier, later in zip(times, times[1:]))):
-            return False
-    return True
-
-
-ComplaintKey = tuple[str, int, int, str]
-
-
-@dataclass(frozen=True, slots=True)
-class Baseline:
-    """
-    What every change is judged against: the audited schedule's complaints (each one's severity, by key), each
-    worker's short straws by kind, its short-rest threshold, the norm the schedule set, which no change may move, and
-    each worker's rests, shortest first
-    """
-    severities: dict[ComplaintKey, float]
-    straws: tuple[dict[str, int], ...]
-    short_rest: float
-    rests: tuple[tuple[float, ...], ...] = ()
-
-
-def baseline(audit: Audit) -> Baseline:
-    """The Baseline of an audited schedule."""
-    return Baseline({complaint.key: complaint.severity for complaint in audit.complaints},
-                    tuple(dict(stats.straws) for stats in audit.stats), audit.short_rest,
-                    tuple(tuple(sorted(stats.rests)) for stats in audit.stats))
-
-
-def is_harmless(before: Baseline, after: Audit) -> bool:
-    """
-    True if a change creates no new complaint, makes no existing one more severe, gives nobody a short straw of any
-    kind they didn't have (a straw happens to a worker, whatever the others have), and makes nobody's short rests
-    shorter
-    :param before: the Baseline of the audited schedule
-    :param after: the Audit after the change, judged by the audited schedule's norm
-    """
-    return (all(complaint.key in before.severities
-                and complaint.severity <= before.severities[complaint.key] + SEVERITY_EPSILON
-                for complaint in after.complaints)
-            and all(stats.straws[kind] <= straws[kind] for stats, straws in zip(after.stats, before.straws)
-                    for kind in straws)
-            and all(not _short_rests_shorter(before.rests[worker], stats.rests, before.short_rest)
-                    for worker, stats in enumerate(after.stats) if worker < len(before.rests)))
-
-
-def _short_rests_shorter(before: tuple[float, ...], after: Sequence[float], short_rest: float) -> bool:
-    """
-    True if a worker's short rests got shorter: comparing their rests shortest first, some short rest after the
-    change is shorter than the rest in its place before (or has none in its place). Two rests of 12 hours becoming 7
-    and 17 is a shorter short rest, even with the number of short rests the same or smaller (found 2026-11-16).
-    :param before: the worker's rests in the audited schedule, shortest first
-    :param after: the worker's rests after the change
-    :param short_rest: the short-rest threshold, the audited schedule's norm
-    :return: True if the change made one of the worker's short rests shorter
-    """
-    return any(rest < short_rest and (place >= len(before) or rest < before[place])
-               for place, rest in enumerate(sorted(after)))
-
-
-@dataclass(frozen=True, slots=True)
-class Fix:
-    """An easy fix: a chain of simple changes, each harmless, that together remove a complaint."""
-    changes: tuple[Change, ...]
-
-    @property
-    def description(self) -> str:
-        """The changes in order, e.g. 'giving Bob ... instead of Anne, then swapping ...'."""
-        return ", then ".join(change.description for change in self.changes)
-
-
-@dataclass(frozen=True, slots=True)
-class _Step:
-    """A harmless change from some schedule, with the audit of the schedule it leads to."""
-    change: Change
-    audit: Audit
-
-    def severity(self, key: ComplaintKey) -> float:
-        """The complaint's severity after the change: 0 if it's gone."""
-        return next((c.severity for c in self.audit.complaints if c.key == key), 0.0)
-
-    def removes(self, key: ComplaintKey) -> bool:
-        """True if the complaint is gone after the change."""
-        return all(c.key != key for c in self.audit.complaints)
-
-
-def harmless_steps(context: AuditContext, assignment: tuple[int, ...], before: Baseline) -> list[_Step]:
-    """
-    Every legal move and swap from a schedule that is harmless compared with the audited schedule
-    :param context: AuditContext
-    :param assignment: the schedule to change, which must be legal
-    :param before: the Baseline of the audited schedule
-    :return: the harmless steps, in candidate_changes' order
-    """
-    steps = []
-    own_slots = slots_by_worker(assignment, len(context.schedule_input.workers))
-    for change in candidate_changes(context, assignment):
-        if not is_legal_change(context, own_slots, change):
-            continue
-        after = evaluate(context, change.assignment, before.short_rest)
-        if is_harmless(before, after):
-            steps.append(_Step(change, after))
-    return steps
-
-
-def _fix_chain(context: AuditContext, before: Baseline, key: ComplaintKey,
-               first_steps: list[_Step]) -> tuple[_Step, ...] | None:
-    """
-    Look for an easy fix for one complaint, greedily: at each step, take the harmless change that lowers the
-    complaint's severity most (the first of equals), until it's gone or MAX_CHANGES changes are made
-    :param context: AuditContext
-    :param before: the Baseline of the audited schedule
-    :param key: the complaint to fix
-    :param first_steps: the harmless steps from the audited schedule (shared between complaints)
-    :return: the chain of steps, or None if no easy fix was found
-    """
-    chain: list[_Step] = []
-    current, options = before.severities[key], first_steps
-    for depth in range(MAX_CHANGES):
-        if depth:
-            options = harmless_steps(context, chain[-1].change.assignment, before)
-        better = [step for step in options if step.severity(key) < current - SEVERITY_EPSILON]
-        if not better:
-            return None
-        best = min(better, key=lambda step: step.severity(key))  # min keeps the first of equals
-        chain.append(best)
-        if best.removes(key):
-            return tuple(chain)
-        current = best.severity(key)
-    return None
-
-
-def find_fixes(context: AuditContext, assignment: tuple[int, ...], audit: Audit) -> dict[ComplaintKey, Fix]:
-    """
-    Find easy fixes (see the spec's Easy fixes section): first single changes, then, for the complaints left, chains
-    of up to MAX_CHANGES, most severe complaint first. A chain found for one complaint is also given to every other
-    complaint left that it removes.
-    :param context: AuditContext
-    :param assignment: the audited schedule
-    :param audit: its Audit
-    :return: the easy fix for each complaint one was found for, by key
-    """
-    before = baseline(audit)
-    if not before.severities:
-        return {}
-    first_steps = harmless_steps(context, assignment, before)
-    fixes: dict[ComplaintKey, Fix] = {}
-    for step in first_steps:
-        for key in before.severities.keys() - fixes.keys():
-            if step.removes(key):
-                fixes[key] = Fix((step.change,))
-    for complaint in audit.complaints:  # most severe first
-        if complaint.key in fixes:
-            continue
-        chain = _fix_chain(context, before, complaint.key, first_steps)
-        if chain is None:
-            continue
-        fix = Fix(tuple(step.change for step in chain))
-        for key in before.severities.keys() - fixes.keys():
-            if chain[-1].removes(key):
-                fixes[key] = fix
-    return fixes
-
-
-# --- the report ---
-
-@dataclass(frozen=True, slots=True)
-class AuditSummary:
-    """
-    The group summary: how many complaints there are and how many have an easy fix, the severity of those with and
-    without one, and severity_by_worker, each worker's total as (worker, severity), most first. All of these leave out
-    the SEPARATE_KINDS complaints, which are counted apart: how many, and their severity.
-    """
-    complaints: int
-    easy_fixes: int
-    easy_fix_severity: float
-    no_fix_severity: float
-    aggrieved: int
-    concentration: float
-    severity_by_worker: tuple[tuple[int, float], ...]
-    separate_complaints: int = 0
-    separate_severity: float = 0.0
-
-
-def summarize(audit: Audit, fixes: dict[ComplaintKey, Fix]) -> AuditSummary:
-    """
-    Summarize an audit for the group
-    :param audit: Audit
-    :param fixes: the fixes found, by complaint key
-    :return: the AuditSummary; concentration is the most aggrieved worker's share of all severity (0 if none)
-    """
-    main = [complaint for complaint in audit.complaints if complaint.kind not in SEPARATE_KINDS]
-    separate = [complaint for complaint in audit.complaints if complaint.kind in SEPARATE_KINDS]
-    by_worker: Counter[int] = Counter()
-    for complaint in main:
-        by_worker[complaint.worker] += complaint.severity
-    total = sum(by_worker.values())
-    fixable = [complaint for complaint in main if complaint.key in fixes]
-    ranked = tuple(sorted(by_worker.items(), key=lambda item: (-item[1], item[0])))
-    fixable_severity = sum(complaint.severity for complaint in fixable)
-    return AuditSummary(complaints=len(main), easy_fixes=len(fixable), easy_fix_severity=fixable_severity,
-                        no_fix_severity=total - fixable_severity,
-                        aggrieved=len(by_worker), concentration=ranked[0][1] / total if total else 0.0,
-                        severity_by_worker=ranked, separate_complaints=len(separate),
-                        separate_severity=sum(complaint.severity for complaint in separate))
-
-
 def shown(value: float) -> str:
     """A number for the report, with at most SHOWN_DECIMALS decimals."""
     return f"{round(value, SHOWN_DECIMALS):g}"
 
-
-def describe_complaint(context: AuditContext, audit: Audit, complaint: Complaint) -> str:
-    """A complaint in the worker's terms, e.g. 'load on 2025-01-01: 4 shifts (16 h), against Bob's 2 (8 h)'."""
-    other = context.schedule_input.workers[complaint.against].name
-    mine, theirs = audit.stats[complaint.worker], audit.stats[complaint.against]
-    if complaint.kind == LOAD:
-        if complaint.window == WHOLE_PERIOD:
-            label, when = WHOLE_PERIOD, "overall"
-        else:
-            label = worst_day(context, audit.stats, complaint.worker, complaint.against)[0]
-            when = f"in the {shown(hours(DAY_LENGTH))} hours from {label}"
-        return (f"load {when}: {mine.shift_count.get(label, 0)} shifts ({shown(mine.shift_hours.get(label, 0.0))} h), "
-                f"against {other}'s {theirs.shift_count.get(label, 0)} ({shown(theirs.shift_hours.get(label, 0.0))} h)")
-    if complaint.kind == SHORT_STRAWS:
-        return f"short straws: {mine.total_straws}, against {other}'s {theirs.total_straws}"
-    return f"shifts with someone they like: {mine.liked_shared}, against {other}'s {theirs.liked_shared}"
-
-
-def card(context: AuditContext, audit: Audit, fixes: dict[ComplaintKey, Fix], worker: int) -> str:
-    """
-    One worker's feedback card
-    :param context: AuditContext
-    :param audit: Audit
-    :param fixes: the fixes found, by complaint key
-    :param worker: the worker's index
-    :return: the card, as lines of text
-    """
-    workers = context.schedule_input.workers
-    stats = audit.stats[worker]
-    availability = context.availability[worker]
-    lines = [f"{workers[worker].name}: {stats.shift_count.get(WHOLE_PERIOD, 0)} shifts, "
-             f"{shown(stats.shift_hours.get(WHOLE_PERIOD, 0.0))} h; available {shown(availability[WHOLE_PERIOD])} h"]
-    busiest = max(context.windows[:-1], default=None,
-                  key=lambda window: (stats.shift_count.get(window.label, 0), stats.shift_hours.get(window.label, 0)))
-    if busiest is not None:
-        lines.append(f"  busiest {shown(hours(DAY_LENGTH))} hours, from {busiest.label}: "
-                     f"{stats.shift_count.get(busiest.label, 0)} shifts, "
-                     f"{shown(stats.shift_hours.get(busiest.label, 0.0))} h; available "
-                     f"{shown(availability[busiest.label])} h")
-    rests = ", ".join(f"{shown(rest)} h" for rest in stats.rests) or "none"
-    lines.append(f"  rests: {rests}")
-    straws = ", ".join(f"{kind} {stats.straws[kind]}" for kind in STRAW_KINDS)
-    lines.append(f"  short straws: {stats.total_straws} ({straws})")
-    partners = ", ".join(f"{workers[other].name} ×{count}" for other, count in sorted(stats.partners.items()))
-    lines.append(f"  partners: {partners or 'none'}; with someone they like: {stats.liked_shared}, with someone "
-                 f"they dislike: {stats.disliked_shared}")
-    own = [complaint for complaint in audit.complaints if complaint.worker == worker]
-    lines.append("  complaints:" if own else "  complaints: none")
-    for complaint in own:
-        fix = fixes.get(complaint.key)
-        verdict = f"easy fix: {fix.description}" if fix else "no easy fix found"
-        lines.append(f"    - [{shown(complaint.severity)}] {describe_complaint(context, audit, complaint)}; {verdict}")
-    return "\n".join(lines)
-
-
-def describe_summary(context: AuditContext, summary: AuditSummary) -> str:
-    """The group summary as lines of text."""
-    names = [worker.name for worker in context.schedule_input.workers]
-    ranking = ", ".join(f"{names[worker]} {shown(severity)}" for worker, severity in summary.severity_by_worker)
-    return "\n".join([
-        f"complaints: {summary.complaints} ({summary.easy_fixes} with an easy fix)",
-        f"severity: with an easy fix {shown(summary.easy_fix_severity)}, no easy fix found "
-        f"{shown(summary.no_fix_severity)}",
-        f"workers with complaints: {summary.aggrieved} of {len(names)}",
-        f"concentration: {shown(summary.concentration)}" + (f" ({ranking})" if ranking else ""),
-        f"left out of the above: {', '.join(SEPARATE_KINDS)}, {summary.separate_complaints} complaints, severity "
-        f"{shown(summary.separate_severity)}",
-    ])
-
-
-# --- the report of grievances (ADR 0048, ADR 0049) ---
 
 KIND_ORDER = (LOAD, REST, DISLIKED_PARTNER, MISSING_LIKE)  # the order kinds are listed in, never added together
 HISTORY_MARK = " (in the history)"                          # after an event no change can reach
@@ -1678,7 +1055,8 @@ def grievance_card(context: AuditContext, crews: Sequence[tuple[int, ...]], repo
     return "\n".join(lines)
 
 
-FixCounts = dict[str, int]  # events, harmless, transfers, none, history
+FixCounts = dict[str, int]  # by FIX_COUNT_FIELDS
+FIX_COUNT_FIELDS = ("events", "harmless", "transfers", "none", "history")  # a cell of the closing table
 
 
 def tally(context: AuditContext, crews: Sequence[tuple[int, ...]],
@@ -1690,7 +1068,7 @@ def tally(context: AuditContext, crews: Sequence[tuple[int, ...]],
     """
     result = []
     for worker in range(len(context.schedule_input.workers)):
-        counts = {kind: {"events": 0, "harmless": 0, "transfers": 0, "none": 0, "history": 0} for kind in KIND_ORDER}
+        counts = {kind: dict.fromkeys(FIX_COUNT_FIELDS, 0) for kind in KIND_ORDER}
         for entry in card_entries(context, crews, report.grievances, worker):
             cell = counts[entry.key[0]]
             cell["events"] += entry.events
@@ -1704,23 +1082,33 @@ def tally(context: AuditContext, crews: Sequence[tuple[int, ...]],
     return result
 
 
+def tally_cell(count: FixCounts, searched: bool) -> str:
+    """A cell of the closing table, e.g. '2 (1/1/0/0)'; just the events if there are none or the search was off."""
+    if not count["events"] or not searched:
+        return str(count["events"])
+    return f"{count['events']} ({'/'.join(str(count[field]) for field in FIX_COUNT_FIELDS[1:])})"
+
+
+def tally_heading(max_changes: int) -> str:
+    """The closing table's heading, saying what the numbers in a cell's brackets are."""
+    if max_changes <= 0:
+        return "events by kind"
+    return (f"events by kind (with a harmless fix / only transfers / no fix of up to {plural(max_changes, 'change')} / "
+            f"in the history)")
+
+
+def aligned(table: Sequence[Sequence[str]]) -> list[str]:
+    """The rows of a table of text, each column as wide as its widest cell."""
+    widths = [max(len(row[column]) for row in table) for column in range(len(table[0]))]
+    return ["  ".join(text.ljust(width) for text, width in zip(row, widths)).rstrip() for row in table]
+
+
 def describe_tally(context: AuditContext, counts: list[dict[str, FixCounts]], max_changes: int) -> str:
     """The closing table: each worker's events by kind, nothing added across kinds."""
     names = [worker.name for worker in context.schedule_input.workers]
-    searched = max_changes > 0
-
-    def cell(count: FixCounts) -> str:
-        if not count["events"] or not searched:
-            return str(count["events"])
-        return (f"{count['events']} ({count['harmless']}/{count['transfers']}/{count['none']}/"
-                f"{count['history']})")
-    rows = [[name] + [cell(worker_counts[kind]) for kind in KIND_ORDER] for name, worker_counts in zip(names, counts)]
-    header = ["events by kind" + (f" (with a harmless fix / only transfers / no fix of up to "
-                                  f"{plural(max_changes, 'change')} / in the history)" if searched else "")]
-    table = [[""] + list(KIND_ORDER)] + rows
-    widths = [max(len(row[column]) for row in table) for column in range(len(table[0]))]
-    return "\n".join(header + ["  ".join(text.ljust(width) for text, width in zip(row, widths)).rstrip()
-                               for row in table])
+    rows = [[name] + [tally_cell(worker_counts[kind], max_changes > 0) for kind in KIND_ORDER]
+            for name, worker_counts in zip(names, counts)]
+    return "\n".join([tally_heading(max_changes)] + aligned([[""] + list(KIND_ORDER)] + rows))
 
 
 def report_text(context: AuditContext, assignment: Sequence[int], report: GrievanceReport) -> str:
@@ -1781,6 +1169,81 @@ def report_json(context: AuditContext, assignment: Sequence[int], report: Grieva
             "liked_pairings": facts.liked_pairings, "grievances": entries, "counts": counts[worker]})
     return {"max_changes": report.max_changes, "fixed_slots": context.fixed_slots,
             "staffed_hours": context.staffed_total, "workers": workers}
+
+
+# --- measures per kind, for the tools that read the audit (docs/explanation/tuning.md#reading-the-audit) ---
+
+KIND_MEASURES = ("harmless", "most", "events")  # per kind, in the reading's order: the events with a harmless fix, the
+                                                # most aggrieved worker's events, all events
+REST_HOURS_MEASURES = ("hours_harmless", "hours_most", "hours")  # the same three for rest, in hours short
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerTally:
+    """
+    One worker's row of the closing table (their counts by kind), with their rest events in hours short: in all, and
+    those of a rest grievance with a harmless fix (leaving out events wholly in the history, as the table does)
+    """
+    name: str
+    counts: dict[str, FixCounts]
+    rest_hours: float
+    rest_hours_harmless: float
+
+
+def worker_tallies(context: AuditContext, assignment: Sequence[int], report: GrievanceReport) -> list[WorkerTally]:
+    """
+    Every worker's row of the closing table, with their rest events in hours short (how much longer each rest would
+    have to be to match the peer's, added within the one kind)
+    :param context: AuditContext
+    :param assignment: the audited schedule, a worker per slot
+    :param report: its GrievanceReport
+    :return: a WorkerTally per worker, in input order
+    """
+    counts = tally(context, workers_by_shift(context, assignment), report)
+    result = []
+    for worker, name in enumerate(worker.name for worker in context.schedule_input.workers):
+        rest = report.grievances.rest[worker]
+        events = rest.events if rest is not None else ()
+        found = report.fixes.get((REST, worker, NO_PERSON))
+        harmless = report.max_changes > 0 and found is not None and found.harmless is not None
+        reachable = [event.shortfall for event in events
+                     if not (in_history(context, event.rest.before) and in_history(context, event.rest.after))]
+        result.append(WorkerTally(name, counts[worker], math.fsum(event.shortfall for event in events),
+                                  math.fsum(reachable) if harmless else 0.0))
+    return result
+
+
+def kind_measures(tallies: Sequence[WorkerTally]) -> dict[str, dict[str, float]]:
+    """
+    Each kind's measures, which the tools reading the audit compare: the events with a harmless fix, the most
+    aggrieved worker's events and all events (KIND_MEASURES); for rest, the same three in hours short too
+    (REST_HOURS_MEASURES). Nothing is added across kinds, and the report itself never shows these.
+    :param tallies: every worker's WorkerTally
+    :return: per kind (in KIND_ORDER), per measure
+    """
+    result: dict[str, dict[str, float]] = {}
+    for kind in KIND_ORDER:
+        cells = [tallied.counts[kind] for tallied in tallies]
+        result[kind] = {"harmless": sum(cell["harmless"] for cell in cells),
+                        "most": max((cell["events"] for cell in cells), default=0),
+                        "events": sum(cell["events"] for cell in cells)}
+    result[REST] |= {"hours_harmless": math.fsum(tallied.rest_hours_harmless for tallied in tallies),
+                     "hours_most": max((tallied.rest_hours for tallied in tallies), default=0.0),
+                     "hours": math.fsum(tallied.rest_hours for tallied in tallies)}
+    return result
+
+
+def audit_measures(context: AuditContext, assignment: Sequence[int],
+                   max_changes: int = DEFAULT_MAX_CHANGES) -> tuple[list[WorkerTally], dict[str, dict[str, float]]]:
+    """
+    Audit a schedule for a tool: every worker's row of the closing table and each kind's measures
+    :param context: AuditContext
+    :param assignment: a worker index per slot, which must be legal
+    :param max_changes: how far the fix search reaches; 0 turns it off
+    :return: (a WorkerTally per worker, the measures per kind)
+    """
+    tallies = worker_tallies(context, assignment, report_grievances(context, assignment, max_changes))
+    return tallies, kind_measures(tallies)
 
 
 # --- command line ---

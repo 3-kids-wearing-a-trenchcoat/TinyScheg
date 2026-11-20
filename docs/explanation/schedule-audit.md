@@ -4,14 +4,13 @@ The schedule audit is a **development tool**. It judges a finished schedule the 
 the [scoring](scoring.md) and its [tuning](tuning.md) don't produce schedules that workers would rightly hold against
 them. It isn't part of TinyScheg's regular operation.
 
-> [!IMPORTANT]
-> **Partially implemented.** Decided on 2026-11-19
-> ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md)),
-> and being built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3. The [grievances](#grievances), the
-> [easy fixes](#easy-fixes) and [the report](#the-report) are in `tools/audit.py` and tested, and the command line
-> prints the new report; `tools/tune.py` and `tools/audit_sample.py` don't read it yet, and still use what's described
-> under [the audit until Phase 13](#the-audit-until-phase-13). [Auditing a schedule](../how-to/audit-a-schedule.md)
-> still describes the old report, until Phase 13's step 5.
+> [!NOTE]
+> **Implemented** in `tools/audit.py` and tested, as decided on 2026-11-19
+> ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md))
+> and amended on 2026-11-20 ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md));
+> `tools/tune.py` ([reading the audit](tuning.md#reading-the-audit)) and `tools/audit_sample.py` ([sampling](#sampling))
+> read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4.
+> [Auditing a schedule](../how-to/audit-a-schedule.md) still describes the old report, until Phase 13's step 5.
 
 ## Why a separate audit
 
@@ -301,12 +300,18 @@ independently of `tinyscheg.csp`:
 
 ## Sampling
 
-To compare the audit with the internal penalty, the sampler makes many legal schedules for one input by shuffling the
-workers' order before the search, then audits and scores each. It reports, per kind:
+To compare the audit with the internal penalty, the sampler (`tools/audit_sample.py`) makes many legal schedules for
+one input by shuffling the workers' order before the search, then audits and scores each. It lists each schedule,
+best penalty first, with each kind's events and how many have a harmless fix, and reports, per kind (kinds are never
+added together):
 
-* the **rank correlation** (Spearman) between the internal penalty and the number of events;
-* **disagreements**: the schedules among the best by internal penalty that still have grievances with a harmless
-  fix. A harmless fix in the penalty's favourite schedule is a direct sign the penalty missed something.
+* the **rank correlation** (Spearman) between the internal penalty and the number of events, and between the
+  penalty and the events with a harmless fix; for rest, in hours short too;
+* **disagreements**: the schedules among the best quarter by internal penalty that still have events of that kind
+  with a harmless fix, up to three, the best by penalty first. A harmless fix in the penalty's favourite schedule is a
+  direct sign the penalty missed something.
+
+Its fix search reaches K changes like the audit's (`--max-changes`, 3 by default).
 
 These are first legal schedules (the sampler doesn't use
 [branch and bound](search-algorithm.md#branch-and-bound-the-pocket), which would give the same best schedule every
@@ -321,10 +326,10 @@ every rule is a sentence about how workers judge.
 ## The audit until Phase 13
 
 > [!NOTE]
-> **Implemented** in `tools/audit.py` and covered by tests, and still what `tools/tune.py` and
-> `tools/audit_sample.py` use, until the last part of [Phase 13](../roadmap.md#phase-13-a-reliable-audit)'s step 3
-> (the command line prints the new report already). The full description is in this page's history (before
-> 2026-11-19), and what's wrong with it in [ADR 0048](../decisions/0048-an-audit-that-only-observes.md).
+> **Replaced**, and its code removed, in [Phase 13](../roadmap.md#phase-13-a-reliable-audit)'s step 3
+> (2026-11-20). The full description is in this page's history (before 2026-11-19), its code in the repository's
+> history (before 2026-11-20), and what's wrong with it in [ADR 0048](../decisions/0048-an-audit-that-only-observes.md).
+> The tuning results measured with it are kept as history ([tuning](tuning.md)).
 
 * **Complaints, per pair.** Each complaint was by one worker against one peer (a peer available at least as long),
   past a **tolerance** of one. Its **severity** was how far past the tolerance it went.

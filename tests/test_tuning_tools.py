@@ -10,6 +10,7 @@ import sys
 import pytest
 
 import tune
+from audit import DEFAULT_MAX_CHANGES, FIX_COUNT_FIELDS, KIND_ORDER, LOAD, REST, WorkerTally
 from benchmarks import generate
 from schedule_checker import hard_constraint_violations
 from tinyscheg.csp.problem import build_problem
@@ -115,15 +116,77 @@ def test_every_sensitivity_setting_is_valid_and_named_uniquely() -> None:
         setting.parameters()  # raises if invalid, e.g. a neutral partner of 1/2 or more
 
 
-def test_settings_are_ranked_by_the_tuning_priorities() -> None:
-    def row(setting: str, easy: float, concentration: float, holdout: str = "False") -> dict[str, str]:
-        return {"setting": setting, "status": "done", "holdout": holdout, "easy_fix_severity": str(easy),
-                "no_fix_severity": "1", "concentration": str(concentration), "complaints": "3",
-                "separate_severity": "0", "seconds": "1"}
-    rows = [row("a", 2, 0.1), row("b", 1, 0.9), row("c", 1, 0.5), row("c", 1, 0.5, holdout="True")]
-    assert [summary["setting"] for summary in tune.setting_summaries(rows)] == ["c", "b", "a"]
-    assert tune.setting_summaries(rows)[0]["inputs"] == 1  # held-back inputs are left out by default
-    assert tune.setting_summaries(rows, include_holdout=True)[0]["inputs"] == 2
+def result_row(setting: str, input_name: str, holdout: str = "False", max_changes: int = 3, assignment: str = "0 1",
+               by_worker: str = "[]", **measures: float) -> dict[str, str]:
+    """A results row of a finished first period: every audit measure 0 but those given (by field name)."""
+    row = {"setting": setting, "input": input_name, "tier": "sweep", "holdout": holdout, "status": "done",
+           "seconds": "1", "liked_pairings": "2", "max_changes": str(max_changes), "assignment": assignment,
+           "by_worker": by_worker}
+    return row | {field: str(measures.get(field, 0)) for field in tune.KIND_FIELDS}
+
+
+def test_each_kinds_measures_are_means_over_the_inputs_in_the_stages_order() -> None:
+    rows = [result_row("b", "x", load_events=2), result_row("a", "x", load_events=1),
+            result_row("b", "y", load_events=4), result_row("b", "z", holdout="True", load_events=9)]
+    summaries = tune.kind_summaries(rows)
+    assert [summary["setting"] for summary in summaries] == ["b", "a"]  # no ranking
+    assert summaries[0]["inputs"] == 2 and summaries[0]["load_events"] == 3  # held-back inputs left out by default
+    assert tune.kind_summaries(rows, include_holdout=True)[0]["inputs"] == 3
+    assert summaries[0]["k"] == [3] and summaries[0]["liked_pairings"] == 2
+
+
+def test_a_setting_is_dominated_only_if_no_better_in_any_measure_and_worse_in_one() -> None:
+    rows = [result_row("defaults", "x", load_events=2, rest_hours=4.5),
+            result_row("worse", "x", load_events=3, rest_hours=4.5),           # dominated by defaults
+            result_row("trade", "x", load_events=1, rest_hours=6.0),           # better at load, worse at rest
+            result_row("equal", "x", load_events=2, rest_hours=4.5 + 1e-12)]   # the same as the defaults
+    assert tune.dominated_by(rows) == {"defaults": [], "worse": ["defaults", "equal"], "trade": [], "equal": []}
+
+
+def test_dominance_compares_only_the_inputs_both_finished_and_never_across_k() -> None:
+    rows = [result_row("defaults", "x", load_events=1), result_row("defaults", "y", load_events=9),
+            result_row("other", "x", load_events=2),                          # worse on x; y never finished
+            result_row("deeper", "x", max_changes=4, load_events=5)]           # audited with another K
+    assert tune.dominated_by(rows) == {"defaults": [], "other": ["defaults"], "deeper": []}
+    mixed = rows + [result_row("defaults", "z", max_changes=4)]  # the defaults now audited with two K values
+    assert tune.dominated_by(mixed) == {"defaults": [], "other": [], "deeper": []}
+    assert "WARNING: audited with different K" in "\n".join(tune.describe_audit(mixed, False, "", "first period"))
+
+
+def worker_json(*workers: tuple[str, int, float]) -> str:
+    """The by_worker field of workers, each (name, load events with only transfers, rest hours short in 1 event)."""
+    tallies = []
+    for name, load, rest_hours in workers:
+        counts = {kind: dict.fromkeys(FIX_COUNT_FIELDS, 0) for kind in KIND_ORDER}
+        counts[LOAD] |= {"events": load, "transfers": load}
+        counts[REST] |= {"events": int(rest_hours > 0), "transfers": int(rest_hours > 0)}
+        tallies.append(WorkerTally(name, counts, rest_hours, 0.0))
+    return "[" + ",".join(tune.json.dumps(tune.tally_json(tallied)) for tallied in tallies) + "]"
+
+
+def test_compare_shows_both_tables_on_the_inputs_whose_schedules_differ() -> None:
+    first = worker_json(("Anne", 1, 2.5), ("Jack", 2, 0))
+    second = worker_json(("Anne", 1, 4.0), ("Jack", 1, 0))
+    rows = [result_row("defaults", "x", assignment="0 1", by_worker=first),
+            result_row("trial", "x", assignment="1 0", by_worker=second),
+            result_row("defaults", "y", assignment="0 1", by_worker=first),
+            result_row("trial", "y", assignment="0 1", by_worker=first),
+            result_row("defaults", "z", by_worker=first)]
+    text = tune.compare_settings(rows, "defaults", "trial")
+    assert text.startswith("defaults | trial: 1 of 2 inputs give different first-period schedules")
+    lines = text.splitlines()
+    block = lines[lines.index("x"):]
+    assert "defaults" in block[1] and block[1].index("trial") > block[1].index("defaults")
+    anne = next(line for line in block if line.startswith("Anne"))
+    assert "1 (0/1/0/0) 2.5 h" in anne and "1 (0/1/0/0) 4 h" in anne  # every worker's cells, changed or not
+    differences = block.index("differences:")
+    assert block[differences + 1:differences + 4] == ["  Anne rest: 1 (0/1/0/0) 2.5 h → 1 (0/1/0/0) 4 h",
+                                                      "  Jack load: 2 (0/2/0/0) → 1 (0/1/0/0)", ""]
+    assert "same schedule under both: y" in lines and "finished under only one: z (defaults)" in lines
+    with pytest.raises(ValueError, match="no finished runs"):
+        tune.compare_settings(rows, "defaults", "nothing")
+    with pytest.raises(ValueError, match="different K"):
+        tune.compare_settings(rows + [result_row("trial", "w", max_changes=2)], "defaults", "trial")
 
 
 def test_one_run_finds_and_audits_the_best_schedule(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,6 +199,10 @@ def test_one_run_finds_and_audits_the_best_schedule(tmp_path: pathlib.Path, monk
     assert row["status"] == "done" and row["penalty"] >= 0
     assert set(row) <= set(tune.RESULT_FIELDS)
     assert len(row["assignment"].split()) == len(build_problem(parse_input(generated[0])).slots)
+    assert row["max_changes"] == DEFAULT_MAX_CHANGES and set(tune.KIND_FIELDS) <= set(row)
+    tallies = tune.tallies_from_json(row["by_worker"])
+    assert [tallied.name for tallied in tallies] == [worker["name"] for worker in generated[0]["workers"]]
+    assert row["load_events"] == sum(tallied.counts[LOAD]["events"] for tallied in tallies)
 
 
 def test_one_run_continues_for_a_second_period(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -220,21 +287,47 @@ def test_reaudit_redoes_the_audit_of_a_finished_stage_only(tmp_path: pathlib.Pat
     monkeypatch.setattr(tune, "RESULTS", tmp_path / "results")
     tune.RESULTS.mkdir()
     row = tune.run_one("baseline", tune.DEFAULTS, tune.Benchmark("small", "sweep", False))
-    stale = {**row, "complaints": 999, "easy_fix_severity": 999}  # as if audited by an older audit
+    stale = {key: value for key, value in row.items() if key not in tune.AUDIT_FIELDS}
+    stale |= {"complaints": 999, "easy_fix_severity": 999}  # as if audited by an older audit, with its columns
     with open(tune.results_path("baseline"), "w", encoding="utf-8", newline="") as file:
-        writer = csv.DictWriter(file, tune.RESULT_FIELDS)
+        writer = csv.DictWriter(file, list(stale))
         writer.writeheader()
         writer.writerow(stale)
+    assert tune.main(["report", "baseline"]) == 1  # older columns: re-audit first
     tune.status_path("baseline").write_text('{"finished": false}', encoding="utf-8")
     with pytest.raises(ValueError, match="still running"):
         tune.reaudit_stage("baseline", 1)
     tune.status_path("baseline").write_text('{"finished": true}', encoding="utf-8")
     tune.reaudit_stage("baseline", 1)
     [reaudited] = tune.read_results("baseline")
-    assert reaudited["complaints"] == str(row["complaints"])
-    assert reaudited["easy_fix_severity"] == str(row["easy_fix_severity"])
+    assert "complaints" not in reaudited
+    assert all(reaudited[field] == str(row[field]) for field in tune.AUDIT_FIELDS)
     assert reaudited["penalty"] == str(row["penalty"]) and reaudited["assignment"] == row["assignment"]
-    assert tune.results_path("baseline").with_suffix(".csv.bak").exists()
+    [kept] = tune.RESULTS.glob("baseline.csv.*.bak")  # the old file, named by the time of the re-audit
+    assert "complaints" in kept.read_text(encoding="utf-8")
+
+
+def test_compare_cards_prints_both_full_audit_reports(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch,
+                                                       capsys: pytest.CaptureFixture[str]) -> None:
+    generated = next(generate.generate(seed, HOURS) for seed in SEEDS if generate.generate(seed, HOURS))
+    assert generated is not None
+    (tmp_path / "inputs").mkdir()
+    generate.write_input(tmp_path / "inputs" / "small.yml", *generated)
+    monkeypatch.setattr(tune, "BENCHMARKS", tmp_path)
+    monkeypatch.setattr(tune, "RESULTS", tmp_path / "results")
+    tune.RESULTS.mkdir()
+    row = tune.run_one("trial", tune.DEFAULTS, tune.Benchmark("small", "sweep", False))
+    with open(tune.results_path("trial"), "w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, tune.RESULT_FIELDS)
+        writer.writeheader()
+        writer.writerows([row, {**row, "setting": "copy"}])
+    assert tune.main(["compare", "trial", "defaults", "copy", "--cards", "small"]) == 0
+    text = capsys.readouterr().out
+    assert text.startswith("=== defaults, on small (first period) ===\n\nfixes searched up to 3 changes")
+    assert "=== copy, on small (first period) ===" in text and text.count("events by kind") == 2
+    assert tune.main(["compare", "trial", "defaults", "copy"]) == 0
+    assert "same schedule under both: small" in capsys.readouterr().out
+    assert tune.main(["compare", "trial", "defaults", "copy", "--cards", "missing"]) == 1
 
 
 def test_a_setting_from_the_command_line_is_named_by_its_parameters_in_field_order() -> None:

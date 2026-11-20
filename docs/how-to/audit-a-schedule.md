@@ -8,8 +8,9 @@
 > [ADR 0048](../decisions/0048-an-audit-that-only-observes.md)): `tools/audit.py` now prints each worker's grievances
 > with their fixes, and a closing table of counts, as described in [the report](../explanation/schedule-audit.md#the-report),
 > and takes `--max-changes K` (how far the fix search reaches, 3 by default, 0 to turn it off) and `--json`. The
-> examples of its output below are the old report's, until this guide is rewritten in Phase 13's step 5;
-> `tools/audit_sample.py` is unchanged so far.
+> examples of its output below are the old report's, until this guide is rewritten in Phase 13's step 5. So is the
+> description of `tools/audit_sample.py`'s output, which now reads the new audit kind by kind (see
+> [sampling](../explanation/schedule-audit.md#sampling)).
 
 The [schedule audit](../explanation/schedule-audit.md) is a development tool that judges a schedule from each worker's
 point of view. These steps assume the `tinyscheg` environment is activated, from the repository root (see
