@@ -14,7 +14,8 @@ them. It isn't part of TinyScheg's regular operation.
 > [ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md), rests that could have been longer, after the
 > [worker panel](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md) checked the audit);
 > `tools/tune.py` ([reading the audit](tuning.md#reading-the-audit)) and `tools/audit_sample.py` ([sampling](#sampling))
-> read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4.
+> read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4
+> ([below](#validation-phase-13-step-4)).
 > [Auditing a schedule](../how-to/audit-a-schedule.md) still describes the old report, until Phase 13's step 5.
 
 ## Why a separate audit
@@ -346,6 +347,57 @@ time), not a random sample of all legal ones, which is enough to find blind spot
 Only how far "no fix" reaches: K, 3 by default (a named constant), set with a command-line option, and recorded with
 every result. Besides that, only how many decimals numbers are shown with. There's no tolerance, margin or weight:
 every rule is a sentence about how workers judge.
+
+## Validation (Phase 13, step 4)
+
+> [!NOTE]
+> **Done** on 2026-11-20 and 2026-11-21. Every rule change it led to has its own ADR.
+
+* **Cards read by hand** (2026-11-20): the user read eight workers' cards on the schedules TinyScheg makes. Four
+  answers disagreed with the audit, and changed four rules
+  ([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)).
+* **The worker panel** ([ADR 0052](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md)): a language model
+  played each of the 174 workers of the 16 schedules read (the defaults' next-period stage, first periods and both
+  periods), and its complaints were matched by hand to the audit's grievances.
+  * Load and rest were the two places they disagreed. Load was measured against a lighter colleague and recorded
+    nothing for a lumpy excess; rest was measured against the best-rested worker.
+  * Those disagreements changed both rules: load is judged against the worker's own share
+    ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md)), and rest against the schedule's typical
+    rest ([ADR 0054](../decisions/0054-rest-against-the-typical-rest.md)).
+* **The finished tuning stages audited again** (309 schedules in 8 stages). For the defaults' next-period stage, first
+  periods: load events 29 → 10, rest events 50 → 17 (248 → 56 hours short). The larger stages fell by about two
+  thirds too.
+  * Grievances against a lighter or better-rested colleague are gone.
+  * The load events that remain mostly have only transfers: when the hours don't divide into whole shifts, someone
+    has to be at least half a shift above their share (the 2-2-3 split).
+* **A panel check of the result** (4 workers per schedule, 64 in all):
+
+  | kind | in both | audit only | workers only |
+  |---|---|---|---|
+  | load | 7 | 0 | 17 |
+  | rest | 8 | 9 | 12 |
+  | missing like | 4 | 13 | 1 |
+
+  * **Load:** every load grievance was raised. The workers' own load complaints were within half a shift of their
+    share, in schedules split as evenly as whole shifts allow, and several said so themselves.
+  * **Rest, audit only:** mostly rests after 4- or 6-hour shifts, which no worker raised.
+  * **Rest, workers only:** typical rests, raised against others' longer gaps. Searching them showed 1 of 12 could
+    have been longer at no one's expense, and that the long gaps workers cited mostly included time between the two
+    schedules.
+  * **What changed:** a typical rest that could have been longer is now noted, nearby schedules are judged against
+    the audited schedule's typical rest, and the panel's input shows the time available first
+    ([ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md)). Rerun with that input, 7 of the 12
+    workers no longer raised their rest.
+* **The samples that once had no easy fix** (seeds 150, 165, 174 and 190 of the example): every grievance on all four
+  now has a harmless fix.
+* **Raised by the panel, and left as they are:**
+  * rests after long shifts, which the user's rule holds proportional and no worker raised;
+  * one long shift against a much smaller share, which is no event under the rounding;
+  * one-hour shifts, raised as a trip in for little work (see
+    [dangling shifts](future-work.md#dangling-shifts));
+  * long desk shifts worked alone;
+  * now and then, the time of day, against the input's own rule.
+* **How the defaults read under the new audit:** see [tuning](tuning.md).
 
 ## The audit until Phase 13
 

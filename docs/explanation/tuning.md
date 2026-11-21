@@ -26,8 +26,16 @@ point, not final, but they shape how every later output is read, so the method i
 > events per worker, with no severities and nothing added across kinds. Every result on this page was measured with
 > the audit until then (severities, easy fixes found greedily), so its numbers aren't comparable with the new
 > audit's. The defaults chosen with it
-> ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) stand; the finished stages are audited
-> again in Phase 13, step 4, and if that changes how the choice reads, it's scoring work after Phase 13.
+> ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) stand. The finished stages were
+> audited again in Phase 13, step 4 (2026-11-21, after ADRs 0051 and 0053–0055):
+> * in `s4-check`, where the defaults were chosen, no setting dominates another, held-back inputs included or not;
+> * in `s3b-workload`'s second periods, the defaults still dominate the higher workload weights;
+> * in `s3-candidates`' first periods, the defaults are dominated by the same setting with a rest weight of 0.3: the
+>   same in every measure but rest's, which it betters (on 8 inputs, rest events 2.62 → 2.38 and hours short 9.38 →
+>   7.38 per input);
+> * not in its second periods.
+>
+> That is scoring work after Phase 13 ([future work](future-work.md#the-rest-weight-under-the-new-audit)).
 
 > [!WARNING]
 > **The audit changed on 2026-11-13** (load compared with no exchange rate between shifts and hours, shifts counted in
@@ -78,7 +86,8 @@ The measures aren't collapsed into one number; trade-offs between them are a dec
 
 > [!NOTE]
 > **Implemented** in `tools/tune.py` (Phase 13, step 3) and tested. Decided with the user on 2026-11-19, as a first
-> version, to revisit once the new audit's results have been read (Phase 13, step 4).
+> version; after the new audit's results were read (Phase 13, step 4), rest gained one measure
+> ([ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md)).
 
 The audit only observes ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md)); every judgement about what
 matters more is made here, when reading it:

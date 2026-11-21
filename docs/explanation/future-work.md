@@ -572,6 +572,9 @@ When a segment's length isn't a multiple of the shift length, its last shift is 
 needs handling: keep the short shift (current behaviour), merge it into the previous shift, or let the input set a
 minimum shift length. If the segment scheme itself doesn't work well in practice, it will be revisited.
 
+The worker panel ([ADR 0052](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md)) raised one-hour shifts more
+than once in Phase 13's step 4 (2026-11-21): a trip in for an hour's work, often right after a short rest.
+
 ## Time and post preferences
 
 > [!WARNING]
@@ -702,6 +705,19 @@ of workers one relation (liked, disliked or neither), leaving it to whoever writ
 one-sided feelings. That changes the input format, the scoring of partners (and its constants, such as
 `neutral_partner`), every benchmark input and the tuning.
 
+## The rest weight under the new audit
+
+> [!WARNING]
+> **Not decided.** Deferred on 2026-11-21, at the end of Phase 13's step 4.
+
+Audited again with the rebuilt audit, the defaults
+([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)) are dominated in `s3-candidates`' first
+periods by the same setting with a rest weight of 0.3 instead of 0.25. They're the same in every measure but rest's,
+which it betters: on 8 inputs, 2.38 rest events per input against 2.62, and 7.38 hours short against 9.38. In the
+second periods, and in `s4-check` where the defaults were chosen, no setting dominates. Whether to raise the rest weight
+is for tuning to settle, with the user's rules for likes and short rests
+([reading the audit](tuning.md#reading-the-audit)) deciding between settings neither of which dominates.
+
 ## Tuning on longer schedules
 
 > [!NOTE]
@@ -721,7 +737,8 @@ open: about half the generated 48-hour inputs took over half an hour to search, 
 
 > [!NOTE]
 > **Answered** on 2026-11-19, in [Phase 13](../roadmap.md#phase-13-a-reliable-audit)'s decisions (easy fixes);
-> deferred 2026-11-11. Step 4 checks that the new fix search finds the fixes.
+> deferred 2026-11-11. Checked in step 4 (2026-11-21): with today's audit, every grievance on all four seeds has a
+> harmless fix.
 
 * **Samples with no easy fix at all.** In one sample of the example (seed 16 of `tools/audit_sample.py`, 2026-11-11),
   none of its 74 complaints had an easy fix, though most samples have many. With the audit and search of 2026-11-15,

@@ -10,8 +10,9 @@ When something is deferred, it goes both into [Later](#later) here and into
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
 bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19); Phase 13, a reliable audit, started
-(2026-11-19; steps 1 to 3, the decisions, the design and the rebuilt audit, done; step 4 under way, its cards read by
-hand changing four rules, [ADR 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md)).
+(2026-11-19; steps 1 to 4, the decisions, the design, the rebuilt audit and its validation, done; step 4 changed the
+audit's rules in [ADRs 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md) and 0053–0055, with a worker
+panel, [ADR 0052](decisions/0052-a-worker-panel-as-a-check-on-the-audit.md); step 5, the docs, next).
 
 ## Phase 1: Walking skeleton
 
@@ -659,7 +660,7 @@ answer, the audit asserts only what holds under every reasonable answer.
       reading two settings worker by worker (both closing tables side by side, then the cells that differ, and
       `--cards` for both full reports of one input), and `reaudit` keeping every earlier file as history
       ([reading the audit](explanation/tuning.md#reading-the-audit)); `tools/audit_sample.py` per kind
-- [ ] **4. Validation:** the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
+- [x] **4. Validation** (done 2026-11-21): the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
       appear and disappear explained, and cards read by hand; the sampled schedules that had no easy fix at all
       (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later) and answered in step 1) checked to
       have fixes with the new search. Reading cards by hand with the user (2026-11-20) changed four rules
@@ -673,7 +674,10 @@ answer, the audit asserts only what holds under every reasonable answer.
       rest, per hour of the shift before it ([ADR 0054](decisions/0054-rest-against-the-typical-rest.md)). The stages
       were audited again and the panel checked them on 4 workers per schedule (2026-11-21); from its rest complaints,
       a typical rest that could have been longer at no one's expense is noted, and nearby schedules are judged against
-      the audited schedule's typical rest ([ADR 0055](decisions/0055-rests-that-could-have-been-longer.md))
+      the audited schedule's typical rest ([ADR 0055](decisions/0055-rests-that-could-have-been-longer.md)). Every
+      grievance on the four seeds has a harmless fix; how the defaults read under the new audit is in
+      [tuning](explanation/tuning.md), and the one change it suggests, a rest weight of 0.3, is in [Later](#later).
+      The results are in [the audit's validation](explanation/schedule-audit.md#validation-phase-13-step-4)
 - [ ] **5. Docs:** the how-to, the status table, future work
 
 ## Later
@@ -734,6 +738,9 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       compare shift shares on the audit's own terms
 - [ ] Scoring: the rest target judged by the shift before a rest, as the audit does since ADR 0051 (2026-11-20),
       instead of the mean of the two shifts around it (ADR 0036), if tuning shows the difference matters
+- [ ] Tuning: the rest weight under the new audit: the defaults are dominated in `s3-candidates`' first periods by
+      the same setting with a rest weight of 0.3 (better at rest, the same otherwise; found in Phase 13's step 4,
+      2026-11-21)
 - [ ] Input: symmetric preferences, one relation per pair of workers (liked, disliked or neither), leaving it to
       whoever writes the input to decide how to read one-sided feelings; floated by the user while reading cards
       (2026-11-20). The audit meanwhile lets a dislike cancel the like it meets (ADR 0051)
