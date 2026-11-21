@@ -86,38 +86,38 @@ def test_a_schedule_is_audited_together_with_its_history() -> None:
     context, assignment = with_history(schedule_input, shifts, new)
     assert context.fixed_slots == 6 and assignment == (0, 1, 0, 1, 0, 2) + new
     assert context.staffed_availability == (48, 48, 48)
-    # Anne's 6 shifts against Bob's and Cy's 3 each over both periods: the new period added to the history's
-    # imbalance instead of making up for it (Bob is the first of the equally best-off peers)
+    # Anne's 6 shifts over both periods against a share of 4 (16 hours): the new period added to the history's
+    # imbalance instead of making up for it
     load = find_grievances(context, assignment).load[0]
-    assert load is not None and (load.peer, load.events) == (1, 3)
+    assert load is not None and (load.events, load.extra_hours, load.share) == (2, 8.0, 16.0)
 
 
-def test_a_worker_who_was_away_longer_is_not_a_peer() -> None:
-    # Dana joined for the new period, so she was available half as long as the others. Anne's 5 shifts over both
-    # periods are 3 more than Cy's 2, and would be 4 more than Dana's 1, but Dana isn't Anne's peer
+def test_a_worker_who_joined_later_has_a_smaller_share() -> None:
+    # Dana joined for the new period, so she was available half as long as the others: her share of the 48 hours is
+    # 48 * 24 / 168, the others' 48 * 48 / 168. Anne's 20 hours over both periods are 6.29 above hers (2 of her
+    # shifts), Bob's 16 are 2.29 above (1), and Dana's 4 are below hers
     schedule_input = history_input(("Anne", "Bob", "Cy", "Dana"))
     shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
     context, assignment = with_history(schedule_input, shifts, (0, 1, 0, 1, 2, 3))
     assert context.staffed_availability == (48, 48, 48, 24)
-    load = find_grievances(context, assignment).load[0]
-    assert load is not None and (load.peer, load.events) == (2, 3)
+    load = find_grievances(context, assignment).load
+    assert [g.events if g else 0 for g in load] == [2, 1, 0, 0]
+    assert load[0] is not None and load[0].share == pytest.approx(48 * 48 / 168)
 
 
 def test_the_measures_per_kind_follow_the_closing_table() -> None:
-    # Anne: 24 hours over both periods against Cy's 8 (4 of her 4-hour shifts), and two rests 8 hours short of Bob's,
-    # one of them in the history; a harmless fix for each grievance. Bob: 8 hours more than Cy (2 shifts) with a
-    # harmless fix, and a rest 8 hours short of Cy's in the history. Events wholly in the history are counted, but
-    # never as having a harmless fix
+    # Anne: 24 hours over both periods against a share of 16 (2 of her 4-hour shifts), and two rests 8 hours short of
+    # Bob's, one of them in the history; a harmless fix for each grievance. Bob: at his share, and a rest 8 hours short
+    # of Cy's in the history. Events wholly in the history are counted, but never as having a harmless fix
     schedule_input = history_input()
     shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
     context, assignment = with_history(schedule_input, shifts, (0, 1, 0, 2, 0, 1))
     tallies = worker_tallies(context, assignment, report_grievances(context, assignment))
     assert [tallied.name for tallied in tallies] == ["Anne", "Bob", "Cy"]
     assert [(tallied.hours[REST], tallied.hours_harmless[REST]) for tallied in tallies] == [(16, 8), (8, 0), (0, 0)]
-    assert [(tallied.hours[LOAD], tallied.hours_harmless[LOAD]) for tallied in tallies] == [(16, 16), (8, 8), (0, 0)]
+    assert [(tallied.hours[LOAD], tallied.hours_harmless[LOAD]) for tallied in tallies] == [(8, 8), (0, 0), (0, 0)]
     measures = kind_measures(tallies)
-    assert measures[LOAD] == {"harmless": 6, "most": 4, "events": 6, "hours_harmless": 24, "hours_most": 16,
-                              "hours": 24}
+    assert measures[LOAD] == {"harmless": 2, "most": 2, "events": 2, "hours_harmless": 8, "hours_most": 8, "hours": 8}
     assert measures[REST] == {"harmless": 1, "most": 2, "events": 3, "hours_harmless": 8, "hours_most": 16,
                               "hours": 24}
     assert measures[DISLIKED_PARTNER] == measures[MISSING_LIKE] == {"harmless": 0, "most": 0, "events": 0}

@@ -151,9 +151,10 @@ def test_a_shift_given_to_a_worker_who_had_fewer_harms_nobody() -> None:
                            (Post("gate", ShiftRules(dt.timedelta(hours=4), (("any", 1),))),), 24)
     assignment = (ANNE, BOB, ANNE, BOB, ANNE, CY)  # 3, 2 and 1 shifts, every rest 4 hours, nobody back to back
     found = fixes_for(context, assignment)[(LOAD, ANNE, NO_PERSON)]
-    # Anne's 00:00 to Cy leaves everyone with 2 shifts: Cy works more but has no new grievance, and Anne's and Bob's
-    # 4-hour rests now fall short of Cy's 16 only because Cy rests longer (ADR 0050), so it's harmless
-    assert found.harmless == NearbyFix((Step((0,), (CY,), (ANNE,)),), 2, ())
+    # Anne's 3 shifts are one above her share of 2 (ADR 0053). Her 00:00 to Cy leaves everyone with 2 shifts: Cy works
+    # more but has no new grievance, and Anne's and Bob's 4-hour rests now fall short of Cy's 16 only because Cy rests
+    # longer (ADR 0050), so it's harmless
+    assert found.harmless == NearbyFix((Step((0,), (CY,), (ANNE,)),), 1, ())
 
 
 def fix_of(size: int, *created: GrievanceKey) -> NearbyFix:

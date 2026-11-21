@@ -667,7 +667,11 @@ answer, the audit asserts only what holds under every reasonable answer.
       shift before it, a missing like as a shift with nobody the worker likes, a dislike cancelling the like it
       meets), after which the stages are audited again. A worker panel, a language model playing each worker
       ([ADR 0052](decisions/0052-a-worker-panel-as-a-check-on-the-audit.md)), checked the audit on all 174 workers of
-      the 16 schedules read (2026-11-20), and was then made about 7 times cheaper per worker (2026-11-21)
+      the 16 schedules read (2026-11-20), and was then made about 7 times cheaper per worker (2026-11-21). From its
+      findings, load is judged against the worker's own share, its events rounded to the nearest shift
+      ([ADR 0053](decisions/0053-load-against-the-workers-own-share.md)); whether rest should be judged against a
+      typical rest rather than the best-off peer is discussed next, then the stages are audited again and the panel
+      checks them
 - [ ] **5. Docs:** the how-to, the status table, future work
 
 ## Later

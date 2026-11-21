@@ -8,7 +8,9 @@ them. It isn't part of TinyScheg's regular operation.
 > **Implemented** in `tools/audit.py` and tested, as decided on 2026-11-19
 > ([ADR 0048](../decisions/0048-an-audit-that-only-observes.md) and [ADR 0049](../decisions/0049-partners-in-the-audit.md))
 > and amended on 2026-11-20 ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md),
-> and [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) after reading cards by hand);
+> and [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) after reading cards by hand) and on
+> 2026-11-21 ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md), load against the worker's own share,
+> after the [worker panel](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md) checked the audit);
 > `tools/tune.py` ([reading the audit](tuning.md#reading-the-audit)) and `tools/audit_sample.py` ([sampling](#sampling))
 > read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4.
 > [Auditing a schedule](../how-to/audit-a-schedule.md) still describes the old report, until Phase 13's step 5.
@@ -49,14 +51,15 @@ read.
 
 The audit models workers who are **sensitive to being treated unfairly**:
 
-* **Each grievance is an event the worker can point to:** a shift's worth of extra hours, a rest shorter than someone
-  else's, a shift with someone they dislike. There's no tolerance. In a 2-2-3 split, the worker with 3 has a grievance, though
-  someone had to do the third shift; whether it could have gone elsewhere is a fact the [easy fixes](#easy-fixes)
-  report.
-* **Worse off only, and the strongest case they can.** Each worker points to every way they were worse off than a
-  peer, never to a way they were better off. Each measures themselves against the peer who makes their case best:
-  the **best-off peer**, the one giving the most events. Disliked partners and missing likes need no peer: they're
-  about the worker's own shifts.
+* **Each grievance is an event the worker can point to:** a shift of theirs worked above their share, a rest shorter
+  than someone else's, a shift with someone they dislike. There's no tolerance. In a 2-2-3 split, the worker with 3
+  has a grievance, though someone had to do the third shift; whether it could have gone elsewhere is a fact the
+  [easy fixes](#easy-fixes) report.
+* **Unfairness against themselves, and the strongest case they can.** Each worker points to every way they were
+  treated unfairly, never to a way they were better off. For load, that's work above their own share: a worker at
+  their share carries no one else's work, however little someone else did. For rest, which has no share, each
+  measures themselves against the peer who makes their case best: the **best-off peer**, the one giving the most
+  events. Disliked partners and missing likes need no peer: they're about the worker's own shifts.
 * **No netting.** A boon (a shift with a friend) is never set against a straw (a short rest), by the workers or by the
   audit.
 * **Lines are drawn from the schedule itself.** No line is set by hand, so if everyone does the same work and rests
@@ -79,22 +82,20 @@ nothing to do costs nothing, so it doesn't lower what a worker owes.
 
 ### Load
 
-Load is judged **in proportion to availability**, the project's workload policy
+Load is judged **against the worker's own share** ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md)),
+in proportion to availability, the project's workload policy
 ([ADR 0013](../decisions/0013-availability-weighted-workload.md)). It's measured **in hours alone**
 ([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)): two 2-hour shifts against one 4-hour shift
 are as much load.
 
-* **Peers.** A worker is compared only with peers available at least as long, and for some time at all.
-* **Scaled down, never up.** The peer's hours are scaled to the worker's availability. A peer available 48 hours who
-  worked 12 counts, for a worker available 40 hours, as 10. Scaling up a barely available peer's load would turn a
-  fraction of a shift into whole grievances.
-* **The extra hours are counted in the worker's own shifts, shortest first.** It's as many events as the shortest
-  shifts that fit in them, so each event is a shift the worker can point to. 5 hours more, with shifts of 3 hours, is
-  1 event; with shifts of one length, each whole extra shift is an event. Fewer extra hours than the worker's shortest
-  shift are no event.
+* **The share** is the schedule's hours split in proportion to availability: everyone's hours, times the worker's
+  availability over everyone's. No peer is involved. A worker at their share has no load grievance, however little
+  someone else did.
+* **The extra hours above the share are counted in the worker's own shifts, shortest first, rounded to the nearest
+  shift.** Each shift counts when at least half of it falls within what's left of the extra hours, so each event is a
+  shift the worker can point to. One 6-hour shift against a share of 3 hours is 1 event; 4 hours in 2-hour shifts
+  against a share of 3.6 is none; 5 extra hours in 2-hour shifts are 3 events.
 * **The extra hours are the grievance's size,** a fact on it.
-* **The best-off peer** is the one giving the most events, then the most extra hours, then the first in input
-  order.
 
 There's no separate comparison within a day. Work concentrated in time shows as [rest](#rest) events, since a rest is
 judged by the shift before it.
@@ -244,20 +245,19 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
     rests: 7 h, 6 h
     partners: Jack ×1, Shamhat ×1; liked pairings: 0
     grievances:
-      - load: 7 h more than Jill, as much as 2 shifts of Jeff's (8 h in 3 shifts; Jill 1 h in 1 shift)
-        harmless fix (2 changes, removes 1 event): give Ninsun Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00;
-          swap Jill's front gate 2025-01-01 06:00–07:00 with Siduri's front gate 2025-01-01 07:00–10:00
+      - load: 2.62 h more than Jeff's share of 5.38 h (the schedule's hours in proportion to availability), as much
+        as 1 shift of Jeff's (8 h in 3 shifts)
+        harmless fix (1 change, removes 1 event): give Jill Jeff's front gate 2025-01-01 13:00–16:00
       - rest: 1 rest shorter than Shamhat's
           6 h, between front gate 2025-01-01 13:00–16:00 and front gate 2025-01-01 22:00–2025-01-02 00:00 (with
             Jack): 4 h short, after a 3 h shift (2 h per hour of it), of Shamhat's 10 h in its place, after a 3 h
             shift (3.33 h per hour of it)
         transfers, each removing events but creating others:
-          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 13:00–16:00 -> Enkidu: 1 more load
-            event, 1 more rest shorter than a peer's
+          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 13:00–16:00 -> Enkidu: 1 more rest
+            shorter than a peer's
       - disliked partner: Jack, in 1 shift
           front gate 2025-01-01 22:00–2025-01-02 00:00
-        harmless fix (2 changes, removes 1 event): give Ninsun Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00;
-          swap Jill's front gate 2025-01-01 06:00–07:00 with Siduri's front gate 2025-01-01 07:00–10:00
+        harmless fix (1 change, removes 1 event): give Ninsun Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00
   ```
 
   All transfers are shown, one per line (on 50 samples of the example, a median of 6 per grievance with only
@@ -273,7 +273,7 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
              load         rest         disliked partner  missing like
   Jack       2 (2/0/0/0)  1 (0/1/0/0)  0                 2 (2/0/0/0)
   Jill       0            0            0                 1 (1/0/0/0)
-  Jeff       2 (2/0/0/0)  1 (0/1/0/0)  1 (1/0/0/0)       0
+  Jeff       1 (1/0/0/0)  1 (0/1/0/0)  1 (1/0/0/0)       0
   ```
 
   * Workers are listed in input order, since ranking them would take a rule across kinds.

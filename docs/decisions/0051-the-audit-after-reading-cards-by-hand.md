@@ -1,6 +1,8 @@
 # 0051. The audit after reading cards by hand: load in hours, rest by the shift just done, a missing like in the worker's own shifts, a dislike cancels the like it meets
 
-**Status:** Accepted. Amends [ADR 0048](0048-an-audit-that-only-observes.md) (load is measured in hours alone; a rest
+**Status:** Accepted; amended by [ADR 0053](0053-load-against-the-workers-own-share.md) (a load event is a shift
+at least half of which falls within the extra hours, and the extra hours are above the worker's own share). Amends
+[ADR 0048](0048-an-audit-that-only-observes.md) (load is measured in hours alone; a rest
 is judged by the shift before it) and [ADR 0049](0049-partners-in-the-audit.md) (a missing like is a shift with
 nobody the worker likes, with no peer; a like for someone who dislikes the worker doesn't count).
 

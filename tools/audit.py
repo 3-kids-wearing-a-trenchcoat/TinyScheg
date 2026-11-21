@@ -33,8 +33,11 @@ EPSILON = 1e-9                              # hours (and fractions of a shift or
                                             # they're computed as floats
 DEFAULT_MAX_CHANGES = 3                     # how far the fix search reaches by default (ADR 0048): "no fix" means none
                                             # of up to this many moves and swaps
+LOAD_EVENT_SHARE = 0.5                      # a shift of the worker's counts as a load event when at least this share
+                                            # of it falls within their extra hours: rounding to the nearest shift
+                                            # (ADR 0053)
 
-LOAD = "load"                               # the kinds of grievance (ADR 0048, ADR 0049, ADR 0051): LOAD, REST,
+LOAD = "load"                               # the kinds of grievance (ADRs 0048, 0049, 0051, 0053): LOAD, REST,
 REST = "rest"                               # DISLIKED_PARTNER, MISSING_LIKE
 DISLIKED_PARTNER = "disliked partner"
 MISSING_LIKE = "missing like"
@@ -237,7 +240,7 @@ def workers_by_shift(context: AuditContext, assignment: Sequence[int]) -> list[t
     return [tuple(assignment[slot.index] for slot in shift.slots) for shift in context.shifts]
 
 
-# --- grievances (ADR 0048, ADR 0049, ADR 0051): each worker's events ---
+# --- grievances (ADR 0048, ADR 0049, ADR 0051, ADR 0053): each worker's events ---
 
 @dataclass(frozen=True, slots=True)
 class Rest:
@@ -274,15 +277,14 @@ class WorkerFacts:
 @dataclass(frozen=True, slots=True)
 class LoadGrievance:
     """
-    A worker's extra hours against their best-off peer, whose shifts and hours are scaled down to the worker's
-    availability (ADR 0051): events is how many of the worker's own shifts, shortest first, fit in the extra hours
+    A worker's hours above their share, the schedule's hours split in proportion to availability (ADR 0053): events
+    is how many of the worker's own shifts, shortest first, count within the extra hours, each counting when at least
+    LOAD_EVENT_SHARE of it falls within what's left of them
     """
     worker: int
-    peer: int
     events: int
     extra_hours: float
-    peer_shifts: float
-    peer_hours: float
+    share: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,47 +364,32 @@ def worker_facts(context: AuditContext, crews: Sequence[tuple[int, ...]], worker
                        context.staffed_availability[worker], rests, dict(partners), liked)
 
 
-def load_events(context: AuditContext, facts: Sequence[WorkerFacts], worker: int, peer: int) -> LoadGrievance:
-    """
-    A worker's load events against one peer available at least as long, in hours alone (ADR 0048, ADR 0051): the
-    peer's hours scaled down to the worker's availability; the worker's own shifts, shortest first, that fit in the
-    hours they worked more are the events
-    :param context: AuditContext
-    :param facts: every worker's facts
-    :param worker: the worker's index
-    :param peer: the peer's index
-    :return: the LoadGrievance (with 0 events if there's none)
-    """
-    mine, theirs = facts[worker], facts[peer]
-    scale = mine.availability / theirs.availability
-    peer_shifts, peer_hours = len(theirs.shifts) * scale, theirs.hours * scale
-    extra_hours = mine.hours - peer_hours
-    events, counted = 0, 0.0
-    for length in sorted(shift_hours(context, shift) for shift in mine.shifts):
-        counted += length
-        if counted > extra_hours + EPSILON:
-            break
-        events += 1
-    return LoadGrievance(worker, peer, events, max(extra_hours, 0.0), peer_shifts, peer_hours)
+def load_share(facts: Sequence[WorkerFacts], worker: int) -> float:
+    """A worker's share of the schedule's hours, in proportion to their availability (ADR 0013, ADR 0053)."""
+    total_availability = math.fsum(f.availability for f in facts)
+    if total_availability <= 0:
+        return 0.0
+    return math.fsum(f.hours for f in facts) * facts[worker].availability / total_availability
 
 
 def load_grievance(context: AuditContext, facts: Sequence[WorkerFacts], worker: int) -> LoadGrievance | None:
     """
-    A worker's load grievance: against the best-off peer among those available at least as long (and for some time),
-    the one giving the most events, then the most extra hours (the strongest case), then the first in input order
+    A worker's load grievance (ADR 0053): the hours they worked above their share, and as events, their own shifts,
+    shortest first, each counting when at least LOAD_EVENT_SHARE of it falls within what's left of those hours
+    :param context: AuditContext
+    :param facts: every worker's facts
+    :param worker: the worker's index
     :return: the LoadGrievance, or None if the worker has no load event
     """
-    best: LoadGrievance | None = None
-    own_availability = facts[worker].availability
-    for peer, theirs in enumerate(facts):
-        if peer == worker or theirs.availability <= 0 or theirs.availability + EPSILON < own_availability:
-            continue
-        grievance = load_events(context, facts, worker, peer)
-        if grievance.events and (best is None or grievance.events > best.events
-                                 or (grievance.events == best.events
-                                     and grievance.extra_hours > best.extra_hours + EPSILON)):
-            best = grievance
-    return best
+    share = load_share(facts, worker)
+    extra_hours = facts[worker].hours - share
+    events, counted = 0, 0.0
+    for length in sorted(shift_hours(context, shift) for shift in facts[worker].shifts):
+        if extra_hours - counted + EPSILON < length * LOAD_EVENT_SHARE:
+            break
+        events += 1
+        counted += length
+    return LoadGrievance(worker, events, extra_hours, share) if events else None
 
 
 def rest_events(mine: Sequence[Rest], theirs: Sequence[Rest]) -> tuple[RestEvent, ...]:
@@ -466,7 +453,7 @@ def like_grievance(context: AuditContext, crews: Sequence[tuple[int, ...]], fact
 
 def find_grievances(context: AuditContext, assignment: Sequence[int]) -> Grievances:
     """
-    Every worker's grievances (ADR 0048, ADR 0049, ADR 0051)
+    Every worker's grievances (ADR 0048, ADR 0049, ADR 0051, ADR 0053)
     :param context: AuditContext
     :param assignment: a worker index per slot
     :return: the Grievances
@@ -950,15 +937,11 @@ def card_entries(context: AuditContext, crews: Sequence[tuple[int, ...]], grieva
     entries = []
     load = grievances.load[worker]
     if load is not None:
-        scaled = (f", scaled to {names[worker]}'s availability: {shown(load.peer_hours)} h"
-                  if grievances.facts[load.peer].availability > facts.availability + EPSILON else "")
-        peer = grievances.facts[load.peer]
         entries.append(CardEntry(
             (LOAD, worker, NO_PERSON),
-            f"load: {shown(load.extra_hours)} h more than {names[load.peer]}, as much as "
-            f"{plural(load.events, 'shift')} of {names[worker]}'s ({shown(facts.hours)} h in "
-            f"{plural(len(facts.shifts), 'shift')}; {names[load.peer]} {shown(peer.hours)} h in "
-            f"{plural(len(peer.shifts), 'shift')}{scaled})",
+            f"load: {shown(load.extra_hours)} h more than {names[worker]}'s share of {shown(load.share)} h (the "
+            f"schedule's hours in proportion to availability), as much as {plural(load.events, 'shift')} of "
+            f"{names[worker]}'s ({shown(facts.hours)} h in {plural(len(facts.shifts), 'shift')})",
             (), load.events, 0))
     rest = grievances.rest[worker]
     if rest is not None:
@@ -1166,7 +1149,7 @@ def has_harmless_fix(report: GrievanceReport, key: GrievanceKey) -> bool:
 
 def worker_tallies(context: AuditContext, assignment: Sequence[int], report: GrievanceReport) -> list[WorkerTally]:
     """
-    Every worker's row of the closing table, with their load in extra hours (against their best-off peer) and their
+    Every worker's row of the closing table, with their load in extra hours (above their share, ADR 0053) and their
     rest events in hours short (how much longer each rest would have to be to match the peer's, added within the one
     kind)
     :param context: AuditContext
