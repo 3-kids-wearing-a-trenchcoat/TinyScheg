@@ -46,8 +46,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from audit import (DEFAULT_MAX_CHANGES, FIX_COUNT_FIELDS, HOURS_KINDS, HOURS_MEASURES, HOURS_UNITS, KIND_MEASURES,
-                   KIND_ORDER, MISSING_LIKE, AuditContext, WorkerTally, aligned, audit_measures, build_context, plural,
-                   report_grievances, report_text, shown, tally_cell, with_history)
+                   KIND_ORDER, LONGER_REST_MEASURE, MISSING_LIKE, REST, AuditContext, WorkerTally, aligned,
+                   audit_measures, build_context, plural, report_grievances, report_text, shown, tally_cell,
+                   with_history)
 from tinyscheg.csp.problem import Problem, build_problem
 from tinyscheg.csp.next_period import next_period_input
 from tinyscheg.csp.parallel import find_best_schedule_in_parallel
@@ -92,7 +93,8 @@ RULE_CHECKS = ("outrage_outweighs_pairings", "outrage_outweighs_twice_at_minimum
 DOMINANCE_EPSILON = 1e-9  # sums of a measure closer than this are equal (hours short are added as floats)
 MEASURE_HEADINGS = {"harmless": "with a harmless fix", "most": "most aggrieved", "events": "events",
                     "hours_harmless": "{unit}, harmless fix", "hours_most": "{unit}, most aggrieved",
-                    "hours": "{unit}"}  # the report's column headings of the audit's measures, {unit} from HOURS_UNITS
+                    "hours": "{unit}", LONGER_REST_MEASURE: "could be longer"}  # the report's column headings of
+# the audit's measures, {unit} from HOURS_UNITS
 COLUMN_GAP = 2  # spaces between a table's columns, as audit.aligned leaves them
 
 
@@ -102,8 +104,12 @@ def kind_field(kind: str, measure: str) -> str:
 
 
 def kind_measure_names(kind: str) -> tuple[str, ...]:
-    """The measures recorded for one kind: KIND_MEASURES, and for load and rest HOURS_MEASURES too."""
-    return KIND_MEASURES + (HOURS_MEASURES if kind in HOURS_KINDS else ())
+    """
+    The measures recorded for one kind: KIND_MEASURES, for load and rest HOURS_MEASURES too, and for rest how many
+    workers' shortest rests could have been longer (LONGER_REST_MEASURE, ADR 0055)
+    """
+    return KIND_MEASURES + (HOURS_MEASURES if kind in HOURS_KINDS else ()) + ((LONGER_REST_MEASURE,) if kind == REST
+                                                                              else ())
 
 
 def measure_heading(kind: str, measure: str) -> str:
@@ -419,13 +425,15 @@ def tally_json(tallied: WorkerTally) -> dict[str, Any]:
     return {"name": tallied.name, **{kind: [tallied.counts[kind][field] for field in FIX_COUNT_FIELDS]
                                      for kind in KIND_ORDER},
             "hours": {kind: round(tallied.hours[kind], 4) for kind in HOURS_KINDS},
-            "hours_harmless": {kind: round(tallied.hours_harmless[kind], 4) for kind in HOURS_KINDS}}
+            "hours_harmless": {kind: round(tallied.hours_harmless[kind], 4) for kind in HOURS_KINDS},
+            "longer_rest": tallied.longer_rest}
 
 
 def tallies_from_json(text: str) -> list[WorkerTally]:
     """Every worker's row of the closing table, read back from a results row's by_worker field."""
     return [WorkerTally(entry["name"], {kind: dict(zip(FIX_COUNT_FIELDS, entry[kind])) for kind in KIND_ORDER},
-                        entry["hours"], entry["hours_harmless"]) for entry in json.loads(text)]
+                        entry["hours"], entry["hours_harmless"], entry.get("longer_rest", False))
+            for entry in json.loads(text)]
 
 
 def reaudit_row(row: dict[str, str]) -> dict[str, str]:

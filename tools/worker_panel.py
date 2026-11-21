@@ -194,7 +194,8 @@ def everyone(context: audit.AuditContext, crews: Sequence[Sequence[int]], names:
              number: dict[int, int]) -> list[str]:
     """
     Every worker's facts: hours available and worked, the share of their available time worked, their shifts (each
-    with its length; the grid shows who with) and rests
+    with its length; the grid shows who with) and rests: the time they were available, then, where it differs, the
+    whole gap (ADR 0055: workers compared whole gaps, time between schedules included)
     :param context: AuditContext
     :param crews: the workers of each shift
     :param names: the workers' names
@@ -214,8 +215,9 @@ def everyone(context: audit.AuditContext, crews: Sequence[Sequence[int]], names:
         for rest in f.rests:
             gap = (context.shifts[rest.after].time.start - context.shifts[rest.before].time.end) / dt.timedelta(hours=1)
             away = gap - rest.hours
-            lines.append(f"  - rest between #{number[rest.before]} and #{number[rest.after]}: {hours_text(gap)}"
-                         + (f", of which {hours_text(away)} away or between schedules" if away > audit.EPSILON else ""))
+            lines.append(f"  - rest between #{number[rest.before]} and #{number[rest.after]}: {hours_text(rest.hours)}"
+                         + (f" (a {hours_text(gap)} gap, {hours_text(away)} of it away or between schedules)"
+                            if away > audit.EPSILON else ""))
     return lines + [""]
 
 

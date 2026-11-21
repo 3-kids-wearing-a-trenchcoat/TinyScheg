@@ -10,7 +10,8 @@ them. It isn't part of TinyScheg's regular operation.
 > and amended on 2026-11-20 ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md),
 > and [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) after reading cards by hand) and on
 > 2026-11-21 ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md), load against the worker's own share,
-> and [ADR 0054](../decisions/0054-rest-against-the-typical-rest.md), rest against the typical rest, after the
+> [ADR 0054](../decisions/0054-rest-against-the-typical-rest.md), rest against the typical rest, and
+> [ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md), rests that could have been longer, after the
 > [worker panel](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md) checked the audit);
 > `tools/tune.py` ([reading the audit](tuning.md#reading-the-audit)) and `tools/audit_sample.py` ([sampling](#sampling))
 > read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4.
@@ -175,8 +176,9 @@ An **easy fix** is a **nearby schedule** in which the grievance is gone: the aud
   small inputs.
 * **The fix's size** is its number of changes, a fact on it.
 
-**Only the nearby schedule is judged,** never each step on the way. It's audited afresh by the same rules, with its
-own typical rest, and compared with the audited schedule worker by worker and kind by kind, never across kinds:
+**Only the nearby schedule is judged,** never each step on the way. It's audited afresh by the same rules, its
+rests judged against the audited schedule's typical rest
+([ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md)), and compared with the audited schedule worker by worker and kind by kind, never across kinds:
 
 1. **The grievance is gone.** The worker has fewer events of that kind (with that person, for partners).
 2. **The worker is better off** in that kind's own terms: worse in none of its facts, and better in at least one.
@@ -203,6 +205,17 @@ own typical rest, and compared with the audited schedule worker by worker and ki
    * With no tolerance, most load fixes are transfers: the extra shift in a 2-2-3 split can only move.
    * A fix is dropped when another creates a subset of what it creates, with no more changes. A harmless fix creates
      nothing, so it drops every transfer of its size or larger.
+
+**The audited schedule's typical rest is the yardstick for every nearby schedule,** as the share is for load (it's
+the same in every nearby schedule). Judged by its own typical rest, a nearby schedule that shortens several rests
+would lower the yardstick with them, and shortening others' rests to lengthen one would pass as harmless.
+
+**Rests that could have been longer** ([ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md)). A rest at
+the typical rest is no grievance, but a typical rest can hide an oversight: someone else resting longer than they
+needed. So the search also checks every worker with no rest event whose shortest rest is at the typical rest: a
+nearby schedule where their shortest rest is longer, none of their rests is shorter, and nobody has a new or larger
+grievance of any kind is reported as a **note** on their card, with its changes. Others may rest less, as long as it
+gives them no event. A note isn't a grievance, and isn't counted in the closing table.
 
 **The search is complete up to K changes,** smallest fix first. K is a command-line option, 3 by default.
 * Each nearby schedule is audited once and checked against every grievance, so nothing is skipped.
@@ -232,35 +245,37 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
   * what it points to: the extra hours; each rest, with the shifts around it and who else was in them, so that a
     short rest into a shift with a friend can be seen; each shift with a disliked person; each shift with nobody they
     like, with who was in it;
-  * the peer it's measured against (for load and rest), with both sides' facts in natural units;
+  * what it's measured against: the worker's share for load, the typical rest for rest, in natural units;
   * its size, where it has one: the extra hours, each rest's hours short;
   * its smallest harmless fix (with how many changes it takes and how many events it removes), or else its
     transfers, fewest changes first, each with what it creates, or else "no fix of up to K changes". A grievance whose
     events are all wholly in the history (rests between two history shifts, history shifts with a disliked person or
     with nobody they like) says that no change can reach it instead; an event of that kind among others is marked "(in the history)".
 
-  For example, from a first legal schedule of the example (seed 7 of the sampler, transfers cut short here):
+  After the grievances, a **note** if the worker's shortest rest, at the typical rest, could have been longer at no
+  one's expense, with the changes that would do it.
+
+  For example, two cards from a first legal schedule of the example (seed 7 of the sampler):
 
   ```
-  Jill: 2 shifts, 7 h; available 24 h (of 24 h with a post staffed)
-    rests: 7 h
-    partners: Ninsun ×1; liked pairings: 0
+  Jack: 2 shifts, 6 h; available 22 h (of 24 h with a post staffed)
+    rests: 6 h
+    partners: none; liked pairings: 0
     grievances:
-      - load: 1.62 h more than Jill's share of 5.38 h (the schedule's hours in proportion to availability), as much
-        as 1 shift of Jill's (7 h in 2 shifts)
-        harmless fix (2 changes, removes 1 event): give Enkidu Anne's front gate 2025-01-01 10:00–13:00; give Anne
-          Jill's front gate 2025-01-01 19:00–22:00
       - rest: 1 rest shorter than the typical rest of 2.33 h per hour of the shift before it
-          7 h, between desk 2025-01-01 08:00–12:00 and front gate 2025-01-01 19:00–22:00 (with Ninsun): 2.33 h
-            short, after a 4 h shift (1.75 h per hour of it), of the typical 9.33 h after a shift this long
+          6 h, between front gate 2025-01-01 07:00–10:00 and front gate 2025-01-01 16:00–19:00: 1 h short, after a
+            3 h shift (2 h per hour of it), of the typical 7 h after a shift this long
         transfers, each removing events but creating others:
-          2 changes, removes 1 event: give Anne Jill's front gate 2025-01-01 19:00–22:00; give Jill Shamhat's front
-            gate 2025-01-01 22:00–2025-01-02 00:00 -> Jeff: 1 more shift with Jill, whom they dislike; Anne: 1 more
-            load event, 2 more rests shorter than the typical rest
-      - missing like: 1 shift with nobody they like (they like Jack)
-          front gate 2025-01-01 19:00–22:00 (with Ninsun)
-        harmless fix (2 changes, removes 1 event): give Enkidu Anne's front gate 2025-01-01 10:00–13:00; give Anne
-          Jill's front gate 2025-01-01 19:00–22:00
+          2 changes, removes 1 event: give Jack Siduri's front gate 2025-01-01 06:00–07:00; give Enkidu Jack's front
+            gate 2025-01-01 07:00–10:00 -> Jack: 1 more shift with nobody they like
+
+  Anne: 2 shifts, 6 h; available 24 h (of 24 h with a post staffed)
+    rests: 7 h
+    partners: Jeff ×1; liked pairings: 0
+    grievances: none
+    note: their shortest rest, at the typical rest, could have been longer at no one's expense (2 changes): give
+      Enkidu Siduri's front gate 2025-01-01 06:00–07:00; swap Anne's front gate 2025-01-01 10:00–13:00 with Siduri's
+      front gate 2025-01-01 13:00–16:00
   ```
 
   All transfers are shown, one per line (on 50 samples of the example, a median of 6 per grievance with only
@@ -275,7 +290,7 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
   events by kind (with a harmless fix / only transfers / no fix of up to 3 changes / in the history)
              load         rest         disliked partner  missing like
   Jack       0            1 (0/1/0/0)  0                 0
-  Jill       1 (1/0/0/0)  1 (0/1/0/0)  0                 1 (1/0/0/0)
+  Jill       1 (1/0/0/0)  1 (1/0/0/0)  0                 1 (1/0/0/0)
   Jeff       0            0            0                 0
   ```
 
@@ -289,7 +304,8 @@ per kind:
 * the events;
 * the most aggrieved worker's events;
 * the events with a harmless fix;
-* for load and rest, the same three in hours: extra hours, hours short.
+* for load and rest, the same three in hours: extra hours, hours short;
+* for rest, how many workers' shortest rests could have been longer (the notes).
 
 It also records the liked-pairings total and K.
 

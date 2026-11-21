@@ -43,6 +43,9 @@ REST = "rest"                               # DISLIKED_PARTNER, MISSING_LIKE
 DISLIKED_PARTNER = "disliked partner"
 MISSING_LIKE = "missing like"
 LARGER_REST = "larger rest event"           # what a fix creates when it makes a worker's rest event larger
+LONGER_REST = "longer rest"                 # a note, not a grievance (ADR 0055): a worker with no rest event whose
+                                            # shortest rest, at the typical rest, could have been longer at no one's
+                                            # expense
 NO_PERSON = -1                              # the person of a grievance that isn't about one (all but disliked
                                             # partners)
 
@@ -455,17 +458,19 @@ def like_grievance(context: AuditContext, crews: Sequence[tuple[int, ...]], fact
     return LikeGrievance(worker, shifts) if shifts else None
 
 
-def find_grievances(context: AuditContext, assignment: Sequence[int]) -> Grievances:
+def find_grievances(context: AuditContext, assignment: Sequence[int], typical: float | None = None) -> Grievances:
     """
-    Every worker's grievances (ADR 0048, ADR 0049, ADR 0051, ADR 0053)
+    Every worker's grievances (ADR 0048, ADR 0049, ADR 0051, ADR 0053, ADR 0054)
     :param context: AuditContext
     :param assignment: a worker index per slot
+    :param typical: the typical rest to judge rests against; by default the schedule's own (typical_rest). The fix
+    search passes the audited schedule's, so that a nearby schedule is judged on the same scale (ADR 0055)
     :return: the Grievances
     """
     crews = workers_by_shift(context, assignment)
     workers = range(len(context.schedule_input.workers))
     facts = tuple(worker_facts(context, crews, worker) for worker in workers)
-    typical = typical_rest(facts)
+    typical = typical_rest(facts) if typical is None else typical
     return Grievances(facts=facts,
                       load=tuple(load_grievance(context, facts, worker) for worker in workers),
                       rest=tuple(rest_grievance(facts, worker, typical) for worker in workers),
@@ -774,10 +779,11 @@ def nearby_schedules(context: AuditContext, assignment: Sequence[int],
 def search_fixes(context: AuditContext, assignment: Sequence[int], grievances: Grievances,
                  max_changes: int = DEFAULT_MAX_CHANGES) -> dict[GrievanceKey, FixesFound]:
     """
-    Search every nearby schedule up to max_changes changes for fixes (ADR 0048), each audited afresh and compared
-    with the audited schedule, worker by worker and kind by kind: for each grievance, the smallest harmless fix, or
-    else the transfers no other one dominates. Stops once every grievance has a harmless fix, as nothing further
-    could be reported.
+    Search every nearby schedule up to max_changes changes for fixes (ADR 0048), each audited afresh (its rests
+    against the audited schedule's typical rest, ADR 0055) and compared with the audited schedule, worker by worker
+    and kind by kind: for each grievance, the smallest harmless fix, or else the transfers no other one dominates; and
+    for each worker checked for a longer rest (rest_note_candidates), the smallest nearby schedule that gives them one
+    at no one's expense. Stops once each of these has been found, as nothing further could be reported.
     :param context: AuditContext
     :param assignment: the audited schedule, which must be legal
     :param grievances: its Grievances
@@ -786,14 +792,16 @@ def search_fixes(context: AuditContext, assignment: Sequence[int], grievances: G
     """
     before = standing(grievances)
     keys = sorted(key for key, count in before.events.items() if count > 0)
+    notes = rest_note_candidates(grievances, before)
+    typical = typical_rest(grievances.facts)  # nearby schedules are judged against the audited one's (ADR 0055)
     if max_changes <= 0:
         return {}
     harmless: dict[GrievanceKey, NearbyFix] = {}
     transfers: dict[GrievanceKey, list[NearbyFix]] = {key: [] for key in keys}
-    for steps, nearby in nearby_schedules(context, assignment, max_changes) if keys else ():
-        if len(harmless) == len(keys):
+    for steps, nearby in nearby_schedules(context, assignment, max_changes) if keys or notes else ():
+        if len(harmless) == len(keys) + len(notes):
             break
-        after = standing(find_grievances(context, nearby))
+        after = standing(find_grievances(context, nearby, typical))
         creates = created_by(before, after)
         for key in keys:
             removed = before.events[key] - after.events.get(key, 0)
@@ -805,7 +813,33 @@ def search_fixes(context: AuditContext, assignment: Sequence[int], grievances: G
                 transfers[key] = [other for other in transfers[key] if len(other.steps) < len(steps)]
             else:
                 keep_undominated(transfers[key], fix)
-    return {key: FixesFound(harmless.get(key), tuple(transfers[key])) for key in keys}
+        if not creates:
+            for key in notes:
+                if key not in harmless and shortest_rest_longer(key[1], before, after):
+                    harmless[key] = NearbyFix(steps, 0, ())
+    found = {key: FixesFound(harmless.get(key), tuple(transfers[key])) for key in keys}
+    return found | {key: FixesFound(harmless[key], ()) for key in notes if key in harmless}
+
+
+def rest_note_candidates(grievances: Grievances, before: Standing) -> list[GrievanceKey]:
+    """
+    The workers checked for a rest that could have been longer (ADR 0055): those with no rest event whose shortest
+    rest, per hour of the shift before it, is at the typical rest
+    :return: their LONGER_REST keys, in input order
+    """
+    typical = typical_rest(grievances.facts)
+    if typical is None:
+        return []
+    return [(LONGER_REST, worker, NO_PERSON) for worker, rests in enumerate(before.rests)
+            if rests and grievances.rest[worker] is None and rests[0] <= typical + EPSILON]
+
+
+def shortest_rest_longer(worker: int, before: Standing, after: Standing) -> bool:
+    """True if a worker's shortest rest is longer and none of their rests shorter (both per hour of the shift before
+    each, sorted shortest first and compared place by place), with no fewer rests."""
+    old, new = before.rests[worker], after.rests[worker]
+    return (len(new) >= len(old) and new[0] > old[0] + EPSILON
+            and all(longer >= place - EPSILON for longer, place in zip(new, old)))
 
 
 # --- the report (ADR 0048, ADR 0049, ADR 0051) ---
@@ -1006,7 +1040,18 @@ def grievance_card(context: AuditContext, crews: Sequence[tuple[int, ...]], repo
         lines += [f"        {line}" for line in entry.event_lines]
         lines += [f"      {line}" for line in describe_fixes(context, report.fixes.get(entry.key), report.max_changes,
                                                              0 < entry.events == entry.in_history)]
+    note = rest_note(report, worker)
+    if note is not None:
+        lines.append(f"  note: their shortest rest, at the typical rest, could have been longer at no one's expense "
+                     f"({plural(len(note.steps), 'change')}): " + "; ".join(describe_step(context, step)
+                                                                              for step in note.steps))
     return "\n".join(lines)
+
+
+def rest_note(report: GrievanceReport, worker: int) -> NearbyFix | None:
+    """The nearby schedule that would have given a worker a longer shortest rest at no one's expense (ADR 0055)."""
+    found = report.fixes.get((LONGER_REST, worker, NO_PERSON))
+    return found.harmless if found else None
 
 
 FixCounts = dict[str, int]  # by FIX_COUNT_FIELDS
@@ -1120,7 +1165,8 @@ def report_json(context: AuditContext, assignment: Sequence[int], report: Grieva
             "rests": [{"hours": rest.hours, "per_hour": rest.per_hour, "before": shift_json(context, rest.before),
                        "after": shift_json(context, rest.after)} for rest in facts.rests],
             "partners": {names[other]: count for other, count in sorted(facts.partners.items())},
-            "liked_pairings": facts.liked_pairings, "grievances": entries, "counts": counts[worker]})
+            "liked_pairings": facts.liked_pairings, "grievances": entries, "counts": counts[worker],
+            "longer_rest": fix_json(context, note) if (note := rest_note(report, worker)) else None})
     return {"max_changes": report.max_changes, "fixed_slots": context.fixed_slots,
             "staffed_hours": context.staffed_total, "workers": workers}
 
@@ -1132,18 +1178,22 @@ KIND_MEASURES = ("harmless", "most", "events")  # per kind, in the reading's ord
 HOURS_KINDS = (LOAD, REST)                      # the kinds also measured in hours (ADR 0051): load in extra hours, rest
 HOURS_UNITS = {LOAD: "h more", REST: "h short"}  # in hours short, as these units say
 HOURS_MEASURES = ("hours_harmless", "hours_most", "hours")  # the same three as KIND_MEASURES, in those hours
+LONGER_REST_MEASURE = "longer"                  # rest's own extra measure (ADR 0055): how many workers' shortest rests
+                                                # could have been longer at no one's expense
 
 
 @dataclass(frozen=True, slots=True)
 class WorkerTally:
     """
     One worker's row of the closing table (their counts by kind), with their events in hours for each of HOURS_KINDS:
-    in all, and those of a grievance with a harmless fix (leaving out events wholly in the history, as the table does)
+    in all, and those of a grievance with a harmless fix (leaving out events wholly in the history, as the table does);
+    and whether their shortest rest could have been longer at no one's expense (ADR 0055)
     """
     name: str
     counts: dict[str, FixCounts]
     hours: dict[str, float]
     hours_harmless: dict[str, float]
+    longer_rest: bool = False
 
 
 def has_harmless_fix(report: GrievanceReport, key: GrievanceKey) -> bool:
@@ -1174,7 +1224,8 @@ def worker_tallies(context: AuditContext, assignment: Sequence[int], report: Gri
         result.append(WorkerTally(
             name, counts[worker], {LOAD: extra, REST: math.fsum(event.shortfall for event in events)},
             {LOAD: extra if has_harmless_fix(report, (LOAD, worker, NO_PERSON)) else 0.0,
-             REST: math.fsum(reachable) if has_harmless_fix(report, (REST, worker, NO_PERSON)) else 0.0}))
+             REST: math.fsum(reachable) if has_harmless_fix(report, (REST, worker, NO_PERSON)) else 0.0},
+            rest_note(report, worker) is not None))
     return result
 
 
@@ -1182,7 +1233,8 @@ def kind_measures(tallies: Sequence[WorkerTally]) -> dict[str, dict[str, float]]
     """
     Each kind's measures, which the tools reading the audit compare: the events with a harmless fix, the most
     aggrieved worker's events and all events (KIND_MEASURES); for load and rest, the same three in hours too
-    (HOURS_MEASURES, in HOURS_UNITS). Nothing is added across kinds, and the report itself never shows these.
+    (HOURS_MEASURES, in HOURS_UNITS); for rest, also how many workers' shortest rests could have been longer
+    (LONGER_REST_MEASURE, ADR 0055). Nothing is added across kinds, and the report itself never shows these.
     :param tallies: every worker's WorkerTally
     :return: per kind (in KIND_ORDER), per measure
     """
@@ -1196,6 +1248,7 @@ def kind_measures(tallies: Sequence[WorkerTally]) -> dict[str, dict[str, float]]
         result[kind] |= {"hours_harmless": math.fsum(tallied.hours_harmless[kind] for tallied in tallies),
                          "hours_most": max((tallied.hours[kind] for tallied in tallies), default=0.0),
                          "hours": math.fsum(tallied.hours[kind] for tallied in tallies)}
+    result[REST][LONGER_REST_MEASURE] = sum(tallied.longer_rest for tallied in tallies)
     return result
 
 

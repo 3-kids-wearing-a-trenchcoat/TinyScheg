@@ -210,6 +210,7 @@ def test_one_run_finds_and_audits_the_best_schedule(tmp_path: pathlib.Path, monk
     tallies = tune.tallies_from_json(row["by_worker"])
     assert [tallied.name for tallied in tallies] == [worker["name"] for worker in generated[0]["workers"]]
     assert row["load_events"] == sum(tallied.counts[LOAD]["events"] for tallied in tallies)
+    assert row["rest_longer"] == sum(tallied.longer_rest for tallied in tallies)  # ADR 0055
 
 
 def test_one_run_continues_for_a_second_period(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:

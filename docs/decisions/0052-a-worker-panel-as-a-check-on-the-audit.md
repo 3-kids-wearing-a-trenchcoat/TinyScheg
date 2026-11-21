@@ -1,6 +1,7 @@
 # 0052. A worker panel: a language model plays each worker, as a check on the audit
 
-**Status:** Accepted (2026-11-21).
+**Status:** Accepted (2026-11-21); amended by [ADR 0055](0055-rests-that-could-have-been-longer.md) (rests are shown
+as the time available first, then the whole gap).
 
 ## Context
 

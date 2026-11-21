@@ -5,9 +5,10 @@ from collections import deque
 
 import pytest
 
-from audit import (DISLIKED_PARTNER, LOAD, NO_PERSON, REST, AuditContext, FixesFound, GrievanceKey, NearbyFix,
-                   Standing, Step, better_off, build_context, created_by, find_grievances, keep_undominated,
-                   search_fixes, standing, with_history)
+from audit import (DISLIKED_PARTNER, LOAD, LONGER_REST, NO_PERSON, REST, AuditContext, FixesFound, GrievanceKey,
+                   NearbyFix, Standing, Step, better_off, build_context, created_by, find_grievances, keep_undominated,
+                   kind_measures, report_grievances, report_text, rest_note_candidates, search_fixes,
+                   shortest_rest_longer, standing, typical_rest, with_history, worker_tallies)
 from schedule_checker import hard_constraint_violations
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import PreviousSchedule, ScheduleInput, Settings
@@ -157,6 +158,52 @@ def test_a_shift_given_to_a_worker_who_had_fewer_harms_nobody() -> None:
     assert found.harmless == NearbyFix((Step((0,), (CY,), (ANNE,)),), 1, ())
 
 
+# --- rests that could have been longer (ADR 0055) ---
+
+def gate_context() -> AuditContext:
+    """Anne, Bob, Cy and Dee, and a gate of 2-hour shifts, one worker each, over 16 hours, with a minimum rest of 4."""
+    posts = (Post("gate", ShiftRules(dt.timedelta(hours=2), (("any", 1),))),)
+    return make_context([Worker(name) for name in ("Anne", "Bob", "Cy", "Dee")], posts, 16, min_rest=4)
+
+
+def applied(assignment: tuple[int, ...], fix: NearbyFix) -> tuple[int, ...]:
+    """A schedule with a fix's changes made."""
+    changed = list(assignment)
+    for step in fix.steps:
+        for slot, worker in zip(step.slots, step.workers):
+            changed[slot] = worker
+    return tuple(changed)
+
+
+def test_a_typical_rest_that_could_have_been_longer_gets_a_note() -> None:
+    # Anne and Bob rest 6 hours, the typical rest; Cy rests 8; Dee's 4 is an event. Two swaps with Cy give Anne (or
+    # Bob) 8 hours and leave Cy at the typical 6: no one is worse off than the schedule's typical rest
+    context = gate_context()
+    assignment = (ANNE, BOB, CY, 3, ANNE, BOB, 3, CY)
+    report = report_grievances(context, assignment)
+    notes = {key[1]: found.harmless for key, found in report.fixes.items() if key[0] == LONGER_REST}
+    assert set(notes) == {ANNE, BOB} and all(len(fix.steps) == 2 for fix in notes.values())
+    rests = [[rest.hours for rest in facts.rests] for facts in find_grievances(context, applied(assignment,
+                                                                                               notes[ANNE])).facts]
+    assert rests == [[8.0], [6.0], [6.0], [4.0]]
+    assert kind_measures(worker_tallies(context, assignment, report))[REST]["longer"] == 2
+    assert "note: their shortest rest, at the typical rest, could have been longer at no one's expense (2 changes)" \
+        in report_text(context, assignment, report)
+
+
+def test_shortening_others_rests_is_judged_against_the_audited_schedules_typical_rest() -> None:
+    # Everyone rests 6 hours. Two swaps give Bob 8 and the others 4, which would lower the schedule's own typical rest
+    # to 4; judged against the audited schedule's 6, the others are worse off, so it's no note
+    context = gate_context()
+    assignment = (ANNE, BOB, CY, 3, ANNE, BOB, CY, 3)
+    grievances = find_grievances(context, assignment)
+    assert [key[1] for key in rest_note_candidates(grievances, standing(grievances))] == [ANNE, BOB, CY, 3]
+    levelled = (3, BOB, CY, 3, ANNE, CY, BOB, ANNE)
+    after = standing(find_grievances(context, levelled, typical_rest(grievances.facts)))
+    assert shortest_rest_longer(BOB, standing(grievances), after) and created_by(standing(grievances), after)
+    assert not any(key[0] == LONGER_REST for key in report_grievances(context, assignment).fixes)
+
+
 def fix_of(size: int, *created: GrievanceKey) -> NearbyFix:
     """A NearbyFix of a given number of changes, creating one event of each grievance given."""
     return NearbyFix(tuple(Step((index,), (0,), (1,)) for index in range(size)), 1, tuple((key, 1) for key in created))
@@ -206,20 +253,32 @@ def expected_fixes(context: AuditContext, assignment: tuple[int, ...],
                    reach: int) -> dict[GrievanceKey, tuple[int | None, set]]:
     """
     For each grievance, by brute force: the smallest harmless fix's size, and the transfers (what each creates, and
-    its size) that no other one dominates
+    its size) that no other one dominates; and for each worker checked for a longer rest, the smallest nearby schedule
+    that gives them one at no one's expense; nearby schedules judged against the audited one's typical rest (ADR 0055)
     """
-    before = standing(find_grievances(context, assignment))
+    audited = find_grievances(context, assignment)
+    typical = typical_rest(audited.facts)
+    before = standing(audited)
     keys = [key for key, count in before.events.items() if count > 0]
     found: dict[GrievanceKey, list[tuple[tuple, int]]] = {key: [] for key in keys}
     for nearby, size in distances(assignment, context, reach).items():
         if size == 0 or hard_constraint_violations(context.schedule_input, context.slots, nearby):
             continue
-        after = standing(find_grievances(context, nearby))
+        after = standing(find_grievances(context, nearby, typical))
         creates = created_by(before, after)
         for key in keys:
             if before.events[key] > after.events.get(key, 0) and better_off(key, before, after):
                 found[key].append((creates, size))
-    result = {}
+    notes: dict[GrievanceKey, list[int]] = {key: [] for key in rest_note_candidates(audited, before)}
+    for nearby, size in distances(assignment, context, reach).items():
+        if size == 0 or not notes or hard_constraint_violations(context.schedule_input, context.slots, nearby):
+            continue
+        after = standing(find_grievances(context, nearby, typical))
+        if not created_by(before, after):
+            for key in notes:
+                if shortest_rest_longer(key[1], before, after):
+                    notes[key].append(size)
+    result = {key: (min(sizes), set()) for key, sizes in notes.items() if sizes}
     for key, candidates in found.items():
         harmless = min((size for creates, size in candidates if not creates), default=None)
         transfers = {(creates, size) for creates, size in candidates
@@ -265,3 +324,15 @@ def test_the_search_finds_what_brute_force_finds(input_index: int) -> None:
             fixes = found[key]
             assert (len(fixes.harmless.steps) if fixes.harmless else None) == harmless, (assignment, key)
             assert {(fix.creates, len(fix.steps)) for fix in fixes.transfers} == transfers, (assignment, key)
+
+
+@pytest.mark.parametrize("assignment", [(0, 1, 2, 3, 0, 1, 3, 2), (0, 1, 2, 0, 3, 2, 1, 3), (0, 1, 2, 3, 0, 2, 1, 3),
+                                        (0, 1, 2, 3, 1, 0, 2, 3), (0, 1, 2, 3, 0, 1, 2, 3)])
+def test_the_search_finds_the_longer_rests_brute_force_finds(assignment: tuple[int, ...]) -> None:
+    # schedules of the gate input with and without notes, within 2 changes
+    context = gate_context()
+    found = fixes_for(context, assignment, max_changes=2)
+    expected = expected_fixes(context, assignment, 2)
+    notes = {key: (len(found[key].harmless.steps), set()) for key in found if key[0] == LONGER_REST}
+    assert notes == {key: value for key, value in expected.items() if key[0] == LONGER_REST}
+    assert bool(notes) == (assignment != (0, 1, 2, 3, 0, 1, 2, 3))  # equal rests: nothing could be longer

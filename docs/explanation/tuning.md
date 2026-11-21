@@ -95,7 +95,10 @@ matters more is made here, when reading it:
    measured in hours above the worker's share ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md)),
    its events counted in the worker's own shifts. So for both, the three measures are also taken in hours (adding to the measures of
    ADR 0048): in all, the most aggrieved worker's, and those with a harmless fix. Hours added within one kind are one
-   unit, not an exchange rate.
+   unit, not an exchange rate. Rest has one more measure: how many workers' shortest rests, at the typical rest,
+   could have been longer at no one's expense ([ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md)),
+   the sign that the model left rest on the table where no grievance shows it. Fewer is better, and it counts in
+   dominance like the others.
 4. **Dominance first.** A setting no better than another in any measure, and worse in at least one, is dominated,
    and `tools/tune.py report` lists, for each setting, the settings that dominate it, each pair compared on the
    inputs both finished, for the first period alone and over both periods. There's no single ranking: settings are
@@ -130,9 +133,9 @@ the whole of both (the `day2_` columns). A first period that leaves the second n
 2's `no schedule`: a failure, since in real use the next schedule couldn't be made
 ([future work](future-work.md#a-schedule-that-leaves-the-next-one-with-no-legal-schedule)).
 
-Besides the audit's measures ([above](#reading-the-audit): each kind's three, for load and rest in hours too, with K
-and each worker's row of the closing table, for `compare`), each schedule gets measures that don't come from the
-audit, over the whole schedule
+Besides the audit's measures ([above](#reading-the-audit): each kind's three, for load and rest in hours too, for
+rest the rests that could have been longer, with K and each worker's row of the closing table, for `compare`), each
+schedule gets measures that don't come from the audit, over the whole schedule
 (both periods for day 2): each rest in available time
 ([ADR 0038](../decisions/0038-rests-count-only-available-time.md)), how many are at or below the minimum rest, their
 median, the spread of the workers' shortest rests, the largest gaps in hours and in shifts between fully available

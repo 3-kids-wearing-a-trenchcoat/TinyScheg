@@ -670,8 +670,10 @@ answer, the audit asserts only what holds under every reasonable answer.
       the 16 schedules read (2026-11-20), and was then made about 7 times cheaper per worker (2026-11-21). From its
       findings, load is judged against the worker's own share, its events rounded to the nearest shift
       ([ADR 0053](decisions/0053-load-against-the-workers-own-share.md)), and rest against the schedule's typical
-      rest, per hour of the shift before it ([ADR 0054](decisions/0054-rest-against-the-typical-rest.md)); then the
-      stages are audited again and the panel checks them
+      rest, per hour of the shift before it ([ADR 0054](decisions/0054-rest-against-the-typical-rest.md)). The stages
+      were audited again and the panel checked them on 4 workers per schedule (2026-11-21); from its rest complaints,
+      a typical rest that could have been longer at no one's expense is noted, and nearby schedules are judged against
+      the audited schedule's typical rest ([ADR 0055](decisions/0055-rests-that-could-have-been-longer.md))
 - [ ] **5. Docs:** the how-to, the status table, future work
 
 ## Later

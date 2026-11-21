@@ -147,3 +147,16 @@ def test_a_dry_run_lists_the_workers_of_each_schedule(tmp_path, capsys) -> None:
                         f"message {len(f'You are {name}.')} chars")
     with pytest.raises(FileNotFoundError):
         schedule_workers(tmp_path, "s-both")
+
+
+def test_a_rest_shows_the_time_available_then_the_whole_gap() -> None:
+    # Anne works 0-2 and 8-10 and is away 4-6: 4 hours of rest, in a 6-hour gap (ADR 0055)
+    workers = (Worker("Anne", unavailable=(DateTimeRange(at(4), at(6)),)), Worker("Bob"))
+    posts = (Post(GATE, ShiftRules(dt.timedelta(hours=2), (("any", 1),))),)
+    settings = Settings(DateTimeRange(at(0), at(12)), dt.timedelta(hours=1))
+    schedule_input = ScheduleInput(settings, workers, posts)
+    shifts = generate_shifts(posts, settings.period)
+    context = build_context(schedule_input, shifts, all_slots(shifts))
+    lines = shared_text(context, (0, 1, 1, 1, 0, 1), schedule_input).splitlines()
+    assert "  - rest between #1 and #5: 4 h (a 6 h gap, 2 h of it away or between schedules)" in lines
+    assert "  - rest between #2 and #3: 0 h" in lines

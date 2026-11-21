@@ -1,6 +1,7 @@
 # 0054. Rest against the schedule's typical rest, per hour of the shift before it
 
-**Status:** Accepted (2026-11-21). Amends [ADR 0048](0048-an-audit-that-only-observes.md) (rests were compared rest by
+**Status:** Accepted (2026-11-21); amended by [ADR 0055](0055-rests-that-could-have-been-longer.md) (nearby
+schedules are judged against the audited schedule's typical rest, not their own). Amends [ADR 0048](0048-an-audit-that-only-observes.md) (rests were compared rest by
 rest against the best-off peer). Keeps [ADR 0051](0051-the-audit-after-reading-cards-by-hand.md)'s rule that a rest is
 judged per hour of the shift before it.
 
