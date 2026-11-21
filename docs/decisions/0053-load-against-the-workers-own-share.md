@@ -68,7 +68,7 @@ share carries no one else's work, however little someone else did.
 
 * **Rest is still judged against the best-off peer.** Rest has no share, so some comparison with others stays. Whether
   it should be with a typical rest in the schedule rather than the best one comes from the same correction. It is
-  discussed next, in Phase 13's step 4.
+  discussed next, in Phase 13's step 4 (settled in [ADR 0054](0054-rest-against-the-typical-rest.md)).
 * **Results audited before this ADR aren't comparable** with those after. The stored tuning stages are audited again
   once the rest question is settled, and the worker panel checks the result.
 * **Checked by** hand-made tests: a 2-2-3 split; a worker at their share beside a light worker; shares by

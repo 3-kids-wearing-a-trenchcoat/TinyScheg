@@ -12,6 +12,7 @@ import itertools
 import json
 import math
 import pathlib
+import statistics
 import sys
 from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
@@ -290,19 +291,21 @@ class LoadGrievance:
 @dataclass(frozen=True, slots=True)
 class RestEvent:
     """
-    One of a worker's rests shorter than their peer's in its place, both sorted shortest first (per hour of the shift
-    before each): shortfall is how many hours longer it would have to be to match the peer's, after a shift this long
+    One of a worker's rests shorter than the schedule's typical rest, per hour of the shift before it (ADR 0054):
+    shortfall is how many hours longer it would have to be to reach the typical rest, after a shift this long
     """
     rest: Rest
-    peer_rest: Rest
     shortfall: float
 
 
 @dataclass(frozen=True, slots=True)
 class RestGrievance:
-    """A worker's rests shorter than their best-off peer's, shortest first."""
+    """
+    A worker's rests shorter than the typical rest, shortest first (per hour of the shift before each): typical is the
+    median of every rest in the schedule, per hour of the shift before it (ADR 0054)
+    """
     worker: int
-    peer: int
+    typical: float
     events: tuple[RestEvent, ...]
 
 
@@ -392,38 +395,39 @@ def load_grievance(context: AuditContext, facts: Sequence[WorkerFacts], worker: 
     return LoadGrievance(worker, events, extra_hours, share) if events else None
 
 
-def rest_events(mine: Sequence[Rest], theirs: Sequence[Rest]) -> tuple[RestEvent, ...]:
+def typical_rest(facts: Sequence[WorkerFacts]) -> float | None:
     """
-    A worker's rest events against one peer (ADR 0048, ADR 0051): both sides' rests sorted shortest first, per hour of
-    the shift before each, and compared in the same places, up to the smaller number of rests
-    :param mine: the worker's rests
-    :param theirs: the peer's rests
-    :return: the events, shortest rest first
+    The schedule's typical rest (ADR 0054): the median of every worker's rests, each per hour of the shift before it
+    (rests before a worker's first shift and after their last aren't rests); None if there are none
     """
-    def shortest_first(rests: Sequence[Rest]) -> list[Rest]:
-        return sorted(rests, key=lambda rest: (rest.per_hour, rest.before))
-
-    return tuple(RestEvent(own, other, (other.per_hour - own.per_hour) * own.shift_hours)
-                 for own, other in zip(shortest_first(mine), shortest_first(theirs))
-                 if own.per_hour < other.per_hour - EPSILON)
+    rests = [rest.per_hour for worker_facts in facts for rest in worker_facts.rests]
+    return statistics.median(rests) if rests else None
 
 
-def rest_grievance(facts: Sequence[WorkerFacts], worker: int) -> RestGrievance | None:
+def rest_events(rests: Sequence[Rest], typical: float) -> tuple[RestEvent, ...]:
     """
-    A worker's rest grievance, against the best-off peer (every worker is a peer): the one giving the most events,
-    then the largest shortfalls (the strongest case), then the first in input order
+    A worker's rest events (ADR 0054): their rests shorter than the typical rest, per hour of the shift before each
+    :param rests: the worker's rests
+    :param typical: the schedule's typical rest, per hour of the shift before it
+    :return: the events, shortest rest first (per hour of the shift before it)
+    """
+    return tuple(RestEvent(rest, (typical - rest.per_hour) * rest.shift_hours)
+                 for rest in sorted(rests, key=lambda rest: (rest.per_hour, rest.before))
+                 if rest.per_hour < typical - EPSILON)
+
+
+def rest_grievance(facts: Sequence[WorkerFacts], worker: int, typical: float | None) -> RestGrievance | None:
+    """
+    A worker's rest grievance: their rests shorter than the schedule's typical rest (ADR 0054)
+    :param facts: every worker's facts
+    :param worker: the worker's index
+    :param typical: the schedule's typical rest (typical_rest), or None if it has no rests
     :return: the RestGrievance, or None if the worker has no rest event
     """
-    best: RestGrievance | None = None
-    best_case: tuple[int, list[float]] = (0, [])
-    for peer, theirs in enumerate(facts):
-        if peer == worker:
-            continue
-        events = rest_events(facts[worker].rests, theirs.rests)
-        case = (len(events), sorted((event.shortfall for event in events), reverse=True))
-        if events and case > best_case:
-            best, best_case = RestGrievance(worker, peer, events), case
-    return best
+    if typical is None:
+        return None
+    events = rest_events(facts[worker].rests, typical)
+    return RestGrievance(worker, typical, events) if events else None
 
 
 def disliked_events(context: AuditContext, crews: Sequence[tuple[int, ...]],
@@ -461,9 +465,10 @@ def find_grievances(context: AuditContext, assignment: Sequence[int]) -> Grievan
     crews = workers_by_shift(context, assignment)
     workers = range(len(context.schedule_input.workers))
     facts = tuple(worker_facts(context, crews, worker) for worker in workers)
+    typical = typical_rest(facts)
     return Grievances(facts=facts,
                       load=tuple(load_grievance(context, facts, worker) for worker in workers),
-                      rest=tuple(rest_grievance(facts, worker) for worker in workers),
+                      rest=tuple(rest_grievance(facts, worker, typical) for worker in workers),
                       disliked=tuple(disliked_events(context, crews, facts, worker) for worker in workers),
                       liked=tuple(like_grievance(context, crews, facts, worker) for worker in workers))
 
@@ -515,11 +520,11 @@ def standing(grievances: Grievances) -> Standing:
 def better_off(key: GrievanceKey, before: Standing, after: Standing) -> bool:
     """
     True if the worker of a grievance is better off in its kind's own terms (ADR 0048, ADR 0051): worse in none of its
-    facts and better in at least one, so that making the peer worse off (levelling down) is no fix
+    facts and better in at least one, so that making others worse off (levelling down) is no fix
     :param key: the grievance
     :param before: the audited schedule's Standing
     :param after: the nearby schedule's Standing
-    :return: for load, fewer hours; for rest, the new rests compared with the old as with a peer's (shortest first,
+    :return: for load, fewer hours; for rest, the new rests compared with the old, place by place (shortest first,
     up to the smaller number), none shorter and at least one longer; for a disliked partner, a shift fewer with them;
     for missing likes, fewer shifts with nobody they like
     """
@@ -561,7 +566,7 @@ def created_by(before: Standing, after: Standing) -> tuple[tuple[GrievanceKey, i
     What a nearby schedule creates (ADR 0050): for each worker, each grievance with more events (how many more), and
     a LARGER_REST if a rest event of theirs is larger than the one in its place before (both sorted largest first),
     where their own situation in that kind got worse too; a grievance that grows only because someone else is better
-    off (a new best-off peer) isn't created by the change
+    off (the typical rest rising as others rest longer) isn't created by the change
     :return: the created grievances, sorted; empty if the nearby schedule is harmless
     """
     created = {key: count - before.events.get(key, 0) for key, count in after.events.items()
@@ -872,9 +877,9 @@ def describe_created(context: AuditContext, created: Sequence[tuple[GrievanceKey
         if kind == LOAD:
             what = plural(count, "more load event", "more load events")
         elif kind == REST:
-            what = plural(count, "more rest", "more rests") + " shorter than a peer's"
+            what = plural(count, "more rest", "more rests") + " shorter than the typical rest"
         elif kind == LARGER_REST:
-            what = "a rest further short of a peer's"
+            what = "a rest further short of the typical rest"
         elif kind == DISLIKED_PARTNER:
             what = f"{plural(count, 'more shift')} with {names[person]}, whom they dislike"
         else:
@@ -949,12 +954,12 @@ def card_entries(context: AuditContext, crews: Sequence[tuple[int, ...]], grieva
                 for event in rest.events]
         lines = tuple(f"{describe_rest(context, crews, worker, event.rest)}: {shown(event.shortfall)} h short, after a "
                       f"{shown(event.rest.shift_hours)} h shift ({shown(event.rest.per_hour)} h per hour of it), of "
-                      f"{names[rest.peer]}'s {shown(event.peer_rest.hours)} h in its place, after a "
-                      f"{shown(event.peer_rest.shift_hours)} h shift ({shown(event.peer_rest.per_hour)} h per hour of "
-                      f"it)" + (HISTORY_MARK if wholly_past else "")
+                      f"the typical {shown(rest.typical * event.rest.shift_hours)} h after a shift this long"
+                      + (HISTORY_MARK if wholly_past else "")
                       for event, wholly_past in zip(rest.events, past))
         entries.append(CardEntry((REST, worker, NO_PERSON),
-                                 f"rest: {plural(len(rest.events), 'rest')} shorter than {names[rest.peer]}'s",
+                                 f"rest: {plural(len(rest.events), 'rest')} shorter than the typical rest of "
+                                 f"{shown(rest.typical)} h per hour of the shift before it",
                                  lines, len(rest.events), sum(past)))
     for person in sorted({event.person for event in grievances.disliked[worker]}):
         shifts = [event.shift for event in grievances.disliked[worker] if event.person == person]
@@ -1150,8 +1155,8 @@ def has_harmless_fix(report: GrievanceReport, key: GrievanceKey) -> bool:
 def worker_tallies(context: AuditContext, assignment: Sequence[int], report: GrievanceReport) -> list[WorkerTally]:
     """
     Every worker's row of the closing table, with their load in extra hours (above their share, ADR 0053) and their
-    rest events in hours short (how much longer each rest would have to be to match the peer's, added within the one
-    kind)
+    rest events in hours short (how much longer each rest would have to be to reach the typical rest, ADR 0054,
+    added within the one kind)
     :param context: AuditContext
     :param assignment: the audited schedule, a worker per slot
     :param report: its GrievanceReport

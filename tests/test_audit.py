@@ -106,20 +106,21 @@ def test_a_worker_who_joined_later_has_a_smaller_share() -> None:
 
 
 def test_the_measures_per_kind_follow_the_closing_table() -> None:
-    # Anne: 24 hours over both periods against a share of 16 (2 of her 4-hour shifts), and two rests 8 hours short of
-    # Bob's, one of them in the history; a harmless fix for each grievance. Bob: at his share, and a rest 8 hours short
-    # of Cy's in the history. Events wholly in the history are counted, but never as having a harmless fix
+    # Anne: 20 hours over both periods against a share of 16 (1 of her 4-hour shifts), with a harmless fix; and three
+    # 4-hour rests after 4-hour shifts, where the typical rest is 2 hours per hour of the shift before (8 hours): two
+    # wholly in the history, the third with a harmless fix. Bob: one such rest, in the history. Events wholly in the
+    # history are counted, but never as having a harmless fix
     schedule_input = history_input()
     shifts = generate_shifts(schedule_input.posts, schedule_input.settings.period)
-    context, assignment = with_history(schedule_input, shifts, (0, 1, 0, 2, 0, 1))
+    context, assignment = with_history(schedule_input, shifts, (0, 1, 2, 0, 1, 2))
     tallies = worker_tallies(context, assignment, report_grievances(context, assignment))
     assert [tallied.name for tallied in tallies] == ["Anne", "Bob", "Cy"]
-    assert [(tallied.hours[REST], tallied.hours_harmless[REST]) for tallied in tallies] == [(16, 8), (8, 0), (0, 0)]
-    assert [(tallied.hours[LOAD], tallied.hours_harmless[LOAD]) for tallied in tallies] == [(8, 8), (0, 0), (0, 0)]
+    assert [(tallied.hours[REST], tallied.hours_harmless[REST]) for tallied in tallies] == [(12, 4), (4, 0), (0, 0)]
+    assert [(tallied.hours[LOAD], tallied.hours_harmless[LOAD]) for tallied in tallies] == [(4, 4), (0, 0), (0, 0)]
     measures = kind_measures(tallies)
-    assert measures[LOAD] == {"harmless": 2, "most": 2, "events": 2, "hours_harmless": 8, "hours_most": 8, "hours": 8}
-    assert measures[REST] == {"harmless": 1, "most": 2, "events": 3, "hours_harmless": 8, "hours_most": 16,
-                              "hours": 24}
+    assert measures[LOAD] == {"harmless": 1, "most": 1, "events": 1, "hours_harmless": 4, "hours_most": 4, "hours": 4}
+    assert measures[REST] == {"harmless": 1, "most": 3, "events": 4, "hours_harmless": 4, "hours_most": 12,
+                              "hours": 16}
     assert measures[DISLIKED_PARTNER] == measures[MISSING_LIKE] == {"harmless": 0, "most": 0, "events": 0}
 
 

@@ -111,6 +111,7 @@ nav:
       - 0051 The audit after reading cards by hand: decisions/0051-the-audit-after-reading-cards-by-hand.md
       - 0052 A worker panel as a check on the audit: decisions/0052-a-worker-panel-as-a-check-on-the-audit.md
       - 0053 Load against the worker's own share: decisions/0053-load-against-the-workers-own-share.md
+      - 0054 Rest against the typical rest: decisions/0054-rest-against-the-typical-rest.md
 
 markdown_extensions:
   - admonition

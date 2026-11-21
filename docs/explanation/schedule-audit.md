@@ -10,7 +10,8 @@ them. It isn't part of TinyScheg's regular operation.
 > and amended on 2026-11-20 ([ADR 0050](../decisions/0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md),
 > and [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) after reading cards by hand) and on
 > 2026-11-21 ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md), load against the worker's own share,
-> after the [worker panel](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md) checked the audit);
+> and [ADR 0054](../decisions/0054-rest-against-the-typical-rest.md), rest against the typical rest, after the
+> [worker panel](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md) checked the audit);
 > `tools/tune.py` ([reading the audit](tuning.md#reading-the-audit)) and `tools/audit_sample.py` ([sampling](#sampling))
 > read it. Built in [Phase 13](../roadmap.md#phase-13-a-reliable-audit), step 3, and validated in its step 4.
 > [Auditing a schedule](../how-to/audit-a-schedule.md) still describes the old report, until Phase 13's step 5.
@@ -57,9 +58,9 @@ The audit models workers who are **sensitive to being treated unfairly**:
   [easy fixes](#easy-fixes) report.
 * **Unfairness against themselves, and the strongest case they can.** Each worker points to every way they were
   treated unfairly, never to a way they were better off. For load, that's work above their own share: a worker at
-  their share carries no one else's work, however little someone else did. For rest, which has no share, each
-  measures themselves against the peer who makes their case best: the **best-off peer**, the one giving the most
-  events. Disliked partners and missing likes need no peer: they're about the worker's own shifts.
+  their share carries no one else's work, however little someone else did. Rest has no share, so each rest is
+  measured against what's typical in the schedule: the median rest, per hour of the shift before it. No kind uses
+  a peer: disliked partners and missing likes are about the worker's own shifts.
 * **No netting.** A boon (a shift with a friend) is never set against a straw (a short rest), by the workers or by the
   audit.
 * **Lines are drawn from the schedule itself.** No line is set by hand, so if everyone does the same work and rests
@@ -117,17 +118,17 @@ load is never scaled up, so that pair isn't compared.
   shorter than 6 hours after a 2-hour one, and 10 hours after a 2-hour shift is longer than 8 hours after a 2-hour
   one, whatever shift follows. (The scoring's rest target uses the mean of the two shifts around a rest,
   [ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md).)
-* **Compared rest by rest, against the best-off peer.**
-  * Each worker's rests are sorted shortest first and compared with the peer's in the same places, up to the smaller
-    number of rests.
-  * Each place where the worker's rest is shorter is an event.
-  * How much shorter is a fact on it, in hours: how much longer it would have to be to match the peer's, after a
-    shift this long.
-* **Every worker is a peer.** Rests aren't scaled, since they're already measured in available time and per hour of
-  the shift before them.
+* **Compared with the schedule's typical rest** ([ADR 0054](../decisions/0054-rest-against-the-typical-rest.md)).
+  * The typical rest is the median of every worker's rests in the schedule, each per hour of the shift before it.
+  * Each rest shorter than the typical rest, per hour of the shift before it, is an event.
+  * How much shorter is a fact on it, in hours: how much longer it would have to be to reach the typical rest, after
+    a shift this long.
+  * No peer is involved, and every shift length is held to the same rate. A worker on longer shifts who gets less rest
+    per hour of work than the rest of the schedule has events, even where the schedule could have done no better.
+    Whether it could have is what the [easy fixes](#easy-fixes) show.
 
-The same rests for everyone give no event, however long they are. Pairing the rests in any other order than shortest
-with shortest would give events even then.
+The same rests for everyone give no event, however long or short they are. If most rests are 6 hours after 2-hour
+shifts, a 6-hour rest after a 2-hour shift is no event.
 
 ### Disliked partners
 
@@ -175,7 +176,7 @@ An **easy fix** is a **nearby schedule** in which the grievance is gone: the aud
 * **The fix's size** is its number of changes, a fact on it.
 
 **Only the nearby schedule is judged,** never each step on the way. It's audited afresh by the same rules, with its
-own best-off peers, and compared with the audited schedule worker by worker and kind by kind, never across kinds:
+own typical rest, and compared with the audited schedule worker by worker and kind by kind, never across kinds:
 
 1. **The grievance is gone.** The worker has fewer events of that kind (with that person, for partners).
 2. **The worker is better off** in that kind's own terms: worse in none of its facts, and better in at least one.
@@ -194,8 +195,8 @@ own best-off peers, and compared with the audited schedule worker by worker and 
    * disliked partner: more shifts with that person;
    * missing likes: more shifts with nobody they like.
 
-   A grievance that grows only because someone else is better off (a new best-off peer) isn't harm: after Jeff gives
-   away a shift and becomes the best-rested worker, the others fall further short of him, though nothing in their own
+   A grievance that grows only because someone else is better off isn't harm: after Jeff gives away a shift and rests
+   longer, the typical rest may rise, and others' rests fall further short of it, though nothing in their own
    schedules changed. The fix is **harmless** if it harms nobody; otherwise it's a **transfer**, reported with exactly
    what it creates and for whom. In a 3-2-1 split, giving one of the first worker's shifts to the third (2-2-2) harms
    nobody; giving it to the second (2-3-1) gives them a load event.
@@ -238,26 +239,28 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
     events are all wholly in the history (rests between two history shifts, history shifts with a disliked person or
     with nobody they like) says that no change can reach it instead; an event of that kind among others is marked "(in the history)".
 
-  For example, from a first legal schedule of the example (seed 150 of the sampler, transfers cut short here):
+  For example, from a first legal schedule of the example (seed 7 of the sampler, transfers cut short here):
 
   ```
-  Jeff: 3 shifts, 8 h; available 24 h (of 24 h with a post staffed)
-    rests: 7 h, 6 h
-    partners: Jack ×1, Shamhat ×1; liked pairings: 0
+  Jill: 2 shifts, 7 h; available 24 h (of 24 h with a post staffed)
+    rests: 7 h
+    partners: Ninsun ×1; liked pairings: 0
     grievances:
-      - load: 2.62 h more than Jeff's share of 5.38 h (the schedule's hours in proportion to availability), as much
-        as 1 shift of Jeff's (8 h in 3 shifts)
-        harmless fix (1 change, removes 1 event): give Jill Jeff's front gate 2025-01-01 13:00–16:00
-      - rest: 1 rest shorter than Shamhat's
-          6 h, between front gate 2025-01-01 13:00–16:00 and front gate 2025-01-01 22:00–2025-01-02 00:00 (with
-            Jack): 4 h short, after a 3 h shift (2 h per hour of it), of Shamhat's 10 h in its place, after a 3 h
-            shift (3.33 h per hour of it)
+      - load: 1.62 h more than Jill's share of 5.38 h (the schedule's hours in proportion to availability), as much
+        as 1 shift of Jill's (7 h in 2 shifts)
+        harmless fix (2 changes, removes 1 event): give Enkidu Anne's front gate 2025-01-01 10:00–13:00; give Anne
+          Jill's front gate 2025-01-01 19:00–22:00
+      - rest: 1 rest shorter than the typical rest of 2.33 h per hour of the shift before it
+          7 h, between desk 2025-01-01 08:00–12:00 and front gate 2025-01-01 19:00–22:00 (with Ninsun): 2.33 h
+            short, after a 4 h shift (1.75 h per hour of it), of the typical 9.33 h after a shift this long
         transfers, each removing events but creating others:
-          1 change, removes 1 event: give Enkidu Jeff's front gate 2025-01-01 13:00–16:00 -> Enkidu: 1 more rest
-            shorter than a peer's
-      - disliked partner: Jack, in 1 shift
-          front gate 2025-01-01 22:00–2025-01-02 00:00
-        harmless fix (1 change, removes 1 event): give Ninsun Jeff's front gate 2025-01-01 22:00–2025-01-02 00:00
+          2 changes, removes 1 event: give Anne Jill's front gate 2025-01-01 19:00–22:00; give Jill Shamhat's front
+            gate 2025-01-01 22:00–2025-01-02 00:00 -> Jeff: 1 more shift with Jill, whom they dislike; Anne: 1 more
+            load event, 2 more rests shorter than the typical rest
+      - missing like: 1 shift with nobody they like (they like Jack)
+          front gate 2025-01-01 19:00–22:00 (with Ninsun)
+        harmless fix (2 changes, removes 1 event): give Enkidu Anne's front gate 2025-01-01 10:00–13:00; give Anne
+          Jill's front gate 2025-01-01 19:00–22:00
   ```
 
   All transfers are shown, one per line (on 50 samples of the example, a median of 6 per grievance with only
@@ -271,9 +274,9 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
   ```
   events by kind (with a harmless fix / only transfers / no fix of up to 3 changes / in the history)
              load         rest         disliked partner  missing like
-  Jack       2 (2/0/0/0)  1 (0/1/0/0)  0                 2 (2/0/0/0)
-  Jill       0            0            0                 1 (1/0/0/0)
-  Jeff       1 (1/0/0/0)  1 (0/1/0/0)  1 (1/0/0/0)       0
+  Jack       0            1 (0/1/0/0)  0                 0
+  Jill       1 (1/0/0/0)  1 (0/1/0/0)  0                 1 (1/0/0/0)
+  Jeff       0            0            0                 0
   ```
 
   * Workers are listed in input order, since ranking them would take a rule across kinds.

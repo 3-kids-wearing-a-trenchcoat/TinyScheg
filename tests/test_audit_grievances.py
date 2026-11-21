@@ -4,7 +4,7 @@ import datetime as dt
 import pytest
 
 from audit import (AuditContext, LikeGrievance, LoadGrievance, Rest, WorkerFacts, away_times, build_context,
-                   find_grievances, rest_events, rest_grievance, with_history)
+                   find_grievances, rest_events, rest_grievance, typical_rest, with_history)
 from tinyscheg.model.post import Post, ShiftRules
 from tinyscheg.model.schedule_input import PreviousSchedule, ScheduleInput, Settings
 from tinyscheg.model.shift_generation import all_slots, generate_shifts
@@ -140,7 +140,7 @@ def test_an_hours_excess_counts_the_workers_own_shifts_shortest_first() -> None:
     assert load_of(find_grievances(context, assign(context, owners, 2)).load[0]) == (2, 8.0, 16.0)
 
 
-# --- rest: the available part, per hour of the shift before it, rest by rest against the best-off peer ---
+# --- rest: the available part, per hour of the shift before it, against the typical rest (ADR 0054) ---
 
 def test_a_rest_is_only_its_available_part_per_hour_of_the_shift_before_it() -> None:
     workers = [Worker("Anne", unavailable=(DateTimeRange(at(4), at(6)),)), Worker("Bob")]
@@ -149,42 +149,47 @@ def test_a_rest_is_only_its_available_part_per_hour_of_the_shift_before_it() -> 
     assert facts[0].rests == (Rest(0, 4, 4.0, 2.0),) and facts[0].rests[0].per_hour == 2
 
 
+def test_the_typical_rest_is_the_median_of_every_rest_per_hour_of_the_shift_before_it() -> None:
+    facts = (facts_with_rests((4, 2), (6, 2)), facts_with_rests((8, 2)), facts_with_rests((12, 4)))  # 2, 3, 4 and 3
+    assert typical_rest(facts) == 3
+    assert typical_rest((facts_with_rests(),)) is None
+
+
 def test_a_rest_after_a_longer_shift_is_shorter() -> None:
-    # 6 hours after a 12-hour shift against 6 hours after a 2-hour one (3 per hour of it): 30 hours short of 36
-    events = rest_events((Rest(0, 1, 6.0, 12.0),), (Rest(0, 1, 6.0, 2.0),))
+    # 6 hours after a 12-hour shift, against a typical rest of 3 hours per hour of the shift before: 30 hours short
+    events = rest_events((Rest(0, 1, 6.0, 12.0),), 3.0)
     assert [event.shortfall for event in events] == [pytest.approx(30)]
+
+
+def test_a_rest_after_a_long_shift_is_judged_at_the_same_rate_as_the_others() -> None:
+    # 12 hours after a 6-hour shift is 2 per hour of it; everyone else's 6 hours after a 2-hour shift are 3: 6 hours
+    # short of the 18 a shift this long would typically be followed by
+    facts = (facts_with_rests((12, 6)), facts_with_rests((6, 2)), facts_with_rests((6, 2)))
+    grievance = rest_grievance(facts, 0, typical_rest(facts))
+    assert grievance is not None and grievance.typical == 3 and [e.shortfall for e in grievance.events] == [6]
+    assert rest_grievance(facts, 1, typical_rest(facts)) is None
 
 
 def test_a_rest_is_judged_by_the_shift_before_it_not_the_one_after() -> None:
     # Anne's 10 hours between the gate 0-2 and the desk 12-16 are 5 per hour of the shift before them: no shorter than
-    # 8 hours after a 2-hour shift (4), though the shifts around them average 3 hours; the other way, 2 hours short
+    # a typical 4, though the shifts around them average 3 hours; against a typical 6, 2 hours short
     context = two_lengths(16, names("Anne", "Bob"))
     facts = find_grievances(context, assign(context, {("gate", 0): 0, ("desk", 12): 0}, 1)).facts
     rest, = facts[0].rests
     assert (rest.hours, rest.shift_hours, rest.per_hour) == (10, 2, 5)
-    assert rest_events(facts[0].rests, facts_with_rests((8, 2)).rests) == ()
-    assert [event.shortfall for event in rest_events(facts_with_rests((8, 2)).rests, facts[0].rests)] == [2]
+    assert rest_events(facts[0].rests, 4.0) == ()
+    assert [event.shortfall for event in rest_events(facts[0].rests, 6.0)] == [2]
 
 
-def test_the_same_rests_for_everyone_give_no_event_whatever_their_order_in_time() -> None:
-    assert rest_events(facts_with_rests((4, 2), (10, 2)).rests, facts_with_rests((10, 2), (4, 2)).rests) == ()
+def test_the_same_rests_for_everyone_give_no_event_however_short() -> None:
+    facts = tuple(facts_with_rests((6, 2), (6, 2)) for _ in range(3))
+    assert [rest_grievance(facts, worker, typical_rest(facts)) for worker in range(3)] == [None, None, None]
 
 
-def test_rests_are_compared_shortest_with_shortest_up_to_the_smaller_number() -> None:
-    mine = facts_with_rests((10, 2), (4, 2), (12, 2))
-    theirs = facts_with_rests((8, 2), (6, 2))
-    events = rest_events(mine.rests, theirs.rests)  # 4 against 6, 10 against 8; the 12 has nothing in its place
-    assert [(event.rest.hours, event.peer_rest.hours, event.shortfall) for event in events] == [(4, 6, 2)]
-
-
-def test_the_rest_peer_is_the_one_giving_the_most_events_then_the_largest() -> None:
-    facts = (facts_with_rests((4, 2), (6, 2)),
-             facts_with_rests((5, 2), (7, 2)),   # 2 events of 1 hour
-             facts_with_rests((10, 2)),          # 1 event of 6 hours
-             facts_with_rests((6, 2), (8, 2)))   # 2 events of 2 hours: the strongest case
-    grievance = rest_grievance(facts, 0)
-    assert grievance is not None and grievance.peer == 3 and [e.shortfall for e in grievance.events] == [2, 2]
-    assert rest_grievance(facts, 2) is None  # the best rested has none
+def test_each_rest_below_the_typical_rest_is_an_event_shortest_first() -> None:
+    mine = facts_with_rests((10, 2), (4, 2), (7, 2))
+    events = rest_events(mine.rests, 4.0)  # 2 and 3.5 per hour of the shift before are below 4; 5 isn't
+    assert [(event.rest.hours, event.shortfall) for event in events] == [(4, 4), (7, 1)]
 
 
 # --- partners (ADR 0049) ---

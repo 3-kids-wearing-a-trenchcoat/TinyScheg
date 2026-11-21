@@ -91,9 +91,9 @@ matters more is made here, when reading it:
       a rule that overrides them ("evenness first" alone prefers levelling down).
    3. **All events:** not more grievances than necessary.
 3. **Rest is read in hours short, load in extra hours.** Rest events have sizes, and with no margin, a rest half an
-   hour shorter than a peer's is an event as much as one four hours shorter, so counts say little. Load is measured
-   in hours ([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)), its events counted in the
-   worker's own shifts. So for both, the three measures are also taken in hours (adding to the measures of
+   hour shorter than the typical rest is an event as much as one four hours shorter, so counts say little. Load is
+   measured in hours above the worker's share ([ADR 0053](../decisions/0053-load-against-the-workers-own-share.md)),
+   its events counted in the worker's own shifts. So for both, the three measures are also taken in hours (adding to the measures of
    ADR 0048): in all, the most aggrieved worker's, and those with a harmless fix. Hours added within one kind are one
    unit, not an exchange rate.
 4. **Dominance first.** A setting no better than another in any measure, and worse in at least one, is dominated,

@@ -85,5 +85,5 @@ The docs describe **intended** behaviour. Where existing code doesn't match it, 
 | Output (XLSX, ODS)                  | Implemented and tested    |
 | Command-line interface              | Implemented and tested    |
 | Schedule history                    | Implemented and tested    |
-| Schedule audit (development tool)   | Implemented and tested: rebuilt in Phase 13 (ADRs 0048–0051, 0053), being validated (step 4) |
+| Schedule audit (development tool)   | Implemented and tested: rebuilt in Phase 13 (ADRs 0048–0051, 0053, 0054), being validated (step 4) |
 | Worker panel (development tool)     | Implemented and tested (ADR 0052): the input files and the command; the model's answers are read by hand |
