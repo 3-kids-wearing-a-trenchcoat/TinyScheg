@@ -73,6 +73,7 @@ ADR that supersedes the old one.
 | [0049](0049-partners-in-the-audit.md) | Partners in the audit: a disliked person in a shift is an event in itself; a missing like, by the worker's own likes applied to a peer's shifts | Accepted, amended by [0051](0051-the-audit-after-reading-cards-by-hand.md) |
 | [0050](0050-a-fix-harms-only-where-a-workers-own-situation-gets-worse.md) | A fix harms a worker only where their own situation gets worse | Accepted |
 | [0051](0051-the-audit-after-reading-cards-by-hand.md) | The audit after reading cards by hand: load in hours, rest by the shift just done, a missing like in the worker's own shifts, a dislike cancels the like it meets | Accepted |
+| [0052](0052-a-worker-panel-as-a-check-on-the-audit.md) | A worker panel: a language model plays each worker, as a check on the audit | Accepted |
 
 ## Template
 

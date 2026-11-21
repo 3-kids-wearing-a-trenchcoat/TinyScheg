@@ -118,5 +118,7 @@ using all of them. `parsing`, `csp` and `output` don't import each other; `scori
 
 Tests live in `tests/`, one test file per module. Development tools live in `tools/`, outside the package: the
 independent schedule checker that verifies every hard constraint of a search result (`schedule_checker.py`), the
-[schedule audit](schedule-audit.md) (`audit.py`, `audit_sample.py`), the [tuning](tuning.md) runner and benchmark
-generator (`tune.py`, `benchmarks/generate.py`), and the [PyPy setup](../how-to/use-pypy.md) (`setup_pypy.py`).
+[schedule audit](schedule-audit.md) (`audit.py`, `audit_sample.py`) and the worker panel that checks it
+([ADR 0052](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md), `worker_panel.py`), the
+[tuning](tuning.md) runner and benchmark generator (`tune.py`, `benchmarks/generate.py`), and the
+[PyPy setup](../how-to/use-pypy.md) (`setup_pypy.py`).

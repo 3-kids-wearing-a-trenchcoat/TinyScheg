@@ -665,7 +665,9 @@ answer, the audit asserts only what holds under every reasonable answer.
       have fixes with the new search. Reading cards by hand with the user (2026-11-20) changed four rules
       ([ADR 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md): load in hours alone, a rest judged by the
       shift before it, a missing like as a shift with nobody the worker likes, a dislike cancelling the like it
-      meets), after which the stages are audited again
+      meets), after which the stages are audited again. A worker panel, a language model playing each worker
+      ([ADR 0052](decisions/0052-a-worker-panel-as-a-check-on-the-audit.md)), checked the audit on all 174 workers of
+      the 16 schedules read (2026-11-20), and was then made about 7 times cheaper per worker (2026-11-21)
 - [ ] **5. Docs:** the how-to, the status table, future work
 
 ## Later
