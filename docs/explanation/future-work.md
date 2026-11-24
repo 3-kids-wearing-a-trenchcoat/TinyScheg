@@ -53,7 +53,7 @@ first day needs plus 1–2 workers), 6 of the 15 inputs first had no legal secon
 tried. Looked at again on 2026-11-15/16:
 * **`sweep_01`, `sweep_03`, `sweep_04`:** a flaw in the test. These are 16-hour periods from 16:00 to 08:00, and the
   second ran from 08:00 to midnight, not the same schedule: 12 hours of a desk open 08:00–20:00, against 4 in the
-  first. Since 2026-11-16 the second period covers the same hours, a whole number of days later (the user), and all
+  first. Since 2026-11-16 the second period covers the same hours, a whole number of days later (the author), and all
   three have a legal second day.
 * **`sweep_05`, `sweep_09`** (20 hours): the end of the first day had used the holders of a role the gate needs at
   night, so the second day, starting right after, was stuck at its first slot. Starting at the same hours a day later,
@@ -63,13 +63,13 @@ tried. Looked at again on 2026-11-15/16:
 * **The example** (`exampleInput.yml`, 24 hours) does the same with the security holders the front gate needs at night.
   One more worker with the security role would remove the warning, but the example is also the input the default
   weights' trade-offs are checked on ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md),
-  `tools/tune.py`), and with that worker one of the user's rules no longer holds there: a 2-2-4 costs 0.83 times as
+  `tools/tune.py`), and with that worker one of the author's rules no longer holds there: a 2-2-4 costs 0.83 times as
   much as one worker resting at the minimum twice, against 1.38 now (the known limit of looser inputs,
-  [Tuning](tuning.md#known-limits)). Left as it is for now (the user, 2026-11-16), to be revisited: keep it, change it
+  [Tuning](tuning.md#known-limits)). Left as it is for now (the author, 2026-11-16), to be revisited: keep it, change it
   and re-examine the defaults, or keep the current file as the reference for tuning and tests and give the
   user-facing example the extra worker.
 
-**The decision** (the user, 2026-11-15/16): **warn**, as long as it's computationally cheap, with the next period
+**The decision** (the author, 2026-11-15/16): **warn**, as long as it's computationally cheap, with the next period
 assumed to have exactly the same parameters, at the same hours a whole number of days later. Done in
 [ADR 0042](../decisions/0042-warn-when-the-next-period-cant-be-filled.md): after writing a schedule, the command line
 searches for any legal schedule of the next period, with this one as history, within about 500,000 nodes (a few
@@ -225,8 +225,8 @@ Still deferred:
   6–10% less time on PyPy for the 16 inputs searched to the end, 60–71 and 3.5–3.9 times the progress on `multiday_05`
   and seed 3009, and `multiday_05` searched to the end in 689 s (3107 s before ADRs 0044–0046). Where roles and
   availability narrow the domains it prunes much more, but elsewhere its bookkeeping costs up to about a third more time
-  (`sweep_06`; `multiday_04` 0.9 times the progress). Then done the same day, as the user asked: a setting to turn it on
-  or off, `auto` by default, choosing from how the input narrows the domains
+  (`sweep_06`; `multiday_04` 0.9 times the progress). Then done the same day, as the author asked: a setting to turn
+  it on or off, `auto` by default, choosing from how the input narrows the domains
   ([ADR 0047](../decisions/0047-choosing-the-role-aware-bound.md)); right 24 times of 30 on the inputs it was fitted on,
   and 15 of 17 on fresh ones, which had no input where on wins much. To revisit as more inputs are tried.
 
@@ -243,7 +243,7 @@ Still deferred:
     now within about 5% (the held-out 48-hour inputs 0.99–1.06, against 0.83–0.88 times the progress before). In all,
     51 comparisons: always off 1240 s, always on 1198 s, `auto` 1166 s, choosing right every time 1159 s. `auto` is
     right 37 times, and its wrong choices now cost little. Making it always choose on would be simpler, at about 3%
-    more time in all; the user kept the rule (2026-11-17).
+    more time in all; the author kept the rule (2026-11-17).
   * **Not taken: skipping children whose own penalty already reaches the pocket**, without setting them up (they'd be
     pruned at once: a child's bound is never below its penalty). Correct, but it skipped 0.3–11% of the nodes, and
     the check cost more than it saved: 14–36% slower on `sweep_04`, `sweep_08`, `sweep_11` and `multiday_02`.
@@ -305,7 +305,7 @@ current code, with the same schedules and node counts on every input (archived o
 > **Accepted for now** (2026-11-16, Phase 10); faster search through the bounds was taken up in
 > [Phase 11](../roadmap.md#phase-11-faster-search-through-the-bounds), complete on 2026-11-18. Reconsidered after it
 > ([below](#after-phase-11s-step-5-2026-11-18)): 3.7 times faster in all, the tier's five inputs in 2–12 minutes, but
-> seed 3009 still takes 1 hour 28, so it stays deferred (the user's choice, 2026-11-18). Leads left: each worker's
+> seed 3009 still takes 1 hour 28, so it stays deferred (the author's choice, 2026-11-18). Leads left: each worker's
 > extra loads as a sorted list where it's short ([Search performance](#search-performance), step 5), the rest
 > look-ahead kept up to date incrementally, and the tangent search's dials; and, as before, workload slack from slots
 > too close together for one worker to take both.
@@ -425,7 +425,7 @@ each keeping exactly the program's schedule wherever a schedule could change onl
     and the nodes about the same, so what's lost is each process's own speed (4 full and 8 compact cores, and heat).
 
 Taken up in Phase 12: the rest's hours without datetimes (built: the same values, about 4–5% less time), a cheaper
-water-filling and the exact matching bound (both stopped by the user on 2026-11-19, the speed work having reached
+water-filling and the exact matching bound (both stopped by the author on 2026-11-19, the speed work having reached
 diminishing returns; see below). Deferred: a stronger rest bound; a portfolio of slot orders in the parallel search, which would need a tie rule that
 doesn't depend on the order; bounds across the parts; dominance higher in the tree; and, for the tuning tool, running
 searches side by side and starting each run's threshold from the previous setting's best schedule. Dropped: caps for
@@ -628,9 +628,9 @@ a check that the penalty stays monotone along the search, and new tuning runs.
 > **Not yet implemented.** Deferred on 2026-11-14, until the weights had been checked again; they have since
 > ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).
 
-The user (2026-11-14): a shift with someone a worker likes "is in and of itself making up for drawing the short
+The author (2026-11-14): a shift with someone a worker likes "is in and of itself making up for drawing the short
 straw": a liked pairing can make up for one short rest, or for being the one who has to take the extra shift in an
-unavoidable 2-2-3, and a dislike likewise justifies being screwed over once, but no more. The user hoped this would
+unavoidable 2-2-3, and a dislike likewise justifies being screwed over once, but no more. The author hoped this would
 arise from the penalties' convexity.
 
 It arises only *within* a part: each worker's workload, and each worker's rest shortfall, go through their own convex
@@ -654,9 +654,9 @@ availability-relative form fitted in. It needs an ADR, new provable properties a
 
 The workload part counts shifts as well as hours: the shift share $\sigma$ blends each slot's hours with one average
 slot ([ADR 0026](../decisions/0026-workload-counts-shifts-and-hours.md)), an exchange rate between shifts and hours
-set by hand, which the user would rather not set. It was added when the rest part ignored the rest after a short
+set by hand, which the author would rather not set. It was added when the rest part ignored the rest after a short
 shift, so nothing kept one worker from being given several short shifts while another had one long one at the same
-hours. The user (2026-11-14) would measure workload only as the hours worked over the hours available, and leave
+hours. The author (2026-11-14) would measure workload only as the hours worked over the hours available, and leave
 spreading shifts out to rest; of two workers like those below, the one who worked more hours drew the short straw,
 and even when that was unavoidable it has to count, so that it can be made up for later.
 
@@ -670,7 +670,7 @@ three more, shorter shifts with shorter rests. At $\sigma = 0.5$, every fully av
 $\sigma$ stays at 0.5 until the rest part keeps short shifts apart in tight schedules too; then it could go to 0.
 
 Since [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md) (2026-11-20), the audit measures load
-in hours alone: reading cards by hand, the user didn't count two 2-hour shifts as more load than one 4-hour shift. So
+in hours alone: reading cards by hand, the author didn't count two 2-hour shifts as more load than one 4-hour shift. So
 tuning can now compare shift shares on the audit's own terms.
 
 Counting shifts also works the other way round, with a [dangling shift](#dangling-shifts) (`sweep_06`,
@@ -687,7 +687,7 @@ tried; at $\sigma = 0$ it moves it. All 12 of that input's complaints with an ea
 The scoring's rest target is in proportion to the mean length of the two shifts around a rest
 ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). Since
 [ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md), the audit judges a rest by the shift before it
-alone: the user expects the rest after a shift twice as long to be twice as long, and doesn't count a rest as short
+alone: the author expects the rest after a shift twice as long to be twice as long, and doesn't count a rest as short
 for the shift that follows it. So the model aims at something slightly different from what the audit checks. If
 tuning shows it matters, the target could follow the shift before a rest, which needs an ADR, its lower bounds
 checked again and tuning.
@@ -695,7 +695,7 @@ checked again and tuning.
 ## Symmetric preferences
 
 > [!WARNING]
-> **Not yet implemented.** Floated by the user on 2026-11-20.
+> **Not yet implemented.** Floated by the author on 2026-11-20.
 
 Each worker lists whom they like and dislike, so feelings can be one-sided: on one card read by hand, Gray liked
 Casey, who disliked Gray. The scoring rates each side of a pair from its own lists, a dislike outweighing a like
@@ -715,7 +715,7 @@ Audited again with the rebuilt audit, the defaults
 periods by the same setting with a rest weight of 0.3 instead of 0.25. They're the same in every measure but rest's,
 which it betters: on 8 inputs, 2.38 rest events per input against 2.62, and 7.38 hours short against 9.38. In the
 second periods, and in `s4-check` where the defaults were chosen, no setting dominates. Whether to raise the rest weight
-is for tuning to settle, with the user's rules for likes and short rests
+is for tuning to settle, with the author's rules for likes and short rests
 ([reading the audit](tuning.md#reading-the-audit)) deciding between settings neither of which dominates.
 
 ## Tuning on longer schedules
@@ -729,7 +729,7 @@ The defaults were tuned on schedules of 16 to 24 hours ([ADR 0028](../decisions/
 then, and on those the whole schedule is the day. With the parallel search
 ([ADR 0041](../decisions/0041-parallel-search-with-the-sequential-result.md)), the multiday tier's 48-hour inputs
 could be searched, and the defaults were checked on them: load within a day, the reason for the check, was uneven
-only where a long rest fell, with even totals, which the user considers fair; the audit gained a correction. Left
+only where a long rest fell, with even totals, which the author considers fair; the audit gained a correction. Left
 open: about half the generated 48-hour inputs took over half an hour to search, some much longer
 ([deferred](#search-time-on-48-hour-first-periods)).
 
@@ -769,7 +769,7 @@ open: about half the generated 48-hour inputs took over half an hour to search, 
   interface rather than replacing it.
 * **Simple distribution.** Per platform, something that needs no installation of Python or other dependencies, and
   can be used either from the command line or through the GUI. Windows and Linux versions, and possibly a macOS
-  version. It needn't be a single file (the user, 2026-11-13), but a non-technical user must be able to just click one
+  version. It needn't be a single file (the author, 2026-11-13), but a non-technical user must be able to just click one
   obvious file to run it. One option is a folder with a portable PyPy inside (about 3 times faster than CPython on
   the search, measured 2026-11-13) and a launcher; another is a CPython bundle (PyInstaller, Nuitka, or the Windows
   embeddable Python), which those tools support and PyPy doesn't.

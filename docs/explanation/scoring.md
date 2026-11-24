@@ -522,7 +522,7 @@ by `tools/tune.py`'s unit trade-offs, 2026-11-14):
 | One extra shift (the others taking one fewer between them) | 1 | 0.59 |
 | An avoidable gap of two shifts (one shift moved between two workers with the same load) | 2 | 1.18 |
 
-* **The user's trade-offs** ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)), which the
+* **The author's trade-offs** ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)), which the
   defaults were chosen to keep, and `tests/test_default_tradeoffs.py` checks: a like is worth about one short rest;
   a dislike a little more than a like; a second short rest more than any one pairing; and an avoidable gap of two
   shifts more than three pairings, and more than one worker resting at the minimum twice.

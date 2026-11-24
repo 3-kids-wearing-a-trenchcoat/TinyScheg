@@ -10,7 +10,7 @@ point, not final, but they shape how every later output is read, so the method i
 > ([ADR 0028](../decisions/0028-rest-factor-default-2-5.md)), since superseded: the rest factor is now derived from
 > the input, and each worker's shortfall squared
 > ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)). The weights were then checked
-> again, and set from the user's trade-offs
+> again, and set from the author's trade-offs
 > ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md); see
 > [the weight re-check](#the-weight-re-check-2026-11-14)). On 48-hour schedules they hold too, for now
 > ([the 48-hour check](#the-48-hour-check-2026-11-1516)). [Reading the audit](#reading-the-audit) rebuilt in
@@ -65,7 +65,7 @@ Revised on 2026-11-14, for the weight re-check after the rest part changed
 ([ADR 0036](../decisions/0036-rest-targets-from-the-input-convex-per-worker.md)): the audit is one fallible tool among
 others, so the evidence is weighed in this order.
 
-1. **The user's rules**, as checks each setting passes or fails. A like or a dislike is worth one short rest (a shift
+1. **The author's rules**, as checks each setting passes or fails. A like or a dislike is worth one short rest (a shift
    one slot sooner), once: it can make up for one short straw, or for being the one who has to take the extra shift in
    an unavoidable 2-2-3, but not for a worker's second short rest, and no number of them for an avoidable two-shift
    gap ("2-2-4 is an outrage"); one worker resting at the minimum twice is acceptable, a 2-2-4 "virtually never"
@@ -85,7 +85,7 @@ The measures aren't collapsed into one number; trade-offs between them are a dec
 ### Reading the audit
 
 > [!NOTE]
-> **Implemented** in `tools/tune.py` (Phase 13, step 3) and tested. Decided with the user on 2026-11-19, as a first
+> **Implemented** in `tools/tune.py` (Phase 13, step 3) and tested. Decided with the author on 2026-11-19, as a first
 > version; after the new audit's results were read (Phase 13, step 4), rest gained one measure
 > ([ADR 0055](../decisions/0055-rests-that-could-have-been-longer.md)).
 
@@ -112,7 +112,7 @@ matters more is made here, when reading it:
    and `tools/tune.py report` lists, for each setting, the settings that dominate it, each pair compared on the
    inputs both finished, for the first period alone and over both periods. There's no single ranking: settings are
    listed in the stage's order.
-5. **Between settings neither of which dominates, the user's rules decide**
+5. **Between settings neither of which dominates, the author's rules decide**
    ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md),
    [ADR 0049](../decisions/0049-partners-in-the-audit.md)):
    * load first: a 2-2-4 is "virtually never" acceptable, one worker resting at the minimum twice is;
@@ -154,7 +154,7 @@ Each setting's **unit trade-offs** are computed from the formulas on the example
 average shift: what a like and a dislike cost (each instead of a neutral partner), a first and a second short rest
 (an average shift's length of rest less, each), one worker resting at the minimum twice (between two average
 shifts), one extra shift (taken on by everyone else) and an outrage (one shift moved between two equal workers, a
-gap of two), all weighted. The report checks the user's rules on them (`RULE_CHECKS`): an outrage must outweigh
+gap of two), all weighted. The report checks the author's rules on them (`RULE_CHECKS`): an outrage must outweigh
 `OUTRAGE_PAIRINGS` (3) likes or dislikes, and one worker resting at the minimum twice; a worker's second short rest
 must outweigh a like or a dislike; and a like must be worth one short rest, within `LIKE_PER_SHORT_REST_FACTOR`
 (1.25) either way. It also shows a dislike per like (a little over 1) and an outrage per twice at the minimum. The
@@ -235,7 +235,7 @@ that came out are in [ADR 0039](../decisions/0039-default-weights-from-the-users
    to three distinct schedules per input); over two periods, a rest weight of 0.15 or less was clearly worse (more
    rests at the minimum, more severe easy fixes, a second period with no legal schedule), and 0.4 or more too (more
    complaints, fewer liked pairings, a like worth half a short rest). Between them the benchmark couldn't tell
-   settings apart, so the user's rules decided.
+   settings apart, so the author's rules decided.
 2. **`s3-candidates`** (three candidates that pass the rules for likes, each with the shift share at 0.5, 0.25 and 0):
    a shift share of 0 gave larger gaps in shift counts and more severe easy fixes; 0.5 kept. The candidates were
    indistinguishable.
@@ -285,7 +285,7 @@ fixing change moves each part of the penalty:
 * **Load within a day** (`multiday_05`): one swap removed all 5 easy fixes of its first period, and the scoring saw no
   difference in workload or rest. The totals were even: the worker with no shift in one 24-hour stretch had as many
   as the one with two in it, and the complainers more; it was only where a 24-hour rest fell, and the swap moved two
-  shifts by 4 hours. The user: for a schedule fair overall, that's not a limitation, so load within a day is left to
+  shifts by 4 hours. The author: for a schedule fair overall, that's not a limitation, so load within a day is left to
   the whole schedule's totals, history included, where compensation for a past period already happens.
 * **Short rests counted, not measured** (`multiday_04`): its 12 easy fixes turned a worker's two rests of 12 hours
   into 7 and 17, one short rest fewer but one close to the minimum, which the scoring rightly rejected. The audit was
@@ -302,7 +302,7 @@ much faster.
 ## Known limits
 
 * Tuning to the audit's quirks: reading cards by hand at the last stage guards against it.
-* The user's rules are checked on the example. On other inputs the trade-offs differ, most of all for rest: what
+* The author's rules are checked on the example. On other inputs the trade-offs differ, most of all for rest: what
   resting at the minimum costs grows with how far the minimum sits below the schedule's targets, so on the loosest
   inputs a 2-2-4 costs less than one worker resting at the minimum twice
   ([ADR 0039](../decisions/0039-default-weights-from-the-users-trade-offs.md)).

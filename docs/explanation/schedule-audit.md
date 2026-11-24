@@ -280,7 +280,7 @@ changes. Requiring each step to be harmless had blocked them: in some samples, a
   ```
 
   All transfers are shown, one per line (on 50 samples of the example, a median of 6 per grievance with only
-  transfers, at most 12; on the tuning schedules, 17, at most 93). Reading cards by hand (2026-11-20), the user kept
+  transfers, at most 12; on the tuning schedules, 17, at most 93). Reading cards by hand (2026-11-20), the author kept
   them all rather than choose which to leave out: the grievances matter more, and come first.
 * **A closing table** of counts, per worker and per kind. Each cell gives the events, then, in brackets, how many of
   them belong to a grievance with a harmless fix, with only transfers, or with no fix within K, and how many lie
@@ -353,7 +353,7 @@ every rule is a sentence about how workers judge.
 > [!NOTE]
 > **Done** on 2026-11-20 and 2026-11-21. Every rule change it led to has its own ADR.
 
-* **Cards read by hand** (2026-11-20): the user read eight workers' cards on the schedules TinyScheg makes. Four
+* **Cards read by hand** (2026-11-20): the author read eight workers' cards on the schedules TinyScheg makes. Four
   answers disagreed with the audit, and changed four rules
   ([ADR 0051](../decisions/0051-the-audit-after-reading-cards-by-hand.md)).
 * **The worker panel** ([ADR 0052](../decisions/0052-a-worker-panel-as-a-check-on-the-audit.md)): a language model
@@ -391,7 +391,7 @@ every rule is a sentence about how workers judge.
 * **The samples that once had no easy fix** (seeds 150, 165, 174 and 190 of the example): every grievance on all four
   now has a harmless fix.
 * **Raised by the panel, and left as they are:**
-  * rests after long shifts, which the user's rule holds proportional and no worker raised;
+  * rests after long shifts, which the author's rule holds proportional and no worker raised;
   * one long shift against a much smaller share, which is no event under the rounding;
   * one-hour shifts, raised as a trip in for little work (see
     [dangling shifts](future-work.md#dangling-shifts));

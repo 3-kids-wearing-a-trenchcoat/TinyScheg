@@ -9,7 +9,7 @@ When something is deferred, it goes both into [Later](#later) here and into
 
 Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
-bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the user (2026-11-19); Phase 13, a reliable audit, started
+bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the author (2026-11-19); Phase 13, a reliable audit, started
 (2026-11-19; steps 1 to 4, the decisions, the design, the rebuilt audit and its validation, done; step 4 changed the
 audit's rules in [ADRs 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md) and 0053–0055, with a worker
 panel, [ADR 0052](decisions/0052-a-worker-panel-as-a-check-on-the-audit.md); step 5, the docs, next).
@@ -192,8 +192,8 @@ Following a long search, then the rest part's blind spots found on 2026-11-13 an
 - [x] **Rests measured in available time** ([ADR 0038](decisions/0038-rests-count-only-available-time.md)):
   unavailable time inside a rest counts as neither work nor rest; the hard minimum rest stays on the clock
 - [x] **The weights re-checked** ([ADR 0039](decisions/0039-default-weights-from-the-users-trade-offs.md)): set from
-  the user's trade-offs, likes : workload : rest = 0.45 : 1 : 0.25 and neutral partner 0.44, judged by the
-  user's rules first, measures that don't come from the audit second and the audit last; the trade-offs tested at
+  the author's trade-offs, likes : workload : rest = 0.45 : 1 : 0.25 and neutral partner 0.44, judged by the
+  author's rules first, measures that don't come from the audit second and the audit last; the trade-offs tested at
   the defaults
 - [x] **A workload bound in whole slots** ([ADR 0040](decisions/0040-workload-bound-in-whole-slots.md)): the heavier
   workload weight made the search 3–7 times slower, and `confirm_01` about 2 hours, because the bound spread the
@@ -215,7 +215,7 @@ Using every processor for one search, without changing its result
 
 ## Phase 10: The defaults on long schedules
 
-Checking the defaults on 48-hour schedules, the length the user's schedules usually run to, and the loose ends the
+Checking the defaults on 48-hour schedules, the length the author's schedules usually run to, and the loose ends the
 check turned up (planned 2026-11-16). Runs with no time limit come last.
 
 - [x] Finish the runs that were cut short and are now fast: the defaults audited on the confirm tier (`confirm_01`
@@ -228,11 +228,11 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       can't see load within a day, as the swap leaves workload and rest unchanged; the audit counts short rests but not
       how short, so its fixes there make a rest of 12 hours one of 7; the gap is forced by a scarce role)
 - [x] Decide on the defaults: they hold, a small tuning round on the 48-hour inputs, or a design question for the
-      user (decided 2026-11-16: they hold, for now; load within a day is left to the whole schedule's totals, since
+      author (decided 2026-11-16: they hold, for now; load within a day is left to the whole schedule's totals, since
       the uneven day on `multiday_05` was only when a long rest fell, with even totals; the audit no longer counts a
       change that makes a short rest shorter as harmless, which removed `multiday_04`'s fixes and changed no
       conclusion of the weight re-check)
-- [x] The next period is the same hours a whole number of days later (the user, 2026-11-16): fix the tuning's
+- [x] The next period is the same hours a whole number of days later (the author, 2026-11-16): fix the tuning's
       second period to match, and re-run the second periods it changes (done 2026-11-16: at the defaults, all 8
       moved second periods have a legal schedule, against 3 of 8 before; of every benchmark input, only `sweep_08`
       still leaves the next period none)
@@ -249,7 +249,7 @@ check turned up (planned 2026-11-16). Runs with no time limit come last.
       taken up in [Phase 11](#phase-11-faster-search-through-the-bounds))
 - [x] Runs with no time limit, unattended: how long the 48-hour seeds 3009–3011 take to search to the end (done
       2026-11-16 for seed 3009 only: 5 hours 57 minutes on the laptop, 12.7 billion nodes, its best schedule found
-      after 3 hours 46; seeds 3010 and 3011 dropped by the user, for Phase 11 instead)
+      after 3 hours 46; seeds 3010 and 3011 dropped by the author, for Phase 11 instead)
 
 ## Phase 11: Faster search through the bounds
 
@@ -270,7 +270,7 @@ Every step below keeps exactly the same schedules: each new bound is a valid low
 completion. Each is checked as the earlier speed-ups were: every benchmark input alone and as a second period, on
 CPython and on PyPy, against the recorded schedules, and the 48-hour inputs. It's judged by **time**, not nodes: a
 tighter bound has to pay for its own cost, measured in one process and in parallel. Each code change needs the
-user's approval first.
+author's approval first.
 
 - [x] **2. The exact multiplier**, with [ADR 0044](decisions/0044-best-whole-slot-multiplier-by-tangents.md) amending
       [ADR 0040](decisions/0040-workload-bound-in-whole-slots.md): the whole-slot bound's best multiplier computed
@@ -278,7 +278,7 @@ user's approval first.
     - [x] Two exact methods compared outside the program first: each worker's lower convex envelope merged by slope
       (the plan; with one load left, a priority queue), and tangents on the concave bound, which reuse its evaluators
       and stop when the value reaches the tangents' crossing. The same values; the envelope 2.5 times slower on PyPy
-      (worst on 48-hour inputs), faster only on CPython's small inputs. The user chose tangents
+      (worst on 48-hour inputs), faster only on CPython's small inputs. The author chose tangents
     - [x] Tests: equal to a long multiplier search on random states (exact and interval sets, powers 2 and 3), a
       function known by hand; never above the best completion (brute force, as before)
     - [x] Check: the same schedules on every benchmark input, alone and as day 2, on CPython and PyPy with 12
@@ -292,7 +292,7 @@ user's approval first.
       the bound doesn't prune, and from scratch near a tie, so the decisions are the same with or without incremental
       scores
     - [x] Lab first: asked before the whole-slot part, it cost more than it saved; a quicker zero test saved a quarter
-      of its cost at most. The user chose the simple version, asked last
+      of its cost at most. The author chose the simple version, asked last
     - [x] Tests: never above what a completion adds (brute force on partial schedules), above 0 on some; the same
       search result with and without it
     - [x] Check: the same schedules everywhere (alone and day 2, CPython and PyPy, 12 processes); one process against
@@ -304,7 +304,7 @@ user's approval first.
       bound's sets from each worker's own domain, counted per load, kept up to date incrementally and cached
     - [x] Lab first: groups of slots with a price each (water-filling and whole slots) never bound; a price per slot
       (the ceiling) cost 80–100 µs per node; the per-worker sets beat it, and pay their way only replacing the global
-      sets with incremental counts. The user chose to adopt them as they are
+      sets with incremental counts. The author chose to adopt them as they are
     - [x] Tests: never above brute force, equal to a long multiplier search, a case by hand where only these reach the
       best completion; incremental equal to from scratch
     - [x] Check: the same schedules everywhere (alone and day 2, CPython and PyPy, 12 processes); one process against
@@ -317,7 +317,7 @@ user's approval first.
       one process on PyPy; see [Future work](explanation/future-work.md#search-performance))
     - [x] Kept: each worker's sets cached in a plain dict keyed by their counts, instead of `lru_cache` (run as Python
       code on PyPy) keyed by pairs built at every bound; the same search node for node, 11–32% less time with the
-      role-aware bound on. The user approved it, on branch `phase11-sets-cache`
+      role-aware bound on. The author approved it, on branch `phase11-sets-cache`
     - [x] Not taken: skipping children that can't beat the pocket (0.3–11% of nodes skipped, 14–36% slower on four
       inputs); the whole-slot bound only near the pocket (no gap that saves calls without losing prunes); each
       worker's extra loads as a sorted list with a binary search and the fixed parts computed once (28% less on
@@ -330,7 +330,7 @@ user's approval first.
       CPython 0.96–1.00 on 6 small inputs
     - [x] `auto`'s rule (ADR 0047) measured again with the cheaper bound, on the comparisons it was fitted and checked
       on: still the best of the policies (51 comparisons: always off 1240 s, always on 1198 s, `auto` 1166 s, the best
-      every time 1159 s), on and off now within about 5% where on prunes no more. The user kept the rule as it is
+      every time 1159 s), on and off now within about 5% where on prunes no more. The author kept the rule as it is
 - [x] **6. Docs and new timings:** the ADRs, the scoring and search explanations, the API reference, future work;
       the 48-hour times measured again on the laptop (the tier's 5 inputs and seed 3009, in parallel), and the
       deferred item on 48-hour first periods reconsidered with them
@@ -344,7 +344,7 @@ user's approval first.
       2 h in all (3.7 times the speed of 2026-11-16), seed 3009 1 h 28 min, `multiday_05` 619 s (5.0 times); 7–15% less
       than after steps 2–4 wherever the role-aware bound is on
     - [x] The deferred item on 48-hour first periods reconsidered with these (2026-11-18): kept deferred, with the
-      new numbers and the leads left (the user closed Phase 11). The tier's five now take 2–12 minutes; seed 3009,
+      new numbers and the leads left (the author closed Phase 11). The tier's five now take 2–12 minutes; seed 3009,
       one generated input, is the outlier at 1 h 28 min, within 0.1% of its best after 8
 
 ## Phase 12: Where speed is left on the table
@@ -355,7 +355,7 @@ this phase also looks at when the best schedule is found, the shape of the searc
 schedules, and how many searches can be run at once. Every measurement is made outside the program (a lab copy under
 `tools/benchmarks/results/`), on the example and the 15 benchmark inputs searched to the end, and on `multiday_04`,
 `multiday_05` and seed 3009 (with a node limit where searching to the end takes too long). After each, its results
-and conclusions are reported to the user.
+and conclusions are reported to the author.
 
 - [x] **1. Measure,** one at a time, in this order (the first four decide which of the others are worth making):
     - [x] The best penalty known from the start: the pocket's threshold set to the best penalty plus the near-tie
@@ -387,7 +387,7 @@ and conclusions are reported to the user.
       slots too close together for one worker are only 4% of the gap; the rest (19%) is how slots and workers are
       matched given roles and whole slots, which the one multiplier doesn't see: on `multiday_04` and `multiday_05`
       that's 80–92% of the gap. The rest's own slack is largest on second periods
-    - [x] ~~Workload caps that count slots too close together for one worker~~, replaced by the user (2026-11-18)
+    - [x] ~~Workload caps that count slots too close together for one worker~~, replaced by the author (2026-11-18)
       after measurement 4 found those slots only 4% of the gap: a workload bound that matches the unfilled slots to
       the workers in their domains, conflicts relaxed, exactly (a greedy over the counts, exact as they form a
       polymatroid; the few slots of another load than the commonest enumerated). Done 2026-11-18, outside the
@@ -435,21 +435,21 @@ and conclusions are reported to the user.
       `confirm_01` 4.41, `sweep_11`'s second period 3.48, slower than with 8), with 2 processes 1.8–2.0; the processes
       are busy 94–100% of the time, idle at the end under 2%, and the nodes about the same: what's lost is each
       process's own speed as more run (4 full and 8 compact cores, and heat), not the search's division of work
-- [x] **2. Choose** what to build, from the measurements, with the user (2026-11-18): cheaper nodes first (the lower
+- [x] **2. Choose** what to build, from the measurements, with the author (2026-11-18): cheaper nodes first (the lower
       hanging fruit), then the exact matching bound; the rest deferred (see [Later](#later)). Each step below keeps
       every node and schedule exactly the same (a valid bound changes only the nodes), checked as in Phase 11, and is
-      judged by time; each is on its own branch from `dev`, with the user's approval, and needs no ADR where it
+      judged by time; each is on its own branch from `dev`, with the author's approval, and needs no ADR where it
       changes no behaviour (as with Phase 11 step 5)
 - [x] **3. The rest's hours without date and time arithmetic:** each slot's start and end in whole microseconds from
       the first slot's, worked out once in the scoring constants, instead of subtracting datetimes at every rest
-      (PyPy runs `datetime` as Python code); the same values, exactly (done 2026-11-18, the user approving it, on
+      (PyPy runs `datetime` as Python code); the same values, exactly (done 2026-11-18, the author approving it, on
       branch `phase12-rest-hours`). Check: every rest's deficit equal to the old arithmetic to the last bit (tests);
       the same nodes, schedules and penalties as `dev` on every input alone and as day 2, one process on PyPy and
       CPython and 12 processes on both. About 4–5% less time, not the 8–17% measurement 2 suggested (its baseline was
       slowed by heat): seed 3009 0.95, `confirm_01` 0.96, `multiday_04` 0.96, `multiday_05` 0.99, `sweep_11` within
       noise (2 million nodes, three alternating rounds); the benchmark set 0.964 on PyPy, 0.974 on CPython
 - [x] ~~**4. The exact matching workload bound**~~ (measurement 5), made cheap enough to pay (moved before the
-      water-filling by the user, 2026-11-18): lab done, stopped by the user (2026-11-19), not built
+      water-filling by the author, 2026-11-18): lab done, stopped by the author (2026-11-19), not built
     - [x] Lab, each version checked to decide exactly as the prototype does (four versions, the last asking only
       whether it prunes, skipping the matching where each worker's best count on their own can already be matched,
       and repairing the counts by exchanges otherwise): 40 µs to 1.6 ms a call; the same schedules everywhere.
@@ -460,7 +460,7 @@ and conclusions are reported to the user.
       when to turn on wasn't worth its upkeep. Kept for [Later](#later) as an opt-in setting
     - [x] ~~An ADR, the code (on its own branch), tests, the check, the 48-hour times~~ (stopped with the step)
 - [x] ~~**5. A cheaper water-filling**~~ (lab first: fewer allocations with the same arithmetic; the change points
-      kept sorted from node to node; each worker's term reused): stopped by the user before its lab (2026-11-19),
+      kept sorted from node to node; each worker's term reused): stopped by the author before its lab (2026-11-19),
       the gain likely small (step 3's measured 4–5% against measurement 2's 8–17%), as speed work had reached
       diminishing returns
 - [x] **6. Docs:** the API reference (done with step 3), future work (the matching bound's lab, 2026-11-19); the
@@ -470,7 +470,7 @@ and conclusions are reported to the user.
 ## Phase 13: A reliable audit
 
 The [schedule audit](explanation/schedule-audit.md) is what the scoring is tuned against, so before the scoring
-changes again, the audit is made reliable (planned with the user, 2026-11-19). Today it puts values on what it finds:
+changes again, the audit is made reliable (planned with the author, 2026-11-19). Today it puts values on what it finds:
 short rests and disliked partners are added together one for one, a short rest is a fixed margin below the typical
 rest, severities are summed across kinds and across pairs of workers (so the totals grow with the number of peers),
 load is also compared in any 24 hours, and fixes are found greedily, with at most three changes. The aim is an audit
@@ -482,7 +482,7 @@ avoided) is decided where the results are read, in tuning, outside the audit, so
 traced either to the audit describing the schedule wrongly or to how it was read. Where a question has no clear
 answer, the audit asserts only what holds under every reasonable answer.
 
-- [x] **1. Decide** what the audit is, a group of decisions at a time, each discussed with the user (the options,
+- [x] **1. Decide** what the audit is, a group of decisions at a time, each discussed with the author (the options,
       examples, a recommendation). The decisions depend on each other, so they're taken in this order, going back
       where a later one changes an earlier one; decisions found along the way are added in their place:
     - [x] **Foundations** (decided 2026-11-19): a grievance is an **event** the worker can point to (an extra shift,
@@ -561,7 +561,7 @@ answer, the audit asserts only what holds under every reasonable answer.
       one giving the most events. Levelling down remains (taking a friend from the peer removes the grievance), as
       with rest. The liked pairings each worker got (the greedy side, a boon) are a **fact** on the card, not a
       grievance, and tuning reads them as a total and worker by worker.
-      **Less settled:** the user wasn't entirely convinced likes should be compared against peers. The peer-free
+      **Less settled:** the author wasn't entirely convinced likes should be compared against peers. The peer-free
       versions each fail: every shift without anyone they like mostly measures the input (the worker with the
       rarest friend is always most aggrieved, and only fewer shifts helps); a liked person on duty at the same time
       at another post never fires with one post and rewards keeping friends apart in time; "never once with X" is
@@ -640,16 +640,16 @@ answer, the audit asserts only what holds under every reasonable answer.
       fix search against brute force (every legal schedule within K changes) on small inputs; identical audits on
       PyPy and CPython; the finished tuning stages audited again (step 4), with every grievance that appears or
       disappears explained by a decision, the four seeds found to have fixes, and the time with K = 3 on 48-hour
-      schedules measured; and cards read by hand, a sample of them brought to the user covering each kind,
+      schedules measured; and cards read by hand, a sample of them brought to the author covering each kind,
       transfers, "no fix" and events in the history
 - [x] **2. Design** (done 2026-11-19): the decisions as two ADRs:
       [ADR 0048](decisions/0048-an-audit-that-only-observes.md) for the audit and
       [ADR 0049](decisions/0049-partners-in-the-audit.md) for partners, apart so that a revisit of the like grievance,
       the least settled decision, supersedes only that one; the [schedule audit](explanation/schedule-audit.md) and
       [tuning](explanation/tuning.md) pages rewritten to match. The reading rules the decisions left open were agreed
-      with the user as a first version, to revisit after step 4: within a kind, the events with a harmless fix, then
+      with the author as a first version, to revisit after step 4: within a kind, the events with a harmless fix, then
       the most aggrieved worker's, then all; rest read in hours short too; dominance, with no single ranking; between
-      settings neither of which dominates, the user's rules applied by hand, worker by worker; the earlier results
+      settings neither of which dominates, the author's rules applied by hand, worker by worker; the earlier results
       kept as history, measured with the old audit, and ADR 0039's defaults standing
 - [x] **3. The audit rebuilt** (done 2026-11-20; `tools/audit.py`, `tools/audit_sample.py`), in four parts, each with
       its tests: the grievances (2026-11-19), the fix search (2026-11-19, checked against brute force; what a fix
@@ -663,7 +663,7 @@ answer, the audit asserts only what holds under every reasonable answer.
 - [x] **4. Validation** (done 2026-11-21): the finished tuning stages audited again (`tools/tune.py reaudit`), the grievances that
       appear and disappear explained, and cards read by hand; the sampled schedules that had no easy fix at all
       (seeds 150, 165, 174 and 190 of the example, taken up from [Later](#later) and answered in step 1) checked to
-      have fixes with the new search. Reading cards by hand with the user (2026-11-20) changed four rules
+      have fixes with the new search. Reading cards by hand with the author (2026-11-20) changed four rules
       ([ADR 0051](decisions/0051-the-audit-after-reading-cards-by-hand.md): load in hours alone, a rest judged by the
       shift before it, a missing like as a shift with nobody the worker likes, a dislike cancelling the like it
       meets), after which the stages are audited again. A worker panel, a language model playing each worker
@@ -715,7 +715,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       4–12% cost (ADR 0045); and the tangent search's dials tuned (ADR 0044). Only if ever worth it (2026-11-17)
 - [x] A setting to turn the whole-slot bound's per-worker sets (ADR 0046) on or off, since they cost up to about a
       third more time where roles and availability don't narrow the domains, and chosen automatically from how
-      constrained the input is (asked by the user, done 2026-11-17, ADR 0047: `role_aware_bound`, `auto` by default)
+      constrained the input is (asked by the author, done 2026-11-17, ADR 0047: `role_aware_bound`, `auto` by default)
 - [ ] A strong bound used only near the top of the tree, where a prune removes the most: a multiplier per slot, each
       worker's best set of slots found on its own, covering roles, overlaps, rest and workload together (too costly
       at every node; suggested 2026-11-16)
@@ -742,7 +742,7 @@ Not scheduled; see [Future work](explanation/future-work.md) for each.
       the same setting with a rest weight of 0.3 (better at rest, the same otherwise; found in Phase 13's step 4,
       2026-11-21)
 - [ ] Input: symmetric preferences, one relation per pair of workers (liked, disliked or neither), leaving it to
-      whoever writes the input to decide how to read one-sided feelings; floated by the user while reading cards
+      whoever writes the input to decide how to read one-sided feelings; floated by the author while reading cards
       (2026-11-20). The audit meanwhile lets a dislike cancel the like it meets (ADR 0051)
 - [ ] A schedule that leaves the next period a worse schedule than another first period would (found 2026-11-14;
       one that leaves it no legal schedule is warned about since Phase 10, ADR 0042)
