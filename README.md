@@ -102,7 +102,8 @@ is an annotated example, and the format is described in [Input format](docs/refe
 
 ## Documentation
 
-All documentation lives in [`docs/`](docs/index.md).
+The documentation is published at **[3-kids-wearing-a-trenchcoat.github.io/TinyScheg](https://3-kids-wearing-a-trenchcoat.github.io/TinyScheg/)**,
+with navigation and search; its source lives in [`docs/`](docs/index.md), which also reads well on GitHub.
 
 ## License
 
