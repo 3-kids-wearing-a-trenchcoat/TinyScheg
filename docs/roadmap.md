@@ -7,7 +7,11 @@ yet are described in [Future work](explanation/future-work.md).
 When something is deferred, it goes both into [Later](#later) here and into
 [Future work](explanation/future-work.md).
 
-Progress: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
+**Where it stands:** TinyScheg works end to end. Phases 1–7 built it, from reading the input to writing the best
+schedule, with schedules that follow on from earlier ones; Phases 8–12 made the search faster and checked its defaults
+on longer schedules; Phase 13 makes the development audit reliable, and only its last step, the docs, is left.
+
+In detail: Phases 1–8 complete (Phase 8 on 2026-11-15); the penalty's parts made flat after Phase 7 ([ADR 0032](decisions/0032-flat-penalty-parts.md)); PyPy for development runs ([ADR 0033](decisions/0033-pypy-for-development-runs.md)); never back to back ([ADR 0034](decisions/0034-never-back-to-back.md)); Phase 9, parallel search, complete
 (2026-11-15); Phase 10, the defaults on long schedules, complete (2026-11-16); Phase 11, faster search through the
 bounds, complete (2026-11-18); Phase 12, where speed is left on the table, closed by the author (2026-11-19); Phase 13, a reliable audit, started
 (2026-11-19; steps 1 to 4, the decisions, the design, the rebuilt audit and its validation, done; step 4 changed the
