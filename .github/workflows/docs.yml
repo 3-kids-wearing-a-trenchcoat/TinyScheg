@@ -1,0 +1,52 @@
+# Builds the docs site with MkDocs and publishes it on GitHub Pages, on every push to main (or by hand, from the
+# Actions tab). The docs packages are installed at the versions environment.yml pins in its pip section, so that the
+# site is built exactly as locally; a broken link or anchor fails the build (--strict) instead of going live.
+name: Docs site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write      # to publish the site
+  id-token: write   # to prove the deployment comes from this workflow
+
+concurrency:        # one deployment at a time; a newer push waits for the running one rather than cancelling it
+  group: pages
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.13"  # as in environment.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install the docs packages pinned in environment.yml
+        run: |
+          awk '/- pip:/ {pip = 1; next} pip && /^ *- / {sub(/^ *- /, ""); sub(/ *#.*/, ""); print}' environment.yml \
+            > docs-requirements.txt
+          cat docs-requirements.txt
+          pip install -r docs-requirements.txt
+      - uses: actions/configure-pages@v6
+      - name: Build the site
+        run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,5 +1,6 @@
 site_name: TinyScheg
 site_description: A shift scheduler that balances hard constraints, fairness and personal preferences.
+site_url: https://3-kids-wearing-a-trenchcoat.github.io/TinyScheg/  # published by .github/workflows/docs.yml
 repo_url: https://github.com/3-kids-wearing-a-trenchcoat/TinyScheg
 repo_name: TinyScheg
 edit_uri: edit/main/docs/
